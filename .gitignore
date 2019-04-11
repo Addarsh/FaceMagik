@@ -1,0 +1,7 @@
+# Unecessary directories
+###################
+__pycache__/
+
+# Weird file extensions #
+###################
+*.DS_Store
