@@ -1,6 +1,7 @@
 # Unecessary directories
 ###################
 __pycache__/
+.ipynb_checkpoints/
 
 # Weird file extensions #
 ###################
