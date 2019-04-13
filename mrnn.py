@@ -17,6 +17,7 @@ import argparse
 import skimage.draw
 import boto3
 import socket
+import keras
 from PIL import Image
 
 if socket.gethostname() == "Addarshs-MacBook-Pro.local":
@@ -190,10 +191,11 @@ def train(model):
     # COCO trained weights, we don't need to train too long. Also,
     # no need to train all layers, just the heads should do it.
     print("Training network heads")
+    callback = None if socket.gethostname() == "Addarshs-MacBook-Pro.local" else SpotTermination()
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
                 epochs=30,
-                layers='heads')
+                layers='heads', custom_callbacks=callback)
 
 def color_splash(image, mask, class_ids):
     """Apply color splash effect.
@@ -310,6 +312,19 @@ def epoch_path(list_of_checkpoint_files):
     raise Exception("Max epoch file cannot be empty")
   return max_epoch_file
 
+"""
+Spot termination class checks if spot instance is going to be terminated
+every 5 seconds and stops training if thats the case.
+"""
+class SpotTermination(keras.callbacks.Callback):
+  def on_epoch_begin(self, epoch, logs=None):
+    print ("Starting to train on epoch number: ", epoch)
+  def on_batch_begin(self, batch, logs={}):
+    status_code = requests.get("http://169.254.169.254/latest/meta-data/spot/instance-action").status_code
+    if status_code != 404:
+      # Stop training.
+      self.model.stop_training = True
+
 if __name__ == '__main__':
   # Parse command line arguments
   parser = argparse.ArgumentParser(
@@ -383,5 +398,9 @@ if __name__ == '__main__':
   # Train or evaluate
   if args.command == "train":
     train(model)
+    if socket.gethostname() != "Addarshs-MacBook-Pro.local":
+      # Backup terminal output once training is complete
+      shutil.copy2('/var/log/cloud-init-output.log', os.path.join(volume_mount_dir,
+                                                                'cloud-init-output-{}.log'.format(datetime.datetime.today().strftime('%Y-%m-%d'))))
   elif args.command == "detect":
     detect(model, args.image)
