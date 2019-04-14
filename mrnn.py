@@ -73,6 +73,9 @@ class FaceConfig(Config):
     # Remove mini mask to improve accuracy.
     USE_MINI_MASK = False
 
+    # Use Resnet50 for faster training.
+    BACKBONE = "resnet50"
+
 
 ############################################################
 #  Dataset
