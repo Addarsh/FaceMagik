@@ -18,6 +18,7 @@ import skimage.draw
 import boto3
 import socket
 import keras
+import requests
 from PIL import Image
 
 if socket.gethostname() == "Addarshs-MacBook-Pro.local":
@@ -198,7 +199,7 @@ def train(model):
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
                 epochs=30,
-                layers='heads', custom_callbacks=callback)
+                layers='heads', custom_callbacks=[callback])
 
 def color_splash(image, mask, class_ids):
     """Apply color splash effect.
@@ -322,6 +323,17 @@ every 5 seconds and stops training if thats the case.
 class SpotTermination(keras.callbacks.Callback):
   def on_epoch_begin(self, epoch, logs=None):
     print ("Starting to train on epoch number: ", epoch)
+    if epoch <= 1:
+      return
+    all_dirs = sorted([f for f in os.listdir(CHECKPOINT_DIR) if os.path.isdir(os.path.join(CHECKPOINT_DIR, f)) and f.startswith("face")])
+    for i in range(len(all_dirs)-1):
+      os.remove(os.path.join(CHECKPOINT_DIR, all_dirs[i]))
+    latest_dir = all_dirs[-1]
+
+    # Delete epoch -1 file to save space.
+    path = "mask_rcnn_face_{:04d}.h5".format(epoch-1)
+    os.remove(os.path.join(os.path.join(os.path.join(CHECKPOINT_DIR, latest_dir), path)))
+
   def on_batch_begin(self, batch, logs={}):
     status_code = requests.get("http://169.254.169.254/latest/meta-data/spot/instance-action").status_code
     if status_code != 404:
