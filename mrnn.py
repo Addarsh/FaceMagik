@@ -97,6 +97,10 @@ class FaceDataset(utils.Dataset):
         assert subset in ["train", "val"]
 
         # Load split annotations.
+        if not os.path.exists(SPLIT_FILE):
+          print ("Split file does not exist, downloading dataset...")
+          download_dataset()
+          print ("Download complete")
         split_ann = []
         with open(SPLIT_FILE, "r") as g:
           split_ann = json.load(g)
@@ -358,6 +362,7 @@ if __name__ == '__main__':
     if not os.path.exists(DATASET_DIR):
       print ("Dataset does not exist, downloading....")
       download_dataset()
+      print ("Dataset download complete")
   elif args.command == "detect":
       assert args.image,\
              "Provide --image or --video to apply color splash"
