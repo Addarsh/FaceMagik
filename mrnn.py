@@ -19,6 +19,7 @@ import boto3
 import socket
 import keras
 import requests
+import shutil
 from PIL import Image
 
 if socket.gethostname() == "Addarshs-MacBook-Pro.local":
