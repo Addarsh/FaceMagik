@@ -107,8 +107,8 @@ class FaceDataset(utils.Dataset):
           split_ann = json.load(g)
         want_set = set(split_ann[subset])
 
-        for i in range(1,2):
-          for j in range(1,2):
+        for i in range(1,4):
+          for j in range(1,8):
             base_dir = os.path.join("helen_r"+str(i),"50_"+str(j))
             for f in os.listdir(os.path.join(DATASET_DIR, base_dir)):
               if not f.endswith(".jpg"):
@@ -252,11 +252,9 @@ def download_dataset():
   for object_summary in bucket.objects.filter(Prefix=split_file):
     bucket.download_file(object_summary.key, os.path.join(DATASET_DIR, object_summary.key))
 
-  for i in range(1,2):
-    for j in range(1,2):
+  for i in range(1,4):
+    for j in range(1,8):
       download_img_and_annotation(os.path.join("helen_r"+str(i),"50_"+str(j)), remote_merged_dir, bucket)
-      break
-    break
 
 """
 download_img_and_annotation downloads images in given directory and corresponding merged annotations.
