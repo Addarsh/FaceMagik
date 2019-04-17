@@ -336,7 +336,8 @@ class SpotTermination(keras.callbacks.Callback):
 
     # Delete epoch -1 file to save space.
     path = "mask_rcnn_face_{:04d}.h5".format(epoch-1)
-    os.remove(os.path.join(os.path.join(os.path.join(CHECKPOINT_DIR, latest_dir), path)))
+    if os.path.exists(os.path.join(os.path.join(os.path.join(CHECKPOINT_DIR, latest_dir), path))):
+      os.remove(os.path.join(os.path.join(os.path.join(CHECKPOINT_DIR, latest_dir), path)))
 
   def on_batch_begin(self, batch, logs={}):
     status_code = requests.get("http://169.254.169.254/latest/meta-data/spot/instance-action").status_code
