@@ -204,7 +204,7 @@ def train(model):
     callback = None if socket.gethostname() == "Addarshs-MacBook-Pro.local" else SpotTermination()
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
-                epochs=30,
+                epochs=60,
                 layers='heads', custom_callbacks=[callback])
 
 def color_splash(image, mask, class_ids):
@@ -217,7 +217,9 @@ def color_splash(image, mask, class_ids):
     count = 0
     m = np.zeros((image.shape[0], image.shape[1], len(class_ids)))
     for i, c in enumerate(class_ids):
-      if c == 3 or c == 1 or c== 4 or c == 5 or c== 2 or c == 11 or c==8 or c==12 or c==9:
+      if c== 14 or c==15 or c==18:
+      #if c == 1 or c==7 or c==9 or c==10:
+      #if c == 13:
         m[:, :, i] = mask[:, :, i]
     mask = m
 
@@ -228,7 +230,7 @@ def color_splash(image, mask, class_ids):
     if mask.shape[-1] > 0:
         # We're treating all instances as one, so collapse the mask into one layer
         mask = (np.sum(mask, -1, keepdims=True) >= 1)
-        splash = np.where(mask, image, gray).astype(np.uint8)
+        splash = np.where(mask, (0, 255, 0), gray).astype(np.uint8)
     else:
         splash = gray.astype(np.uint8)
     return splash
@@ -299,7 +301,7 @@ def detect(model, image_path):
   # Color splash
   splash = color_splash(image, r["masks"], r["class_ids"])
   # Save output
-  file_name = "splash_{:%Y%m%dT%H%M%S}.png".format(datetime.datetime.now())
+  file_name = "splash_{:%Y%m%dT%H%M%S}.jpg".format(datetime.datetime.now())
   skimage.io.imsave(file_name, splash)
 
 """
