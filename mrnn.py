@@ -205,7 +205,7 @@ def train(model):
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
                 epochs=60,
-                layers='heads', custom_callbacks=[callback])
+                layers='all', custom_callbacks=[callback])
 
 def color_splash(image, mask, class_ids):
     """Apply color splash effect.
@@ -217,8 +217,8 @@ def color_splash(image, mask, class_ids):
     count = 0
     m = np.zeros((image.shape[0], image.shape[1], len(class_ids)))
     for i, c in enumerate(class_ids):
-      if c== 14 or c==15 or c==18:
-      #if c == 1 or c==7 or c==9 or c==10:
+      if c== 14 or c==15 or c==18 or c==17:
+      #if c == 1 or c==7 or c==9 or c==10 or c==4:
       #if c == 13:
         m[:, :, i] = mask[:, :, i]
     mask = m
