@@ -108,9 +108,11 @@ class FaceDataset(utils.Dataset):
           split_ann = json.load(g)
         want_set = set(split_ann[subset])
 
-        for i in range(1,4):
-          for j in range(1,8):
+        for i in range(1,10):
+          for j in range(1,9):
             base_dir = os.path.join("helen_r"+str(i),"50_"+str(j))
+            if not os.path.exists(os.path.join(DATASET_DIR, base_dir)):
+              continue
             for f in os.listdir(os.path.join(DATASET_DIR, base_dir)):
               if not f.endswith(".jpg"):
                 continue
@@ -255,29 +257,23 @@ def download_dataset():
   for object_summary in bucket.objects.filter(Prefix=split_file):
     bucket.download_file(object_summary.key, os.path.join(DATASET_DIR, object_summary.key))
 
-  for i in range(1,4):
-    for j in range(1,8):
+  for i in range(1, 10):
+    for j in range(1, 9):
       download_img_and_annotation(os.path.join("helen_r"+str(i),"50_"+str(j)), remote_merged_dir, bucket)
 
 """
 download_img_and_annotation downloads images in given directory and corresponding merged annotations.
 """
 def download_img_and_annotation(remote_dir, remote_merged_dir, bucket):
-  local_dir = os.path.join(DATASET_DIR, remote_dir)
-  if not os.path.exists(local_dir):
-    os.makedirs(local_dir)
-
-  local_merged_dir = os.path.join(os.path.join(DATASET_DIR, remote_merged_dir), remote_dir)
-  for c in ["eye", "nose", "face"]:
-    if not os.path.exists(os.path.join(local_merged_dir,c)):
-      os.makedirs(os.path.join(local_merged_dir,c))
-
   # Download image file.
   for object_summary in bucket.objects.filter(Prefix=remote_dir+"/"):
     if not os.path.split(object_summary.key)[1].endswith(".jpg"):
       continue
     if os.path.exists(os.path.join(DATASET_DIR,object_summary.key)):
       continue
+    local_dir = os.path.join(DATASET_DIR, remote_dir)
+    if not os.path.exists(local_dir):
+      os.makedirs(local_dir)
     bucket.download_file(object_summary.key, os.path.join(DATASET_DIR,object_summary.key))
 
   # Download associated merged annotation files.
@@ -287,6 +283,10 @@ def download_img_and_annotation(remote_dir, remote_merged_dir, bucket):
         continue
       if os.path.exists(os.path.join(DATASET_DIR,object_summary.key)):
         continue
+      local_merged_dir = os.path.join(os.path.join(DATASET_DIR, remote_merged_dir), remote_dir)
+      for c in ["eye", "nose", "face"]:
+        if not os.path.exists(os.path.join(local_merged_dir,c)):
+          os.makedirs(os.path.join(local_merged_dir,c))
       bucket.download_file(object_summary.key, os.path.join(DATASET_DIR,object_summary.key))
 
 
