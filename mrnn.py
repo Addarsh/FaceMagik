@@ -44,7 +44,7 @@ from mrcnn import model as modellib, utils
 class_dict = {
   "Eye (Open)": 1, "Eyeball": 2, "Eyebrow": 3, "Reading glasses": 4, "Sunglasses": 5, "Eye (Closed)": 6,
   "Nose": 7, "Nostril": 8, "Upper Lip":9, "Lower Lip":10, "Teeth":11, "Tongue": 12, "Facial Hair":13,
-  "Face": 14, "Hair (on head)": 15, "Head Gear": 16, "Bald Head": 17, "Ear": 18
+  "Face": 14, "Hair (on head)": 15, "Bald Head": 16, "Ear": 17
 }
 
 ############################################################
@@ -65,7 +65,7 @@ class FaceConfig(Config):
     IMAGES_PER_GPU = 1
 
     # Number of classes (including background)
-    NUM_CLASSES = 18 + 1  # Background + class_dict
+    NUM_CLASSES = 17 + 1  # Background + class_dict
 
     # Number of training steps per epoch
     STEPS_PER_EPOCH = 100
@@ -134,7 +134,7 @@ class FaceDataset(utils.Dataset):
                   if d["class"] not in class_dict:
                     continue
                   polygons.append(d)
-                  annotation_count += 1
+                annotation_count += 1
 
               # Get image width and height.
               im = Image.open(img_path)
@@ -264,7 +264,7 @@ def download_dataset():
   for object_summary in bucket.objects.filter(Prefix=split_file):
     bucket.download_file(object_summary.key, os.path.join(DATASET_DIR, object_summary.key))
 
-  for i in range(1, 10):
+  for i in range(6, 7):
     for j in range(1, 9):
       download_img_and_annotation(os.path.join("helen_r"+str(i),"50_"+str(j)), remote_merged_dir, bucket)
 
