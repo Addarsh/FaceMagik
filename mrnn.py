@@ -108,6 +108,8 @@ class FaceDataset(utils.Dataset):
           split_ann = json.load(g)
         want_set = set(split_ann[subset])
 
+        img_count = 0
+        annotation_count = 0
         for i in range(1,10):
           for j in range(1,9):
             base_dir = os.path.join("helen_r"+str(i),"50_"+str(j))
@@ -119,6 +121,8 @@ class FaceDataset(utils.Dataset):
               if os.path.join(base_dir, f) not in want_set:
                 continue
               img_path = os.path.join(DATASET_DIR, os.path.join(base_dir, f))
+              print ("Adding image path: ",  img_path)
+              img_count += 1
 
               # Get image annotations.
               polygons = []
@@ -128,9 +132,9 @@ class FaceDataset(utils.Dataset):
                 ann = json.load(open(ann_path))
                 for d in ann:
                   if d["class"] not in class_dict:
-                    print ("Skipping polygon with class: ", d["class"], " in file: ", img_path)
                     continue
                   polygons.append(d)
+                  annotation_count += 1
 
               # Get image width and height.
               im = Image.open(img_path)
@@ -144,6 +148,9 @@ class FaceDataset(utils.Dataset):
                 height=height,
                 polygons=polygons,
               )
+        print ("subset: ", subset)
+        print ("Image count: ", img_count)
+        print ("Annotation count: ", annotation_count)
 
     def load_mask(self, image_id):
         """Generate instance masks for an image.
@@ -220,7 +227,7 @@ def color_splash(image, mask, class_ids):
     m = np.zeros((image.shape[0], image.shape[1], len(class_ids)))
     for i, c in enumerate(class_ids):
       if c== 14 or c==15 or c==18 or c==17:
-      #if c == 1 or c==7 or c==9 or c==10 or c==4:
+      #if c == 1 or c==7 or c==9 or c==10 or c==4 or c == 3:
       #if c == 13:
         m[:, :, i] = mask[:, :, i]
     mask = m
