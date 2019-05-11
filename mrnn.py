@@ -265,7 +265,7 @@ def download_dataset():
   for object_summary in bucket.objects.filter(Prefix=split_file):
     bucket.download_file(object_summary.key, os.path.join(DATASET_DIR, object_summary.key))
 
-  for i in range(6, 7):
+  for i in range(1, 10):
     for j in range(1, 9):
       download_img_and_annotation(os.path.join("helen_r"+str(i),"50_"+str(j)), remote_merged_dir, bucket)
 
