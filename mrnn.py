@@ -213,7 +213,7 @@ def train(model):
     callback = None if socket.gethostname() == "Addarshs-MacBook-Pro.local" else SpotTermination()
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
-                epochs=60,
+                epochs=90,
                 layers='all', custom_callbacks=[callback])
 
 def color_splash(image, mask, class_ids):
@@ -226,8 +226,9 @@ def color_splash(image, mask, class_ids):
     count = 0
     m = np.zeros((image.shape[0], image.shape[1], len(class_ids)))
     for i, c in enumerate(class_ids):
-      if c== 14 or c==15 or c==18 or c==17:
+      if c== 14 or c==15 or c==16 or c==17:
       #if c == 1 or c==7 or c==9 or c==10 or c==4 or c == 3:
+      #if c == 14:
       #if c == 13:
         m[:, :, i] = mask[:, :, i]
     mask = m
