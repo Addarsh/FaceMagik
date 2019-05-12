@@ -191,7 +191,7 @@ class FaceDataset(utils.Dataset):
           raise Exception("source is not face in image_reference")
         return info["path"]
 
-def train(model):
+def train(model, epochs):
     """Train the model."""
     print ("Training starts")
 
@@ -213,37 +213,8 @@ def train(model):
     callback = None if socket.gethostname() == "Addarshs-MacBook-Pro.local" else SpotTermination()
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
-                epochs=90,
+                epochs=epochs,
                 layers='all', custom_callbacks=[callback])
-
-def color_splash(image, mask, class_ids):
-    """Apply color splash effect.
-    image: RGB image [height, width, 3]
-    mask: instance segmentation mask [height, width, instance count]
-
-    Returns result image.
-    """
-    count = 0
-    m = np.zeros((image.shape[0], image.shape[1], len(class_ids)))
-    for i, c in enumerate(class_ids):
-      if c== 14 or c==15 or c==16 or c==17:
-      #if c == 1 or c==7 or c==9 or c==10 or c==4 or c == 3:
-      #if c == 14:
-      #if c == 13:
-        m[:, :, i] = mask[:, :, i]
-    mask = m
-
-    # Make a grayscale copy of the image. The grayscale copy still
-    # has 3 RGB channels, though.
-    gray = skimage.color.gray2rgb(skimage.color.rgb2gray(image)) * 255
-    # Copy color pixels from the original color image where mask is set
-    if mask.shape[-1] > 0:
-        # We're treating all instances as one, so collapse the mask into one layer
-        mask = (np.sum(mask, -1, keepdims=True) >= 1)
-        splash = np.where(mask, (0, 255, 0), gray).astype(np.uint8)
-    else:
-        splash = gray.astype(np.uint8)
-    return splash
 
 """
 download_dataset will fetch the face annotation dataset from Amazon S3 bucket.
@@ -297,21 +268,6 @@ def download_img_and_annotation(remote_dir, remote_merged_dir, bucket):
           os.makedirs(os.path.join(local_merged_dir,c))
       bucket.download_file(object_summary.key, os.path.join(DATASET_DIR,object_summary.key))
 
-
-def detect(model, image_path):
-  print("Running on {}".format(args.image))
-  # Read image
-  image = skimage.io.imread(args.image)
-  # Detect objects
-  r = model.detect([image], verbose=1)[0]
-
-  print ("len mask: ", len(r["masks"]))
-  # Color splash
-  splash = color_splash(image, r["masks"], r["class_ids"])
-  # Save output
-  file_name = "splash_{:%Y%m%dT%H%M%S}.jpg".format(datetime.datetime.now())
-  skimage.io.imsave(file_name, splash)
-
 """
 epoch_path returns the latest epoch file.
 """
@@ -359,47 +315,27 @@ if __name__ == '__main__':
   # Parse command line arguments
   parser = argparse.ArgumentParser(
       description='Train Mask R-CNN to detect balloons.')
-  parser.add_argument("--command",
-                      metavar="<command>",
+  parser.add_argument("--epochs", type=int,
+                      metavar="<epochs>", default=60,
                       help="'train' or 'detect'")
-  parser.add_argument('--image', required=False,
-                      metavar="path or URL to image",
-                      help='Image to apply the color splash effect on')
   args = parser.parse_args()
 
-  # Validate arguments
-  if args.command == "train":
-    # Download dataset if it does not exist.
-    if not os.path.exists(DATASET_DIR):
-      print ("Dataset does not exist, downloading....")
-      download_dataset()
-      print ("Dataset download complete")
-  elif args.command == "detect":
-      assert args.image,\
-             "Provide --image or --video to apply color splash"
+  # Download dataset if it does not exist.
+  if not os.path.exists(DATASET_DIR):
+    print ("Dataset does not exist, downloading....")
+    download_dataset()
+    print ("Dataset download complete")
 
   print("Dataset: ", DATASET_DIR)
   print("Logs: ", CHECKPOINT_DIR)
 
   # Configurations
-  if args.command == "train":
-      config = FaceConfig()
-  else:
-      class InferenceConfig(FaceConfig):
-          # Set batch size to 1 since we'll be running inference on
-          # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-          GPU_COUNT = 1
-          IMAGES_PER_GPU = 1
-      config = InferenceConfig()
+  config = FaceConfig()
   config.display()
 
   # Create model
-  if args.command == "train":
-      model = modellib.MaskRCNN(mode="training", config=config,
-                                model_dir=CHECKPOINT_DIR)
-  else:
-      model = modellib.MaskRCNN(mode="inference", config=config,
-                                model_dir=CHECKPOINT_DIR)
+  model = modellib.MaskRCNN(mode="training", config=config,
+                            model_dir=CHECKPOINT_DIR)
 
   # Select weights file to load
   weights_path = ""
@@ -426,12 +362,10 @@ if __name__ == '__main__':
   else:
       model.load_weights(weights_path, by_name=True)
 
-  # Train or evaluate
-  if args.command == "train":
-    train(model)
-    if socket.gethostname() != "Addarshs-MacBook-Pro.local":
-      # Backup terminal output once training is complete
-      shutil.copy2('/var/log/cloud-init-output.log', os.path.join(volume_mount_dir,
-                                                                'cloud-init-output-{}.log'.format(datetime.datetime.today().strftime('%Y-%m-%d'))))
-  elif args.command == "detect":
-    detect(model, args.image)
+  print ("Starting training for ", args.epochs, " epochs...")
+  # Train.
+  train(model, args.epochs)
+  if socket.gethostname() != "Addarshs-MacBook-Pro.local":
+    # Backup terminal output once training is complete
+    shutil.copy2('/var/log/cloud-init-output.log', os.path.join(volume_mount_dir,
+                                                              'cloud-init-output-{}.log'.format(datetime.datetime.today().strftime('%Y-%m-%d'))))
