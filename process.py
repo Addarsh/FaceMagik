@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import skimage.draw
 import random
@@ -122,23 +123,76 @@ def merge_face_ear(imagePath, ann):
     f = tpoints[i] if tpoints[i] in set(face) else tpoints[i+1]
     e = tpoints[i+1] if f == tpoints[i] else tpoints[i]
 
+    evpts = []
+    fvpts = []
     if is_higher(f, e) and is_right(e, f):
-      vpts += vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=True, up=True)
-      vpts += vpoints_face_ear(f, face , clockwise=True, left=False, up=False, extraArg=e)
+      evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=True, up=True)
+      fvpts = vpoints_face_ear(f, face , clockwise=True, left=False, up=False, extraArg=e)
     elif is_higher(f, e) and is_left(e, f):
-      vpts += vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=True, left=False, up=True)
-      vpts += vpoints_face_ear(f, face , clockwise=False, left=True, up=False, extraArg=e)
+      evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=True, left=False, up=True)
+      fvpts = vpoints_face_ear(f, face , clockwise=False, left=True, up=False, extraArg=e)
     elif is_higher(e, f) and is_right(e, f):
-      vpts += vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=True, left=True, up=False)
-      vpts += vpoints_face_ear(f, face , clockwise=False, left=False, up=True, extraArg=e)
+      evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=True, left=True, up=False)
+      fvpts = vpoints_face_ear(f, face , clockwise=False, left=False, up=True, extraArg=e)
     elif is_higher(e, f) and is_left(e, f):
-      vpts += vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=False, up=False)
-      vpts += vpoints_face_ear(f, face , clockwise=True, left=True, up=True, extraArg=e)
+      evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=False, up=False)
+      fvpts = vpoints_face_ear(f, face , clockwise=True, left=True, up=True, extraArg=e)
+
+    vpts += fit_polynomial(evpts+fvpts)
 
   set_color(image, vpts, 4)
 
-  cv2.imshow("image", image)
+  windowName = "image"
+  cv2.namedWindow(windowName,cv2.WINDOW_NORMAL)
+  cv2.resizeWindow(windowName, 1024,1024)
+
+  cv2.imshow(windowName, image)
   key = cv2.waitKey(0)
+
+"""
+fit_polynomial fits a polynomial from given set of points.
+"""
+def fit_polynomial(points):
+  xlims = xlimits(points)
+  m = xMap(points)
+
+  xarr = []
+  yarr = []
+  for x in range(xlims[0], xlims[1]+1):
+    if x not in m:
+      continue
+    xarr.append(x)
+    yarr.append(m[x])
+
+  p = np.poly1d(np.polyfit(xarr, yarr, 5))
+  return [(x, int(p(x))) for x in range(xlims[0], xlims[1]+1)]
+
+
+"""
+xMap returns the mapping from x to y for given set of points.
+We assume that each x maps to exactly one y in the input points.
+"""
+def xMap(points):
+  if len(points) == 0:
+    raise Exception("xMap: Empty input points!")
+  m = {}
+  for p in points:
+    m[p[0]] = p[1]
+  return m
+
+"""
+xlimits returns the x coordinate limits tuple for the given set of points.
+"""
+def xlimits(points):
+  if len(points) == 0:
+    raise Exception("xlims: Empty input points!")
+
+  min_x, max_x = sys.maxsize, 0
+  for _, p in enumerate(points):
+    min_x = min(p[0], min_x)
+    max_x = max(p[0], max_x)
+
+  return (min_x, max_x)
 
 """
 vpoints_face_ear returns the points in the vicinity of given ear or face point. left and up give
