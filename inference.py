@@ -1,38 +1,62 @@
 import os
 import sys
-import datetime
 import numpy as np
 import argparse
+import json
+import random
 import skimage.draw
-from train import FaceConfig, DATASET_DIR, CHECKPOINT_DIR, modellib
+from train import FaceConfig, DATASET_DIR, CHECKPOINT_DIR, modellib, label_id_map
+from train import (
+  EYE_OPEN,
+  EYEBALL,
+  EYEBROW,
+  READING_GLASSES,
+  SUNGLASSES,
+  EYE_CLOSED,
+  NOSE,
+  NOSTRIL,
+  UPPER_LIP,
+  LOWER_LIP,
+  TEETH,
+  TONGUE,
+  FACIAL_HAIR,
+  FACE,
+  HAIR_ON_HEAD,
+  BALD_HEAD,
+  EAR,
+)
+from imantics import Mask
+CLASS = "class"
+DATA = "data"
 
-"""Apply color splash effect.
-image: RGB image [height, width, 3]
-mask: instance segmentation mask [height, width, instance count]
+OUTPUT_DIR = "output"
+IMAGE_DIR = os.path.join(OUTPUT_DIR, "images")
+ANNOTATIONS_DIR = os.path.join(OUTPUT_DIR, "annotations")
 
-Returns result image.
-"""
-def color_splash(image, mask, class_ids):
-    count = 0
-    m = np.zeros((image.shape[0], image.shape[1], len(class_ids)))
-    for i, c in enumerate(class_ids):
-      if c== 14 or c==15 or c==16 or c==17:
-      #if c == 1 or c==7 or c==9 or c==10 or c==4 or c == 3:
-      #if c == 13:
-        m[:, :, i] = mask[:, :, i]
-    mask = m
+id_label_map = {v: k for k, v in label_id_map.items()}
 
-    # Make a grayscale copy of the image. The grayscale copy still
-    # has 3 RGB channels, though.
-    gray = skimage.color.gray2rgb(skimage.color.rgb2gray(image)) * 255
-    # Copy color pixels from the original color image where mask is set
-    if mask.shape[-1] > 0:
-        # We're treating all instances as one, so collapse the mask into one layer
-        mask = (np.sum(mask, -1, keepdims=True) >= 1)
-        splash = np.where(mask, (0, 255, 0), gray).astype(np.uint8)
-    else:
-        splash = gray.astype(np.uint8)
-    return splash
+def color(image, mask, class_ids):
+  m = skimage.color.gray2rgb(skimage.color.rgb2gray(image)) * 255
+
+  r = lambda: random.randint(0,255)
+
+  color_map = {}
+  for class_id in class_ids:
+    if class_id in color_map:
+      continue
+    color_map[class_id] = (r(),r(),r())
+
+  ann = []
+  for i, class_id in enumerate(class_ids):
+    polygons = Mask(mask[:,:, i]).polygons()
+    list_polygons = []
+    for p in polygons.points:
+      list_polygons.append(p.tolist())
+    ann.append({CLASS: id_label_map[class_id], DATA: list_polygons})
+    gmask = np.reshape(mask[:,:, i], (image.shape[0], image.shape[1], 1))
+    m = np.where(gmask, color_map[class_id], m).astype(np.uint8)
+
+  return m, ann
 
 
 """
@@ -47,10 +71,16 @@ def detect(model, image_path):
 
   print ("len mask: ", len(r["masks"]))
   # Color splash
-  splash = color_splash(image, r["masks"], r["class_ids"])
+  splash, ann = color(image, r["masks"], r["class_ids"])
+
+  fname = os.path.splitext(os.path.split(image_path)[1])[0]
+
   # Save output
-  file_name = "splash_{:%Y%m%dT%H%M%S}.jpg".format(datetime.datetime.now())
-  skimage.io.imsave(file_name, splash)
+  skimage.io.imsave(os.path.join(IMAGE_DIR, fname+".jpg"), splash)
+
+  # save annotation.
+  with open(os.path.join(ANNOTATIONS_DIR, fname+".json"), 'w') as outfile:
+    json.dump(ann, outfile)
 
 if __name__ == '__main__':
   # Parse command line arguments

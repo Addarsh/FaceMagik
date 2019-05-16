@@ -40,11 +40,30 @@ sys.path.append(ROOT_DIR)  # To find local version of the library
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils
 
-# Dictionary of labels for training.
-class_dict = {
-  "Eye (Open)": 1, "Eyeball": 2, "Eyebrow": 3, "Reading glasses": 4, "Sunglasses": 5, "Eye (Closed)": 6,
-  "Nose": 7, "Nostril": 8, "Upper Lip":9, "Lower Lip":10, "Teeth":11, "Tongue": 12, "Facial Hair":13,
-  "Face": 14, "Hair (on head)": 15, "Bald Head": 16, "Ear": 17
+# Label constants.
+EYE_OPEN = "Eye (Open)"
+EYEBALL = "Eyeball"
+EYEBROW = "Eyebrow"
+READING_GLASSES = "Reading glasses"
+SUNGLASSES = "Sunglasses"
+EYE_CLOSED = "Eye (Closed)"
+NOSE = "Nose"
+NOSTRIL = "Nostril"
+UPPER_LIP = "Upper Lip"
+LOWER_LIP = "Lower Lip"
+TEETH = "Teeth"
+TONGUE = "Tongue"
+FACIAL_HAIR = "Facial Hair"
+FACE = "Face"
+HAIR_ON_HEAD = "Hair (on head)"
+BALD_HEAD = "Bald Head"
+EAR = "Ear"
+
+# Map from label to class ID.
+label_id_map = {
+  EYE_OPEN: 1, EYEBALL: 2, EYEBROW: 3, READING_GLASSES: 4, SUNGLASSES: 5, EYE_CLOSED: 6,
+  NOSE: 7, NOSTRIL: 8, UPPER_LIP:9, LOWER_LIP:10, TEETH:11, TONGUE: 12, FACIAL_HAIR:13,
+  FACE: 14, HAIR_ON_HEAD: 15, BALD_HEAD: 16, EAR: 17
 }
 
 ############################################################
@@ -65,7 +84,7 @@ class FaceConfig(Config):
     IMAGES_PER_GPU = 1
 
     # Number of classes (including background)
-    NUM_CLASSES = 17 + 1  # Background + class_dict
+    NUM_CLASSES = 17 + 1  # Background + classes
 
     # Number of training steps per epoch
     STEPS_PER_EPOCH = 100
@@ -92,8 +111,8 @@ class FaceDataset(utils.Dataset):
         """
         source = "face"
         # Add classes.
-        for c in class_dict:
-          self.add_class(source, class_dict[c], c)
+        for c in label_id_map:
+          self.add_class(source, label_id_map[c], c)
 
         # Train or validation dataset?
         assert subset in ["train", "val"]
@@ -131,7 +150,7 @@ class FaceDataset(utils.Dataset):
                 ann_path = os.path.join(os.path.join(merged_dir, c), os.path.splitext(f)[0]+".json" )
                 ann = json.load(open(ann_path))
                 for d in ann:
-                  if d["class"] not in class_dict:
+                  if d["class"] not in label_id_map:
                     continue
                   polygons.append(d)
                 annotation_count += 1
@@ -179,7 +198,7 @@ class FaceDataset(utils.Dataset):
             rr, cc = skimage.draw.polygon(y, x, shape=(info["height"] , info["width"]))
             mask[rr, cc, i] = 1
 
-          class_ids[i] = class_dict[c["class"]]
+          class_ids[i] = label_id_map[c["class"]]
 
         # Return mask, and array of class IDs of each instance.
         return mask.astype(np.bool), class_ids
