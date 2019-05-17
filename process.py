@@ -118,6 +118,21 @@ def merge_face_ear(imagePath, ann):
     return
 
   vpts = []
+
+  remPoints = set(allPoints.copy())
+  for i in range(-1, len(tpoints)-1, 2):
+    pfamily = []
+    if tpoints[i] in set(face):
+      pfamily = face
+    elif tpoints[i] in set(ears[0]):
+      pfamily = ears[0]
+    else:
+      pfamily = ears[1]
+
+    dpoints = points_between(tpoints[i], tpoints[i+1],  pfamily)
+    vpts += fit_smooth_spline(dpoints)
+    remPoints -= set(dpoints)
+
   for i in range(0, len(tpoints), 2):
     tpt1, tpt2 = tpoints[i], tpoints[i+1]
     f = tpoints[i] if tpoints[i] in set(face) else tpoints[i+1]
@@ -138,7 +153,7 @@ def merge_face_ear(imagePath, ann):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=False, up=False)
       fvpts = vpoints_face_ear(f, face , clockwise=True, left=True, up=True, extraArg=e)
 
-    vpts += fit_polynomial(evpts+fvpts)
+    vpts += fit_polynomial(evpts+fvpts, k=5)
 
   set_color(image, vpts, 4)
 
@@ -150,9 +165,29 @@ def merge_face_ear(imagePath, ann):
   key = cv2.waitKey(0)
 
 """
+fit_smooth_spline fits a smooth spline connect given points.
+"""
+def fit_smooth_spline(points):
+  x = np.array([p[0] for p in points])
+  y = np.array([p[1] for p in points])
+
+  # distance huerstic is deciding values for parameter t.
+  # Found online.
+  t = np.zeros(x.shape)
+  t[1:] = np.sqrt((x[1:] - x[:-1])**2 + (y[1:] - y[:-1])**2)
+  t = np.cumsum(t)
+  t /= t[-1]
+
+  nt = np.linspace(0, 1, 20)
+  x2 = scipy.interpolate.spline(t, x, nt)
+  y2 = scipy.interpolate.spline(t, y, nt)
+
+  return [(int(x2[i]), int(y2[i])) for i in range(len(x2))]
+
+"""
 fit_polynomial fits a polynomial from given set of points.
 """
-def fit_polynomial(points):
+def fit_polynomial(points, k=3):
   xlims = xlimits(points)
   m = xMap(points)
 
@@ -164,7 +199,7 @@ def fit_polynomial(points):
     xarr.append(x)
     yarr.append(m[x])
 
-  p = np.poly1d(np.polyfit(xarr, yarr, 5))
+  p = np.poly1d(np.polyfit(xarr, yarr, k))
   return [(x, int(p(x))) for x in range(xlims[0], xlims[1]+1)]
 
 
@@ -228,6 +263,23 @@ def vpoints_face_ear(p, points, clockwise=True, left=True, up=True, extraArg=Non
   return vpoints
 
 """
+points_between returns the points between the given indices in the given
+points. Note that that point a and point b are assumed to be one after
+the other while moving in clockwise direction.
+"""
+def points_between(a, b, points):
+  i = find_index(a, points)
+  j = find_index(b, points)
+
+  ndx = i
+  res = []
+  while ndx != j:
+    ndx = next_index(ndx, points, clockwise=True)
+    res.append(points[ndx])
+
+  return res
+
+"""
 next_index returns next index to given index along given direction.
 """
 def next_index(i, points, clockwise=False):
@@ -242,14 +294,15 @@ We return all pairs of such transiitons.
 """
 def check_short_transition(ears, face, chull):
   fset = set(face)
+  eset = set()
+  for ear in ears:
+    eset.update(ear)
   res = []
 
-  for ear in ears:
-    eset = set(ear)
-    for i in range(len(chull)):
-      if transition(tuple(chull[i]), tuple(chull[i-1]), eset, fset):
-        res.append(tuple(chull[i]))
-        res.append(tuple(chull[i-1]))
+  for i in range(len(chull)):
+    if transition(tuple(chull[i]), tuple(chull[i-1]), eset, fset):
+      res.append(tuple(chull[i-1]))
+      res.append(tuple(chull[i]))
 
   return res
 
