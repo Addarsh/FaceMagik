@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from inference import ANNOTATIONS_DIR, OUTPUT_DIR, CLASS, DATA
 from imantics import Polygons
+from rdp import rdp
 from train import (
   EYE_OPEN,
   EYEBALL,
@@ -162,8 +163,8 @@ def merge_face_ear(imagePath, ann):
 
     count += 1
 
-  print (fit_smooth_spline(vpts))
-  set_color(image, fit_smooth_spline(vpts), 4)
+  print (rdp(vpts, epsilon=0.5))
+  set_color(image, rdp(vpts, epsilon=0.5), 4)
 
   windowName = "image"
   cv2.namedWindow(windowName,cv2.WINDOW_NORMAL)
