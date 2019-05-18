@@ -74,7 +74,6 @@ def convexify(imagePath, ann):
 Merges face and ear. Currently tested only on short hair faces.
 """
 def merge_face_ear(imagePath, ann):
-  #image = skimage.io.imread(imagePath)
   image = cv2.imread(imagePath)
 
   face = []
@@ -117,10 +116,8 @@ def merge_face_ear(imagePath, ann):
     print ("Face and ear have no transition points; something must be horribly wrong!")
     return
 
-  vpts = []
-
-  remPoints = set(allPoints.copy())
-  for i in range(-1, len(tpoints)-1, 2):
+  pbetween = []
+  for i in range(1, len(tpoints), 2):
     pfamily = []
     if tpoints[i] in set(face):
       pfamily = face
@@ -129,10 +126,12 @@ def merge_face_ear(imagePath, ann):
     else:
       pfamily = ears[1]
 
-    dpoints = points_between(tpoints[i], tpoints[i+1],  pfamily)
-    vpts += fit_smooth_spline(dpoints)
-    remPoints -= set(dpoints)
+    j = 0 if i == len(tpoints)-1 else i+1
+    dpoints = points_between(tpoints[i], tpoints[j],  pfamily)
+    pbetween.append(dpoints)
 
+  vpts = []
+  count = 0
   for i in range(0, len(tpoints), 2):
     tpt1, tpt2 = tpoints[i], tpoints[i+1]
     f = tpoints[i] if tpoints[i] in set(face) else tpoints[i+1]
@@ -140,22 +139,31 @@ def merge_face_ear(imagePath, ann):
 
     evpts = []
     fvpts = []
+    hpts = []
     if is_higher(f, e) and is_right(e, f):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=True, up=True)
       fvpts = vpoints_face_ear(f, face , clockwise=True, left=False, up=False, extraArg=e)
+      hpts = fvpts + list(reversed(evpts))
     elif is_higher(f, e) and is_left(e, f):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=True, left=False, up=True)
       fvpts = vpoints_face_ear(f, face , clockwise=False, left=True, up=False, extraArg=e)
+      hpts = evpts + list(reversed(fvpts))
     elif is_higher(e, f) and is_right(e, f):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=True, left=True, up=False)
       fvpts = vpoints_face_ear(f, face , clockwise=False, left=False, up=True, extraArg=e)
+      hpts = evpts + list(reversed(fvpts))
     elif is_higher(e, f) and is_left(e, f):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=False, up=False)
       fvpts = vpoints_face_ear(f, face , clockwise=True, left=True, up=True, extraArg=e)
+      hpts = fvpts + list(reversed(evpts))
 
-    vpts += fit_polynomial(evpts+fvpts, k=5)
+    vpts += hpts
+    vpts += pbetween[count]
 
-  set_color(image, vpts, 4)
+    count += 1
+
+  print (fit_smooth_spline(vpts))
+  set_color(image, fit_smooth_spline(vpts), 4)
 
   windowName = "image"
   cv2.namedWindow(windowName,cv2.WINDOW_NORMAL)
@@ -171,14 +179,12 @@ def fit_smooth_spline(points):
   x = np.array([p[0] for p in points])
   y = np.array([p[1] for p in points])
 
-  # distance huerstic is deciding values for parameter t.
+  # Some huerstic deciding values for parameter t.
   # Found online.
-  t = np.zeros(x.shape)
-  t[1:] = np.sqrt((x[1:] - x[:-1])**2 + (y[1:] - y[:-1])**2)
-  t = np.cumsum(t)
+  t = np.arange(x.shape[0], dtype=float)
   t /= t[-1]
 
-  nt = np.linspace(0, 1, 20)
+  nt = np.linspace(0, 1, 100)
   x2 = scipy.interpolate.spline(t, x, nt)
   y2 = scipy.interpolate.spline(t, y, nt)
 
@@ -273,8 +279,10 @@ def points_between(a, b, points):
 
   ndx = i
   res = []
-  while ndx != j:
+  while True:
     ndx = next_index(ndx, points, clockwise=True)
+    if ndx == j:
+      break
     res.append(points[ndx])
 
   return res
