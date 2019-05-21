@@ -132,6 +132,7 @@ def merge_face_ear(ann):
     return []
 
   pbetween = []
+  usedEpts = [[] for i in range(len(ears))]
   for i in range(1, len(tpoints), 2):
     pfamily = []
     if tpoints[i] in set(face):
@@ -144,6 +145,10 @@ def merge_face_ear(ann):
     j = 0 if i == len(tpoints)-1 else i+1
     dpoints = points_between(tpoints[i], tpoints[j],  pfamily)
     pbetween.append(dpoints)
+    if pfamily == ears[0]:
+      usedEpts[0] += dpoints
+    elif len(ears) > 1 and pfamily == ears[1]:
+      usedEpts[1] += dpoints
 
   vpts = []
   count = 0
@@ -177,9 +182,32 @@ def merge_face_ear(ann):
 
     count += 1
 
-  resPts = rdp(vpts, epsilon=0.5)
+    if e in set(ears[0]):
+      usedEpts[0] += evpts
+    elif len(ears) > 1 and e in set(ears[1]):
+      usedEpts[1] += evpts
 
-  return list(reversed(resPts)), d
+  resPts = rdp(vpts, epsilon=0.5)
+  remEarPts = rem_ear_points(usedEpts, ears)
+  wEpts = []
+  for epts in remEarPts:
+    wEpts.append(epts)
+
+  return list(reversed(resPts)), wEpts, d
+
+"""
+rem_ear_points returns the remaining ear points post merge for
+each ear.
+"""
+def rem_ear_points(usedEpts, ears):
+  rem = [[] for i in range(len(usedEpts))]
+  for i, ear in enumerate(ears):
+    uset = set(usedEpts[i])
+    for p in ear:
+      if p not in uset:
+        rem[i].append(p)
+
+  return rem
 
 """
 merge_face_hair will merge given face points with hair
@@ -248,8 +276,7 @@ def merge_face_hair(mergedPts, d):
 
   vpts = vvpts[0] + pbetween[0] + vvpts[1]
 
-  print ("HAIR: ", [mergedPts, vpts])
-  return [vpts, mergedPts]
+  return [mergedPts, vpts]
 
 """
 plot given points on given image.
@@ -265,24 +292,6 @@ def view_image(imagePath, points):
 
   cv2.imshow(windowName, image)
   key = cv2.waitKey(0)
-
-"""
-fit_smooth_spline fits a smooth spline connect given points.
-"""
-def fit_smooth_spline(points):
-  x = np.array([p[0] for p in points])
-  y = np.array([p[1] for p in points])
-
-  # Some huerstic deciding values for parameter t.
-  # Found online.
-  t = np.arange(x.shape[0], dtype=float)
-  t /= t[-1]
-
-  nt = np.linspace(0, 1, 100)
-  x2 = scipy.interpolate.spline(t, x, nt)
-  y2 = scipy.interpolate.spline(t, y, nt)
-
-  return [(int(x2[i]), int(y2[i])) for i in range(len(x2))]
 
 """
 fit_polynomial fits a polynomial from given set of points.
@@ -379,7 +388,6 @@ def vpoints_hair_face(h, hair, f, faceMask, clockwise=True):
 
   # Flip vertices so polynomial can be fit.
   g = fit_polynomial([(p[1], p[0]) for p in polyPoints], k =2)
-  #np.poly1d(np.polyfit(xarr, yarr, k))
   res = []
   p = (hair[idx][0], hair[idx][1])
   x = hair[idx][1]
@@ -440,7 +448,7 @@ def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
   x = hair[idx][1]
   count = 0
   maskSet = set(mergedPtsMask)
-  while p not in maskSet and count < 200:
+  while p not in maskSet and count < 300:
     res.append(p)
     x += 1
     p = (int(g(x)), x)
@@ -577,6 +585,8 @@ if __name__ == "__main__":
   elif args.op == "convex":
     convexify(args.image, ann)
   else:
-    mergedPts, d = merge_face_ear(ann)
+    mergedPts, remEarPts, d = merge_face_ear(ann)
     mergedPts = merge_face_hair(mergedPts, d)
+    mergedPts += remEarPts
+    print ("FINAL PTS: ", mergedPts)
     view_image(args.image, mergedPts)
