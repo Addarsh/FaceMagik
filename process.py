@@ -9,7 +9,7 @@ import scipy
 import cv2
 import numpy as np
 from inference import ANNOTATIONS_DIR, OUTPUT_DIR, CLASS, DATA
-from imantics import Polygons
+from imantics import Polygons, Mask
 from rdp import rdp
 from train import (
   EYE_OPEN,
@@ -74,34 +74,48 @@ def convexify(imagePath, ann):
 """
 Merges face and ear. Currently tested only on short hair faces.
 """
-def merge_face_ear(imagePath, ann):
-  image = cv2.imread(imagePath)
-
+def merge_face_ear(ann):
   face = []
   pears = []
   for c in ann:
     if c[CLASS] == FACE:
       if len(c[DATA]) > 1:
         print ("More than 1 face image is not supported yet")
-        return
+        return []
       face = c[DATA][0]
       continue
 
     if c[CLASS] == EAR:
       if len(c[DATA]) > 1:
         print ("More than 1 ear image is not supported yet")
-        return
+        return []
       pears.append(c[DATA][0])
+      continue
+
+    if c[CLASS] == HAIR_ON_HEAD:
+      if len(c[DATA]) > 1:
+        print ("More than 1 hair image is not supported yet")
+        return []
+      hair = c[DATA][0]
       continue
 
   if len(pears) == 0 or len(pears) > 2:
     print ("Incorrect number of ears: ", len(pears) ," review please!")
-    return
+    return []
+
+  if len(hair) == 0:
+    print ("hair not found: ", len(pears) ," review please!")
+    return []
 
   face = to_points(face)
   ears = []
   for ear in pears:
     ears.append(to_points(ear))
+  # dictionary that stores original boundary points.
+  d = {}
+  d[FACE] = face
+  d[EAR] = ears
+  d[HAIR_ON_HEAD] = to_points(hair)
 
   allPoints = []
   for ear in ears:
@@ -115,7 +129,7 @@ def merge_face_ear(imagePath, ann):
 
   if len(tpoints) == 0:
     print ("Face and ear have no transition points; something must be horribly wrong!")
-    return
+    return []
 
   pbetween = []
   for i in range(1, len(tpoints), 2):
@@ -163,8 +177,87 @@ def merge_face_ear(imagePath, ann):
 
     count += 1
 
-  print (rdp(vpts, epsilon=0.5))
-  set_color(image, rdp(vpts, epsilon=0.5), 4)
+  resPts = rdp(vpts, epsilon=0.5)
+
+  return list(reversed(resPts)), d
+
+"""
+merge_face_hair will merge given face points with hair
+label in annotations. All lists of points are in counter clockwise
+direction.
+"""
+def merge_face_hair(mergedPts, d):
+  hair = d[HAIR_ON_HEAD]
+  mergedPts = to_points(mergedPts)
+
+  allPoints = hair + mergedPts
+  cv = scipy.spatial.ConvexHull(allPoints)
+  chull = np.array(allPoints)[cv.vertices]
+
+  tpoints = check_short_transition([hair], mergedPts, chull)
+
+  if len(tpoints) == 0:
+    print ("No transiiton with hair; try some other method.")
+    return []
+
+  pbetween = []
+  for i in range(1, len(tpoints), 2):
+    if not tpoints[i] in set(hair):
+      continue
+    j = 0 if i == len(tpoints)-1 else i+1
+    dpoints = points_between(tpoints[i], tpoints[j],  hair)
+    pbetween.append(dpoints)
+
+  if len(pbetween) != 1:
+    print ("Points between: ", len(pbetween), " is not equal to 1!")
+    return []
+
+
+  vvpts = []
+  mergedPtsMask = Polygons([mergedPts]).mask(width=1024, height=1024)
+  mergedPtsMask = [(p[1], p[0]) for p in np.argwhere(mergedPtsMask.array)]
+  for i in range(0, len(tpoints), 2):
+    tpt1, tpt2 = tpoints[i], tpoints[i+1]
+    done = False
+    for epts in d[EAR]:
+      if tpoints[i] in set(epts) or tpoints[i+1] in set(epts):
+        e = tpoints[i] if tpoints[i] in set(epts) else tpoints[i+1]
+        h = tpoints[i+1] if e == tpoints[i] else tpoints[i]
+        gpts = vpoints_hair_ear(h, hair, e, epts, mergedPtsMask, clockwise=is_left(tpoints[i], tpoints[i-2]))
+        if is_left(tpoints[i], tpoints[i-2]):
+          vvpts.insert(0, gpts)
+        else:
+          vvpts.append(gpts)
+        done = True
+        break
+
+    if done:
+      continue
+
+    f = tpoints[i] if tpoints[i] in set(d[FACE]) else tpoints[i+1]
+    h = tpoints[i+1] if f == tpoints[i] else tpoints[i]
+    gpts = vpoints_hair_face(h, hair, f, mergedPtsMask, clockwise=is_left(tpoints[i], tpoints[i-2]))
+    if is_left(tpoints[i], tpoints[i-2]):
+      vvpts.insert(0, gpts)
+    else:
+      vvpts.append(gpts)
+
+  if len(vvpts) !=2 :
+    print ("Edge points: ", len(vvpts), " is not equal to 2!")
+    return []
+
+  vpts = vvpts[0] + pbetween[0] + vvpts[1]
+
+  print ("HAIR: ", [mergedPts, vpts])
+  return [vpts, mergedPts]
+
+"""
+plot given points on given image.
+"""
+def view_image(imagePath, points):
+  image = cv2.imread(imagePath)
+  for pts in points:
+    set_color(image, pts, 4)
 
   windowName = "image"
   cv2.namedWindow(windowName,cv2.WINDOW_NORMAL)
@@ -207,7 +300,7 @@ def fit_polynomial(points, k=3):
     yarr.append(m[x])
 
   p = np.poly1d(np.polyfit(xarr, yarr, k))
-  return [(x, int(p(x))) for x in range(xlims[0], xlims[1]+1)]
+  return p
 
 
 """
@@ -268,6 +361,95 @@ def vpoints_face_ear(p, points, clockwise=True, left=True, up=True, extraArg=Non
     ndx = next_index(pdx, points, clockwise)
 
   return vpoints
+
+"""
+vpoints_hair_face returns the extrapolated points from given hair point
+to face mask.
+"""
+def vpoints_hair_face(h, hair, f, faceMask, clockwise=True):
+  r = 10 # Num points in vicinity of h to determine polynomial curve. This number is emperical.
+  idx = find_index(h, hair)
+
+  polyPoints = [hair[idx]]
+  ndx = idx
+  for i in range(r):
+    ndx = next_index(ndx, hair, clockwise)
+    polyPoints.append(hair[ndx])
+  polyPoints.append(f)
+
+  # Flip vertices so polynomial can be fit.
+  g = fit_polynomial([(p[1], p[0]) for p in polyPoints], k =2)
+  #np.poly1d(np.polyfit(xarr, yarr, k))
+  res = []
+  p = (hair[idx][0], hair[idx][1])
+  x = hair[idx][1]
+  count = 0
+  maskSet = set(faceMask)
+  while p not in maskSet:
+    res.append(p)
+    x += 1
+    p = (int(g(x)), x)
+    count += 1
+
+  return res
+
+"""
+vpoints_hair_ear returns the extrapolated points from given hair point
+to face-ear mask with ear point as additional reference.
+"""
+def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
+  r = 10 # Num points in vicinity of h to determine polynomial curve. This number is emperical.
+  idx = find_index(h, hair)
+
+  polyPoints = [hair[idx]]
+  ndx = idx
+  # Add points before given transition point.
+  for i in range(r):
+    ndx = next_index(ndx, hair, clockwise)
+    polyPoints.append(hair[ndx])
+
+  polyPoints = list(reversed(polyPoints))
+
+  # Add points before given transition point.
+  pdx = idx
+  ndx = next_index(pdx, hair, not clockwise)
+  upfunc = is_lower if not clockwise else is_higher
+  rcount = 0
+  while upfunc(hair[ndx], hair[pdx]) and rcount < r:
+    polyPoints.append(hair[ndx])
+    pdx = ndx
+    ndx = next_index(pdx, hair, clockwise)
+    rcount += 1
+
+  # Get the top most ear point.
+  topEpt = e
+  pdx = find_index(e, ear)
+  ndx = next_index(pdx, ear, clockwise)
+  while is_higher(ear[ndx], ear[pdx]):
+    topEpt = ear[ndx]
+    pdx = ndx
+    ndx = next_index(pdx, ear, clockwise)
+
+  # Append ear point to curve.
+  polyPoints.append(topEpt)
+
+  # Flip vertices so polynomial can be fit.
+  g = fit_polynomial([(p[1], p[0]) for p in polyPoints], k =2)
+  res = []
+  p = (hair[idx][0], hair[idx][1])
+  x = hair[idx][1]
+  count = 0
+  maskSet = set(mergedPtsMask)
+  while p not in maskSet and count < 200:
+    res.append(p)
+    x += 1
+    p = (int(g(x)), x)
+    count += 1
+
+  # reverse list if clockwise (because it is on the left side)
+  if clockwise:
+    return list(reversed(res))
+  return res
 
 """
 points_between returns the points between the given indices in the given
@@ -395,4 +577,6 @@ if __name__ == "__main__":
   elif args.op == "convex":
     convexify(args.image, ann)
   else:
-    merge_face_ear(args.image, ann)
+    mergedPts, d = merge_face_ear(ann)
+    mergedPts = merge_face_hair(mergedPts, d)
+    view_image(args.image, mergedPts)
