@@ -30,6 +30,12 @@ from train import (
   BALD_HEAD,
   EAR,
 )
+from output import (
+  SVG_FACE_EAR,
+  SVG_HAIR,
+  SVG_LEFT_REM_EAR,
+  SVG_RIGHT_REM_EAR,
+)
 
 PROCESSED_DIR = os.path.join(OUTPUT_DIR, "processed")
 
@@ -274,9 +280,10 @@ def merge_face_hair(mergedPts, d):
     print ("Edge points: ", len(vvpts), " is not equal to 2!")
     return []
 
-  vpts = vvpts[0] + pbetween[0] + vvpts[1]
+  hairPts = vvpts[0] + pbetween[0] + vvpts[1]
 
-  return [mergedPts, vpts]
+  # Return points in counter clockwise order to be unfiorm.
+  return list(reversed(hairPts))
 
 """
 plot given points on given image.
@@ -397,7 +404,10 @@ def vpoints_hair_face(h, hair, f, faceMask, clockwise=True):
     res.append(p)
     x += 1
     p = (int(g(x)), x)
-    count += 1
+
+  # add a few more points so intersection is definite.
+  for xn in range(x, x+r*5):
+    res.append((int(g(xn)), xn))
 
   return res
 
@@ -446,13 +456,15 @@ def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
   res = []
   p = (hair[idx][0], hair[idx][1])
   x = hair[idx][1]
-  count = 0
   maskSet = set(mergedPtsMask)
-  while p not in maskSet and count < 300:
+  while p not in maskSet:
     res.append(p)
     x += 1
     p = (int(g(x)), x)
-    count += 1
+
+  # add a few more points so intersection is definite.
+  for xn in range(x, x+r*5):
+    res.append((int(g(xn)), xn))
 
   # reverse list if clockwise (because it is on the left side)
   if clockwise:
@@ -573,6 +585,7 @@ if __name__ == "__main__":
   parser.add_argument('--op', required=True,
                       metavar="operation",
                       help="operation",)
+
   args = parser.parse_args()
 
   fname = os.path.splitext(os.path.split(args.image)[1])[0]
@@ -585,8 +598,15 @@ if __name__ == "__main__":
   elif args.op == "convex":
     convexify(args.image, ann)
   else:
+    paths = {}
     mergedPts, remEarPts, d = merge_face_ear(ann)
-    mergedPts = merge_face_hair(mergedPts, d)
-    mergedPts += remEarPts
-    print ("FINAL PTS: ", mergedPts)
-    view_image(args.image, mergedPts)
+    paths[SVG_FACE_EAR] = mergedPts
+    paths[SVG_LEFT_REM_EAR] = remEarPts[0]
+    if len(remEarPts) > 1:
+      paths[SVG_RIGHT_REM_EAR] = remEarPts[1]
+
+    hairPts = merge_face_hair(mergedPts, d)
+    paths[SVG_HAIR] = hairPts
+    view_image(args.image, [mergedPts, hairPts] + remEarPts)
+    with open("paths.json", "w") as outputfile:
+      json.dump(paths, outputfile)
