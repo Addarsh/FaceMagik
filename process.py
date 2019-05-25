@@ -220,7 +220,7 @@ merge_face_hair will merge given face points with hair
 label in annotations. All lists of points are in counter clockwise
 direction.
 """
-def merge_face_hair(mergedPts, d):
+def merge_face_hair(mergedPts, d, imdims):
   hair = d[HAIR_ON_HEAD]
   mergedPts = to_points(mergedPts)
 
@@ -248,7 +248,7 @@ def merge_face_hair(mergedPts, d):
 
 
   vvpts = []
-  mergedPtsMask = Polygons([mergedPts]).mask(width=1024, height=1024)
+  mergedPtsMask = Polygons([mergedPts]).mask(width=imdims[1], height=imdims[0])
   mergedPtsMask = [(p[1], p[0]) for p in np.argwhere(mergedPtsMask.array)]
   for i in range(0, len(tpoints), 2):
     tpt1, tpt2 = tpoints[i], tpoints[i+1]
@@ -288,8 +288,7 @@ def merge_face_hair(mergedPts, d):
 """
 plot given points on given image.
 """
-def view_image(imagePath, points):
-  image = cv2.imread(imagePath)
+def view_image(image, points):
   for pts in points:
     set_color(image, pts, 4)
 
@@ -406,8 +405,9 @@ def vpoints_hair_face(h, hair, f, faceMask, clockwise=True):
     p = (int(g(x)), x)
 
   # add a few more points so intersection is definite.
-  for xn in range(x, x+r*5):
-    res.append((int(g(xn)), xn))
+  for i in range(2*r):
+    npi = -i-1 if not clockwise else i+1
+    res.append((p[0]+npi, p[1]))
 
   return res
 
@@ -436,7 +436,7 @@ def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
   while upfunc(hair[ndx], hair[pdx]) and rcount < r:
     polyPoints.append(hair[ndx])
     pdx = ndx
-    ndx = next_index(pdx, hair, clockwise)
+    ndx = next_index(pdx, hair, not clockwise)
     rcount += 1
 
   # Get the top most ear point.
@@ -462,14 +462,38 @@ def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
     x += 1
     p = (int(g(x)), x)
 
-  # add a few more points so intersection is definite.
-  for xn in range(x, x+r*5):
-    res.append((int(g(xn)), xn))
+  res += enter_mask(res[-1], r, maskSet, clockwise)
 
   # reverse list if clockwise (because it is on the left side)
   if clockwise:
     return list(reversed(res))
   return res
+
+"""
+perpendicular_line will go further a little
+and then draw the perpendicular line from that point.
+This is to ensure that intersections are not missed.
+"""
+def enter_mask(p, k, maskSet, clockwise):
+  # Try to move in Diagonal direction
+  # and downward.
+  yd = 1
+  xd = 1 if clockwise else -1
+  x, y = p
+  res = []
+  for i in range(1,k+1):
+    res.append((x+xd*i, y+yd*i))
+  return res
+
+"""
+slope returns slope between given points.
+"""
+def slope(p1, p2):
+  x1, y1 = p1
+  x2, y2 = p2
+  if x1 == x2:
+    return None
+  return (y2-y1)/(x2-x1)
 
 """
 points_between returns the points between the given indices in the given
@@ -599,14 +623,15 @@ if __name__ == "__main__":
     convexify(args.image, ann)
   else:
     paths = {}
+    image = cv2.imread(args.image)
     mergedPts, remEarPts, d = merge_face_ear(ann)
     paths[SVG_FACE_EAR] = mergedPts
     paths[SVG_LEFT_REM_EAR] = remEarPts[0]
     if len(remEarPts) > 1:
       paths[SVG_RIGHT_REM_EAR] = remEarPts[1]
 
-    hairPts = merge_face_hair(mergedPts, d)
+    hairPts = merge_face_hair(mergedPts, d, image.shape[:2])
     paths[SVG_HAIR] = hairPts
-    view_image(args.image, [mergedPts, hairPts] + remEarPts)
+    view_image(image, [mergedPts, hairPts] + remEarPts)
     with open("paths.json", "w") as outputfile:
       json.dump(paths, outputfile)

@@ -25,7 +25,6 @@ def find_intersection_points(hairPath, facePath):
   tpts = []
   for (T1, seg1, t1), (T2, seg2, t2) in hairPath.intersect(facePath):
     tpts.append(hairPath.point(T1))
-    print ("TPTS: ", T1)
     kh, th = hairPath.T2t(T1)
     kf, tf = facePath.T2t(T2)
     paramList.append(((kh, th), (kf, tf)))
@@ -110,12 +109,12 @@ if __name__ == "__main__":
     outputMap[k] = {PATH: path, ATTR: attr}
 
   intersections = merge_face_hair(outputMap)
-  #intersections = []
+  intersections = []
 
   pathList = []
   attrList = []
   for k in outputMap:
-    #if k != SVG_HAIR:
+    #if k != SVG_FACE_EAR:
     #  continue
     pathList.append(outputMap[k][PATH])
     attrList.append(outputMap[k][ATTR])
