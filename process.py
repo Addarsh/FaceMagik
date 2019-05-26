@@ -100,8 +100,8 @@ def merge_face_ear(ann):
 
     if c[CLASS] == HAIR_ON_HEAD:
       if len(c[DATA]) > 1:
-        print ("More than 1 hair image is not supported yet")
-        return []
+        hair = merge_hairs(c[DATA])
+        break
       hair = c[DATA][0]
       continue
 
@@ -284,6 +284,54 @@ def merge_face_hair(mergedPts, d, imdims):
 
   # Return points in counter clockwise order to be unfiorm.
   return list(reversed(hairPts))
+
+"""
+merge_hairs will merge hair annotations for the same instance.
+We use a convex hull to find intersection points and then use those
+points to merge the two curves. The returned merged hair is in
+counterclockwise order.
+"""
+def merge_hairs(hairAnn):
+  hairs = []
+  allPoints = []
+  for h in hairAnn:
+    hr = to_points(h)
+    allPoints += hr
+    hairs.append(hr)
+
+  cv = scipy.spatial.ConvexHull(allPoints)
+  chull = np.array(allPoints)[cv.vertices]
+
+  tpoints = check_short_transition(hairs[1:], hairs[0], chull)
+
+  if len(tpoints) == 0:
+    print ("Hair and Hair have no transition points; something must be horribly wrong!")
+    return []
+
+  pbetween = []
+  for i in range(1, len(tpoints), 2):
+    j = 0 if i == len(tpoints)-1 else i+1
+    dpoints = points_between(tpoints[i], tpoints[j],  hairs[0] if tpoints[i] in set(hairs[0]) else hairs[1])
+    pbetween.append(dpoints)
+
+  vpts = []
+  count = 0
+  for i in range(0, len(tpoints), 2):
+    tpt1, tpt2 = tpoints[i], tpoints[i+1]
+    f1 = tpoints[i] if tpoints[i] in set(hairs[0]) else tpoints[i+1]
+    f2 = tpoints[i+1] if f1 == tpoints[i] else tpoints[i]
+
+    vpts += list(reversed(pbetween[count]))
+    f1pts = move_until(f1, hairs[0], positive=is_left(f1,f2))
+    f2pts = move_until(f2, hairs[1], positive=is_left(f2,f1))
+    if is_left(f1, f2):
+      vpts += f1pts + f2pts
+    else:
+      vpts += f2pts + f1pts
+    count += 1
+
+  return vpts
+
 
 """
 plot given points on given image.
@@ -469,6 +517,60 @@ def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
     return list(reversed(res))
   return res
 
+
+"""
+move_until will move starting from given point
+along given label in given direction until
+violation of x direction constraint. Returns
+points in counter-clockwise order.
+"""
+def move_until(p, points, positive=True):
+  r = 5
+  res = [p]
+  clockwise = not is_counter_clockwise(p, points, positive)
+  func = is_right if positive else is_left
+  pp = p
+  np = move_x_points(pp, points, clockwise)
+  while func(np, pp):
+    res.append(np)
+    pp = np
+    np = move_x_points(pp, points, clockwise)
+
+  if len(res) > 2:
+    res = res[:-2]
+
+  if clockwise:
+    return list(reversed(res))
+  return res
+
+"""
+move_x_points will move from given starting point
+in the given direction in intervals based on number
+of points in the label
+"""
+def move_x_points(p, points, clockwise=True):
+  r = 1 if len(points) < 10 else int(len(points)/20)
+  idx = find_index(p, points)
+  ndx = idx
+  for i in range(r):
+    ndx = next_index(ndx, points, clockwise)
+  return points[ndx]
+
+"""
+is_clockwise returns true if moving in the given
+x direction is clockwise or counterclockwise movement
+of the label.
+"""
+def is_counter_clockwise(p, points, positive=True):
+  d = 1 if positive else -1
+  r = 5
+  idx = find_index(p, points)
+  ndx = idx
+  for i in range(r):
+    ndx = next_index(ndx, points)
+
+  return (points[ndx][0] - p[0])*d >= 0
+
 """
 perpendicular_line will go further a little
 and then draw the perpendicular line from that point.
@@ -523,9 +625,9 @@ def next_index(i, points, clockwise=False):
   return 0 if i == len(points)-1 else i+1
 
 """
-check_short_transition will check for a transition from
-face to ear or ear to face among the given set of points.
-We return all pairs of such transiitons.
+check_short_transition is a general transition
+function that will transition points in the convex
+hull of the given set of points.
 """
 def check_short_transition(ears, face, chull):
   fset = set(face)
@@ -556,7 +658,7 @@ list of tuples to allow for hashing.
 def to_points(points):
   res = []
   for p in points:
-    res.append((p[0], p[1]))
+    res.append((int(p[0]), int(p[1])))
   return res
 
 def set_color(img, points, radius=0):
@@ -632,6 +734,7 @@ if __name__ == "__main__":
 
     hairPts = merge_face_hair(mergedPts, d, image.shape[:2])
     paths[SVG_HAIR] = hairPts
+
     view_image(image, [mergedPts, hairPts] + remEarPts)
     with open("paths.json", "w") as outputfile:
       json.dump(paths, outputfile)
