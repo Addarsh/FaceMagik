@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from inference import ANNOTATIONS_DIR, OUTPUT_DIR, CLASS, DATA
 from imantics import Polygons, Mask
+from scipy.interpolate import interp1d
 from rdp import rdp
 from train import (
   EYE_OPEN,
@@ -79,6 +80,8 @@ def convexify(imagePath, ann):
 
 """
 Merges face and ear. Currently tested only on short hair faces.
+It will compute points in clockwise direction but return in
+counter clockwise direction.
 """
 def merge_face_ear(ann):
   face = []
@@ -166,6 +169,10 @@ def merge_face_ear(ann):
     evpts = []
     fvpts = []
     hpts = []
+
+    """
+    vpts is in clockwise order.
+    """
     if is_higher(f, e) and is_right(e, f):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=True, up=True)
       fvpts = vpoints_face_ear(f, face , clockwise=True, left=False, up=False, extraArg=e)
@@ -195,11 +202,8 @@ def merge_face_ear(ann):
 
   resPts = rdp(vpts, epsilon=0.5)
   remEarPts = rem_ear_points(usedEpts, ears)
-  wEpts = []
-  for epts in remEarPts:
-    wEpts.append(epts)
 
-  return list(reversed(resPts)), wEpts, d
+  return list(reversed(resPts)), remEarPts, d
 
 """
 rem_ear_points returns the remaining ear points post merge for
@@ -209,11 +213,40 @@ def rem_ear_points(usedEpts, ears):
   rem = [[] for i in range(len(usedEpts))]
   for i, ear in enumerate(ears):
     uset = set(usedEpts[i])
+    res = []
     for p in ear:
       if p not in uset:
-        rem[i].append(p)
+        res.append(p)
 
+    idx = start_ear_point_idx(res)
+    vals = []
+    ndx = idx
+    for j in range(len(res)):
+      vals.append(res[ndx])
+      ndx = 0 if ndx == len(res)-1 else ndx+1
+
+    rem[i] = fit_spline(vals)
   return rem
+
+"""
+start_ear_point_idx returns the starting ear point index
+among given ear points. It figures out the corner
+points by finding the maximum difference between
+consecutive points and choosing the larger y
+coordinate value.
+"""
+def start_ear_point_idx(points):
+  dmax = 0
+  pos1, pos2 = -1, 0
+  for i in range(-1, len(points)-1):
+    p1, p2 = points[i], points[i+1]
+    d = math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
+    if d > dmax:
+      dmax = d
+      pos1 = i
+      pos2 = i+1
+
+  return pos2
 
 """
 merge_face_hair will merge given face points with hair
@@ -346,6 +379,28 @@ def view_image(image, points):
 
   cv2.imshow(windowName, image)
   key = cv2.waitKey(0)
+
+"""
+fit_spline fits a cubic spline
+through given points. The spline passes through
+given points.
+"""
+def fit_spline(pts, k=3):
+  # Define some points:
+  points = np.array([[p[0] for p in pts],
+                   [p[1] for p in pts]]).T  # a (nbre_points x nbre_dim) array
+
+  # Linear length along the line:
+  distance = np.cumsum(np.sqrt(np.sum( np.diff(points, axis=0)**2, axis=1)))
+  distance = np.insert(distance, 0, 0)/distance[-1]
+
+  # Interpolation.
+  alpha = np.linspace(0, 1, len(pts))
+  interpolator =  interp1d(distance, points, kind='quadratic', axis=0)
+
+  interpVals = interpolator(alpha)
+
+  return [(int(p[0]),int(p[1])) for p in interpVals]
 
 """
 fit_polynomial fits a polynomial from given set of points.
@@ -510,7 +565,7 @@ def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
     x += 1
     p = (int(g(x)), x)
 
-  res += enter_mask(res[-1], r, maskSet, clockwise)
+  res += enter_mask(res[-1], 2*r, maskSet, clockwise)
 
   # reverse list if clockwise (because it is on the left side)
   if clockwise:
@@ -521,20 +576,22 @@ def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
 """
 move_until will move starting from given point
 along given label in given direction until
-violation of x direction constraint. Returns
+violation of x direction constraint. step specifies
+the number of points to be moved in given direction.
+If step is default value, then it is calculated. Returns
 points in counter-clockwise order.
 """
-def move_until(p, points, positive=True):
+def move_until(p, points, positive=True, step=-1):
   r = 5
   res = [p]
   clockwise = not is_counter_clockwise(p, points, positive)
   func = is_right if positive else is_left
   pp = p
-  np = move_x_points(pp, points, clockwise)
+  np = move_x_points(pp, points, clockwise, step)
   while func(np, pp):
     res.append(np)
     pp = np
-    np = move_x_points(pp, points, clockwise)
+    np = move_x_points(pp, points, clockwise, step)
 
   if len(res) > 2:
     res = res[:-2]
@@ -548,8 +605,11 @@ move_x_points will move from given starting point
 in the given direction in intervals based on number
 of points in the label
 """
-def move_x_points(p, points, clockwise=True):
-  r = 1 if len(points) < 10 else int(len(points)/20)
+def move_x_points(p, points, clockwise=True, step = -1):
+  if step != -1:
+    r = step
+  else:
+    r = 1 if len(points) < 10 else int(len(points)/20)
   idx = find_index(p, points)
   ndx = idx
   for i in range(r):
@@ -572,7 +632,7 @@ def is_counter_clockwise(p, points, positive=True):
   return (points[ndx][0] - p[0])*d >= 0
 
 """
-perpendicular_line will go further a little
+enter_mask will go further a little
 and then draw the perpendicular line from that point.
 This is to ensure that intersections are not missed.
 """

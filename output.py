@@ -109,12 +109,12 @@ if __name__ == "__main__":
     outputMap[k] = {PATH: path, ATTR: attr}
 
   intersections = merge_face_hair(outputMap)
-  intersections = []
+  #intersections = []
 
   pathList = []
   attrList = []
   for k in outputMap:
-    #if k != SVG_FACE_EAR:
+    #if k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
     #  continue
     pathList.append(outputMap[k][PATH])
     attrList.append(outputMap[k][ATTR])
