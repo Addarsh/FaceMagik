@@ -89,7 +89,7 @@ will modify the input map with the modified
 path and attributes.
 """
 def merge_face_hair(outputMap):
-  facePath = outputMap[SVG_FACE_EAR][PATH]
+  facePath = outputMap[SVG_FACE_EAR][PATH][0]
   hairPath = outputMap[SVG_HAIR][PATH]
 
   iPts, tpts = find_intersection_points(hairPath, facePath)
@@ -114,13 +114,28 @@ if __name__ == "__main__":
     if k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
       err = 10
       swidth = 2
+
+    if k == SVG_FACE_EAR:
+      attr = {STROKE: "#000", STROKE_WIDTH: swidth, FILL:"none"}
+      outputMap[k] = {PATH: [], ATTR: []}
+      for i, data in enumerate(p[SVG_DATA]):
+        attr_copy = attr.copy()
+        pf = fitpath(data, err)
+        sp = pathtosvg(pf)
+        sp += " Z"
+        attr_copy[FILL] = p[SVG_COLOR][i]
+
+        path = parse_path(sp)
+        if i > 0:
+          attr_copy[STROKE] = "none"
+        outputMap[k][PATH].append(path)
+        outputMap[k][ATTR].append(attr_copy)
+      continue
+
     pf = fitpath(p[SVG_DATA], err)
     sp = pathtosvg(pf)
     attr = {STROKE: "#000", STROKE_WIDTH: swidth, FILL:"none"}
-    if k == SVG_FACE_EAR:
-      sp += " Z"
-      attr[FILL] = p[SVG_COLOR]
-    elif k == SVG_HAIR:
+    if k == SVG_HAIR:
       attr[FILL] = p[SVG_COLOR]
     elif k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE:
       sp += " Z"
@@ -142,8 +157,12 @@ if __name__ == "__main__":
   pathList = []
   attrList = []
   for k in outputMap:
-    #if k == SVG_RIGHT_EYEBROW:
-    #  continue
+    if k == SVG_FACE_EAR:
+      for i, path in enumerate(outputMap[k][PATH]):
+        pathList.append(path)
+        attrList.append(outputMap[k][ATTR][i])
+      continue
+
     pathList.append(outputMap[k][PATH])
     attrList.append(outputMap[k][ATTR])
 

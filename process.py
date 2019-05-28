@@ -634,7 +634,7 @@ def post_process(args):
   paths = {}
   image = cv2.imread(args.image)
   mergedPts, remEarPts, d = merge_face_ear(ann)
-  addPointsToPath(image, paths, SVG_FACE_EAR, mergedPts, ann)
+  mmask = addPointsToPath(image, paths, SVG_FACE_EAR, mergedPts, ann)
   addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
   if len(remEarPts) > 1:
     addPointsToPath(image, paths, SVG_RIGHT_REM_EAR, remEarPts[1], ann)
@@ -682,8 +682,8 @@ def post_process(args):
   nosePts = process_nose(ann)
   addPointsToPath(image, paths, SVG_NOSE, nosePts, ann)
 
-  view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
-  #view_image(image, mmask)
+  #view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
+  view_image(image, mmask)
   with open("paths.json", "w") as outputfile:
     json.dump(paths, outputfile)
 
@@ -707,16 +707,31 @@ def addPointsToPath(image, paths, k, points, ann):
   img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
   pts1, pts2 = MathUtils.segregate_points(img, mask)
   maxpts = pts1 if len(pts1) >= len(pts2) else pts2
+  minpts = pts2 if len(pts1) >= len(pts2) else pts1
   paths[k][SVG_COLOR] = ImageUtils.rgb_to_hex(ImageUtils.avg_color(img, maxpts))
 
   res = []
   if k == SVG_FACE_EAR:
-    cdict = MathUtils.make_clusters(pts1)
+    cdict = MathUtils.make_clusters(minpts)
     for r in cdict:
       res.append(cdict[r])
 
-    res = sorted(res, key=len, reverse=True)[:3]
+    # M clusters.
+    M = 2
+    res = sorted(res, key=len, reverse=True)[:M]
     res = [MathUtils.boundary_points(p) for p in res]
+
+    g = []
+    for pts in res:
+      g.append([(int(pts[i][0]), int(pts[i][1])) for i in range(len(pts)) if i % 10 == 0])
+    res = g
+
+    # Add new curves to the face data.
+    res.insert(0, points)
+    paths[k][SVG_DATA] = res
+
+    paths[k][SVG_COLOR] = [ImageUtils.rgb_to_hex(ImageUtils.avg_color(img, maxpts))] + \
+      [ImageUtils.rgb_to_hex(ImageUtils.avg_color(img, minpts)) for i in range(M)]
   return res
 
 
