@@ -12,8 +12,8 @@ from inference import ANNOTATIONS_DIR, OUTPUT_DIR, CLASS, DATA
 from imantics import Polygons, Mask
 from scipy.interpolate import interp1d
 from rdp import rdp
-sys.path.insert(0,"/Users/addarsh/virtualenvs/toonime/src")
-from math_utils import MathUtils, ImageUtils
+from math_utils import MathUtils
+from image_utils import ImageUtils
 from train import (
   EYE_OPEN,
   EYEBALL,
