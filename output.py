@@ -3,10 +3,21 @@ from path_fitter import fitpath, pathtosvg, drawsvg
 import json
 
 # SVG JSON file constants.
+SVG_DATA = "SVG Data"
+SVG_COLOR = "SVG Color"
 SVG_FACE_EAR = "SVG Face Ear"
 SVG_LEFT_REM_EAR = "SVG Left Rem Ear"
 SVG_RIGHT_REM_EAR = "SVG Right Rem Ear"
 SVG_HAIR = "SVG Hair"
+SVG_LEFT_OPEN_EYE = "SVG Left Open Eye"
+SVG_RIGHT_OPEN_EYE = "SVG Right Open Eye"
+SVG_LEFT_EYEBROW = "SVG Left Eyebrow"
+SVG_RIGHT_EYEBROW = "SVG Right Eyebrow"
+SVG_LEFT_EYEBALL = "SVG Left Eyeball"
+SVG_RIGHT_EYEBALL = "SVG Right Eyeball"
+SVG_NOSE = "SVG Nose"
+SVG_LEFT_NOSTRIL = "SVG Left Nostril"
+SVG_RIGHT_NOSTRIL = "SVG Right Nostril"
 
 # SVG Attribute constants.
 STROKE = "stroke"
@@ -88,7 +99,6 @@ def merge_face_hair(outputMap):
   reverse_path(facePath, (iPts[1][1], iPts[0][1]), path)
 
   outputMap[SVG_HAIR][PATH] = path
-  outputMap[SVG_HAIR][ATTR][FILL] = "#000"
 
   return tpts
 
@@ -99,22 +109,40 @@ if __name__ == "__main__":
 
   outputMap = {}
   for k, p in d.items():
-    pf = fitpath(p)
+    err = 50
+    swidth = 5
+    if k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
+      err = 10
+      swidth = 2
+    pf = fitpath(p[SVG_DATA], err)
     sp = pathtosvg(pf)
-    attr = {STROKE: "#000", STROKE_WIDTH: 5, FILL:"none"}
+    attr = {STROKE: "#000", STROKE_WIDTH: swidth, FILL:"none"}
     if k == SVG_FACE_EAR:
       sp += " Z"
-      attr[FILL] = "#654321"
+      attr[FILL] = p[SVG_COLOR]
+    elif k == SVG_HAIR:
+      attr[FILL] = p[SVG_COLOR]
+    elif k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE:
+      sp += " Z"
+      attr[FILL] = "#ffffff"
+    elif k == SVG_LEFT_EYEBROW or k == SVG_RIGHT_EYEBROW or \
+      k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL:
+      sp += "Z"
+      attr[FILL] = p[SVG_COLOR]
+    elif k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL:
+      sp += " Z"
+      attr[FILL] = "#000000"
+
     path = parse_path(sp)
     outputMap[k] = {PATH: path, ATTR: attr}
 
   intersections = merge_face_hair(outputMap)
-  #intersections = []
+  intersections = []
 
   pathList = []
   attrList = []
   for k in outputMap:
-    #if k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
+    #if k == SVG_RIGHT_EYEBROW:
     #  continue
     pathList.append(outputMap[k][PATH])
     attrList.append(outputMap[k][ATTR])

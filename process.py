@@ -12,6 +12,8 @@ from inference import ANNOTATIONS_DIR, OUTPUT_DIR, CLASS, DATA
 from imantics import Polygons, Mask
 from scipy.interpolate import interp1d
 from rdp import rdp
+sys.path.insert(0,"/Users/addarsh/virtualenvs/toonime/src")
+from math_utils import MathUtils, ImageUtils
 from train import (
   EYE_OPEN,
   EYEBALL,
@@ -32,10 +34,21 @@ from train import (
   EAR,
 )
 from output import (
+  SVG_COLOR,
+  SVG_DATA,
   SVG_FACE_EAR,
   SVG_HAIR,
   SVG_LEFT_REM_EAR,
   SVG_RIGHT_REM_EAR,
+  SVG_LEFT_OPEN_EYE,
+  SVG_RIGHT_OPEN_EYE,
+  SVG_LEFT_EYEBROW,
+  SVG_RIGHT_EYEBROW,
+  SVG_LEFT_EYEBALL,
+  SVG_RIGHT_EYEBALL,
+  SVG_NOSE,
+  SVG_LEFT_NOSTRIL,
+  SVG_RIGHT_NOSTRIL,
 )
 
 PROCESSED_DIR = os.path.join(OUTPUT_DIR, "processed")
@@ -572,6 +585,182 @@ def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
     return list(reversed(res))
   return res
 
+"""
+process_nose processes nose annotations and
+returns relevant curve.
+"""
+def process_nose(ann):
+  nosePts = []
+  for c in ann:
+    if c[CLASS] == NOSE:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Nose Data points: ", len(c[DATA]), " is not 1")
+      nosePts = to_points(c[DATA][0])
+      break
+
+  nosePts = to_points(nosePts)
+  cv = scipy.spatial.ConvexHull(nosePts)
+  chull = np.array(nosePts)[cv.vertices]
+
+  # Find the 3 important points in the convex hull.
+  topPt, leftPt, rightPt = find_nose_points(chull)
+  topIdx = find_index((topPt[0], topPt[1]), nosePts)
+  leftIdx = find_index((leftPt[0], leftPt[1]), nosePts)
+  rightIdx = find_index((rightPt[0], rightPt[1]), nosePts)
+
+  # Go to the left from the top most point.
+  # Go to the right from top most point.
+  leftPts = move_until(nosePts[topIdx], nosePts, positive=False, step=1, discard_pts=0)
+  leftNosePt = leftPts[-1]
+  rightPts = move_until(nosePts[topIdx], nosePts, positive=True, step=1, discard_pts=0)
+  rightNosePt = rightPts[-1]
+
+  # Get points from left point to right point.
+  res = [leftNosePt]
+  ndx = find_index(leftNosePt, nosePts)
+  fdx = find_index(rightNosePt, nosePts)
+  while ndx != fdx:
+    ndx = next_index(ndx, nosePts, clockwise=False)
+    res.append(nosePts[ndx])
+
+  return res
+
+
+"""
+post_process will take input annotations and post process
+them so they can converted to vector graphics.
+"""
+def post_process(args):
+  paths = {}
+  image = cv2.imread(args.image)
+  mergedPts, remEarPts, d = merge_face_ear(ann)
+  addPointsToPath(image, paths, SVG_FACE_EAR, mergedPts, ann)
+  addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
+  if len(remEarPts) > 1:
+    addPointsToPath(image, paths, SVG_RIGHT_REM_EAR, remEarPts[1], ann)
+
+  hairPts = merge_face_hair(mergedPts, d, image.shape[:2])
+  addPointsToPath(image, paths, SVG_HAIR, hairPts, ann)
+
+  # Add eyes to image.
+  for c in ann:
+    if c[CLASS] == EYE_OPEN:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Eye Open Data points: ", len(c[DATA]), " is not 1")
+      facePts = to_points(c[DATA][0])
+      if SVG_LEFT_OPEN_EYE not in paths:
+        addPointsToPath(image, paths, SVG_LEFT_OPEN_EYE, facePts, ann)
+      else:
+        addPointsToPath(image, paths, SVG_RIGHT_OPEN_EYE, facePts, ann)
+    elif c[CLASS] == EYEBROW:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Eyebrow Data points: ", len(c[DATA]), " is not 1")
+      eyebrowPts = to_points(c[DATA][0])
+      if SVG_LEFT_EYEBROW not in paths:
+        addPointsToPath(image, paths, SVG_LEFT_EYEBROW, eyebrowPts, ann)
+      else:
+        addPointsToPath(image, paths, SVG_RIGHT_EYEBROW, eyebrowPts, ann)
+    elif c[CLASS] == NOSTRIL:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Nostril data points: ", len(c[DATA]), " is not 1")
+      nostrilPts = to_points(c[DATA][0])
+      if SVG_LEFT_NOSTRIL not in paths:
+        addPointsToPath(image, paths, SVG_LEFT_NOSTRIL, nostrilPts, ann)
+      else:
+        addPointsToPath(image, paths, SVG_RIGHT_NOSTRIL, nostrilPts, ann)
+
+  for c in ann:
+    if c[CLASS] == EYEBALL:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Eyeball Data points: ", len(c[DATA]), " is not 1")
+      eyeballPts = to_points(c[DATA][0])
+      if SVG_LEFT_EYEBALL not in paths:
+        addPointsToPath(image, paths, SVG_LEFT_EYEBALL, eyeballPts, ann)
+      else:
+        addPointsToPath(image, paths, SVG_RIGHT_EYEBALL, eyeballPts, ann)
+
+  nosePts = process_nose(ann)
+  addPointsToPath(image, paths, SVG_NOSE, nosePts, ann)
+
+  view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
+  #view_image(image, mmask)
+  with open("paths.json", "w") as outputfile:
+    json.dump(paths, outputfile)
+
+"""
+addPointsToPath will add given points to given path dictionary.
+"""
+def addPointsToPath(image, paths, k, points, ann):
+  paths[k] = {}
+  paths[k][SVG_DATA] = points
+
+  if k != SVG_HAIR and k != SVG_FACE_EAR and k != SVG_LEFT_EYEBROW and k != SVG_RIGHT_EYEBROW and \
+  k != SVG_LEFT_EYEBALL and k != SVG_RIGHT_EYEBALL:
+    return
+
+  #Get color from annotation masks.
+  label = label_map(k)
+  bpts = get_ann_points(ann, label)
+  mask = Polygons(bpts).mask(width=image.shape[1], height=image.shape[0])
+  mask = [(p[1], p[0]) for p in np.argwhere(mask.array)]
+
+  img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+  pts1, pts2 = MathUtils.segregate_points(img, mask)
+  maxpts = pts1 if len(pts1) >= len(pts2) else pts2
+  paths[k][SVG_COLOR] = ImageUtils.rgb_to_hex(ImageUtils.avg_color(img, maxpts))
+
+  res = []
+  if k == SVG_FACE_EAR:
+    cdict = MathUtils.make_clusters(pts1)
+    for r in cdict:
+      res.append(cdict[r])
+
+    res = sorted(res, key=len, reverse=True)[:3]
+    res = [MathUtils.boundary_points(p) for p in res]
+  return res
+
+
+"""
+label_map returns mapping from svg label to annotation label.
+"""
+def label_map(k):
+  if k == SVG_HAIR:
+    return HAIR_ON_HEAD
+  if k == SVG_FACE_EAR:
+    return FACE
+  if k == SVG_LEFT_EYEBROW or k == SVG_RIGHT_EYEBROW:
+    return EYEBROW
+  if k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL:
+    return EYEBALL
+
+"""
+get_ann_points returns annotation points for given label
+from ann.
+"""
+def get_ann_points(ann, label):
+  for c in ann:
+    if c[CLASS] == label:
+      return c[DATA]
+
+"""
+find_nose_points will return the leftmost, rightmost
+and topmost point indices amond the given Convex hull nose points.
+"""
+def find_nose_points(nosePts):
+  yminIdx = 0
+  xminIdx = 0
+  xmaxIdx = 0
+  for i in range(1, len(nosePts)):
+    p = nosePts[i]
+    if p[1] < nosePts[yminIdx][1]:
+      yminIdx = i
+    if p[0] < nosePts[xminIdx][0]:
+      xminIdx = i
+    if p[0] > nosePts[xmaxIdx][0]:
+      xmaxIdx = i
+
+  return nosePts[yminIdx], nosePts[xminIdx], nosePts[xmaxIdx]
+
 
 """
 move_until will move starting from given point
@@ -581,7 +770,7 @@ the number of points to be moved in given direction.
 If step is default value, then it is calculated. Returns
 points in counter-clockwise order.
 """
-def move_until(p, points, positive=True, step=-1):
+def move_until(p, points, positive=True, step=-1, discard_pts=2):
   r = 5
   res = [p]
   clockwise = not is_counter_clockwise(p, points, positive)
@@ -593,8 +782,8 @@ def move_until(p, points, positive=True, step=-1):
     pp = np
     np = move_x_points(pp, points, clockwise, step)
 
-  if len(res) > 2:
-    res = res[:-2]
+  if len(res) > discard_pts and discard_pts != 0:
+    res = res[:-discard_pts]
 
   if clockwise:
     return list(reversed(res))
@@ -784,17 +973,4 @@ if __name__ == "__main__":
   elif args.op == "convex":
     convexify(args.image, ann)
   else:
-    paths = {}
-    image = cv2.imread(args.image)
-    mergedPts, remEarPts, d = merge_face_ear(ann)
-    paths[SVG_FACE_EAR] = mergedPts
-    paths[SVG_LEFT_REM_EAR] = remEarPts[0]
-    if len(remEarPts) > 1:
-      paths[SVG_RIGHT_REM_EAR] = remEarPts[1]
-
-    hairPts = merge_face_hair(mergedPts, d, image.shape[:2])
-    paths[SVG_HAIR] = hairPts
-
-    view_image(image, [mergedPts, hairPts] + remEarPts)
-    with open("paths.json", "w") as outputfile:
-      json.dump(paths, outputfile)
+    post_process(args)
