@@ -7,6 +7,7 @@ import json
 import math
 import scipy
 import cv2
+from skimage.filters import sobel
 import numpy as np
 from inference import ANNOTATIONS_DIR, OUTPUT_DIR, CLASS, DATA
 from imantics import Polygons, Mask
@@ -641,7 +642,7 @@ def post_process(args):
   addPointsToPath(image, paths, SVG_FACE_EAR, mergedPts, ann)
   addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
   if len(remEarPts) > 1:
-    addPointsToPath(image, paths, SVG_RIGHT_REM_EAR, remEarPts[1], ann)
+    addPointsToPath(image, paths, SVG_RIGHT_REM_EAR, remEarPts[1], ann, left=False)
 
   hairPts = merge_face_hair(mergedPts, d, image.shape[:2])
   addPointsToPath(image, paths, SVG_HAIR, hairPts, ann)
@@ -655,7 +656,7 @@ def post_process(args):
       if SVG_LEFT_OPEN_EYE not in paths:
         addPointsToPath(image, paths, SVG_LEFT_OPEN_EYE, facePts, ann)
       else:
-        addPointsToPath(image, paths, SVG_RIGHT_OPEN_EYE, facePts, ann)
+        addPointsToPath(image, paths, SVG_RIGHT_OPEN_EYE, facePts, ann, left=False)
     elif c[CLASS] == EYEBROW:
       if len(c[DATA]) != 1:
         raise Exception("Length of Eyebrow Data points: ", len(c[DATA]), " is not 1")
@@ -663,7 +664,7 @@ def post_process(args):
       if SVG_LEFT_EYEBROW not in paths:
         addPointsToPath(image, paths, SVG_LEFT_EYEBROW, eyebrowPts, ann)
       else:
-        addPointsToPath(image, paths, SVG_RIGHT_EYEBROW, eyebrowPts, ann)
+        addPointsToPath(image, paths, SVG_RIGHT_EYEBROW, eyebrowPts, ann, left=False)
     elif c[CLASS] == NOSTRIL:
       if len(c[DATA]) != 1:
         raise Exception("Length of Nostril data points: ", len(c[DATA]), " is not 1")
@@ -671,7 +672,7 @@ def post_process(args):
       if SVG_LEFT_NOSTRIL not in paths:
         addPointsToPath(image, paths, SVG_LEFT_NOSTRIL, nostrilPts, ann)
       else:
-        addPointsToPath(image, paths, SVG_RIGHT_NOSTRIL, nostrilPts, ann)
+        addPointsToPath(image, paths, SVG_RIGHT_NOSTRIL, nostrilPts, ann, left=False)
 
   for c in ann:
     if c[CLASS] == EYEBALL:
@@ -681,7 +682,7 @@ def post_process(args):
       if SVG_LEFT_EYEBALL not in paths:
         addPointsToPath(image, paths, SVG_LEFT_EYEBALL, eyeballPts, ann)
       else:
-        addPointsToPath(image, paths, SVG_RIGHT_EYEBALL, eyeballPts, ann)
+        addPointsToPath(image, paths, SVG_RIGHT_EYEBALL, eyeballPts, ann, left=False)
 
   nosePts = process_nose(ann)
   addPointsToPath(image, paths, SVG_NOSE, nosePts, ann)
@@ -833,7 +834,6 @@ def find_nose_points(nosePts):
       xmaxIdx = i
 
   return nosePts[yminIdx], nosePts[xminIdx], nosePts[xmaxIdx]
-
 
 """
 move_until will move starting from given point

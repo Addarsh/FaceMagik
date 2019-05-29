@@ -679,6 +679,25 @@ class MathUtils:
       x.parent = MathUtils.Find(x.parent)
       return x.parent
 
+  """
+  distance_between_polygons takes given input points
+  of two polygons and returns the distance between them.
+  """
+  @staticmethod
+  def distance_between_polygons(poly1, poly2):
+    return MathUtils.distance(MathUtils.centroid(poly1), MathUtils.centroid(poly2))
+
+  """
+  centroid returns centroid of given points.
+  """
+  @staticmethod
+  def centroid(points):
+    s = [0, 0]
+    for p in points:
+      s[0] += p[0]
+      s[1] += p[1]
+    n = len(points)
+    return (s[0]/n, s[1]/n)
 
   """
   find_next_point returns the next point (moving clockwise) that is part
