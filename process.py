@@ -34,8 +34,12 @@ from train import (
   EAR,
 )
 from output import (
-  SVG_COLOR,
+  SVG_ATTR,
   SVG_DATA,
+  STROKE,
+  STROKE_WIDTH,
+  FILL,
+  CLOSED_PATH,
   SVG_FACE_EAR,
   SVG_HAIR,
   SVG_LEFT_REM_EAR,
@@ -634,7 +638,7 @@ def post_process(args):
   paths = {}
   image = cv2.imread(args.image)
   mergedPts, remEarPts, d = merge_face_ear(ann)
-  mmask = addPointsToPath(image, paths, SVG_FACE_EAR, mergedPts, ann)
+  addPointsToPath(image, paths, SVG_FACE_EAR, mergedPts, ann)
   addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
   if len(remEarPts) > 1:
     addPointsToPath(image, paths, SVG_RIGHT_REM_EAR, remEarPts[1], ann)
@@ -682,61 +686,105 @@ def post_process(args):
   nosePts = process_nose(ann)
   addPointsToPath(image, paths, SVG_NOSE, nosePts, ann)
 
-  #view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
-  view_image(image, mmask)
+  view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
   with open("paths.json", "w") as outputfile:
     json.dump(paths, outputfile)
 
 """
-addPointsToPath will add given points to given path dictionary.
+addPointsToPath will add given points to given path dictionary. In addition,
+it will also segregate points in the label and add corresponding
+attributes to the path.
 """
-def addPointsToPath(image, paths, k, points, ann):
+def addPointsToPath(image, paths, k, points, ann, left=True):
+  attr = {STROKE: "#000", STROKE_WIDTH: 2, FILL:"none", CLOSED_PATH: False}
   paths[k] = {}
-  paths[k][SVG_DATA] = points
+  paths[k] = {SVG_DATA: [], SVG_ATTR: []}
+  paths[k][SVG_DATA].append(points)
 
-  if k != SVG_HAIR and k != SVG_FACE_EAR and k != SVG_LEFT_EYEBROW and k != SVG_RIGHT_EYEBROW and \
-  k != SVG_LEFT_EYEBALL and k != SVG_RIGHT_EYEBALL:
+  # Close paths for certain labels.
+  if k == SVG_FACE_EAR or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL or \
+    k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL or k == SVG_LEFT_OPEN_EYE or\
+    k == SVG_RIGHT_OPEN_EYE:
+    attr[CLOSED_PATH] = True
+
+  if k == SVG_NOSE:
+    paths[k][SVG_ATTR].append(attr)
+    return
+  if k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL:
+    attr[FILL] = "#000"
+    paths[k][SVG_ATTR].append(attr)
+    return
+  if k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE:
+    attr[FILL] = "#fff"
+    paths[k][SVG_ATTR].append(attr)
     return
 
-  #Get color from annotation masks.
-  label = label_map(k)
-  bpts = get_ann_points(ann, label)
+  # Remaining labels will be shaded according to inherent colors.
+  # Get annotation mask for given label.
+  bpts = get_ann_points(ann, label_map(k), left)
   mask = Polygons(bpts).mask(width=image.shape[1], height=image.shape[0])
   mask = [(p[1], p[0]) for p in np.argwhere(mask.array)]
 
+  # CV2 image is BGR by default; convert it to RGB.
   img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+  # Segrate points divides points based on 2 dominant colors in the image.
   pts1, pts2 = MathUtils.segregate_points(img, mask)
   maxpts = pts1 if len(pts1) >= len(pts2) else pts2
   minpts = pts2 if len(pts1) >= len(pts2) else pts1
-  paths[k][SVG_COLOR] = ImageUtils.rgb_to_hex(ImageUtils.avg_color(img, maxpts))
 
-  res = []
+  # Fill out maximum color.
+  attr[FILL] = ImageUtils.rgb_to_hex(ImageUtils.avg_color(img, maxpts))
   if k == SVG_FACE_EAR:
-    cdict = MathUtils.make_clusters(minpts)
-    for r in cdict:
-      res.append(cdict[r])
+    attr[STROKE_WIDTH] = 5
+  paths[k][SVG_ATTR].append(attr)
 
-    # M clusters.
-    M = 2
-    res = sorted(res, key=len, reverse=True)[:M]
-    res = [MathUtils.boundary_points(p) for p in res]
+  # No need to calculate shading for labels other than face or hair.
+  if k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
+    return
 
-    g = []
-    for pts in res:
-      g.append([(int(pts[i][0]), int(pts[i][1])) for i in range(len(pts)) if i % 10 == 0])
-    res = g
+  # Find clusters for minpts.
+  clusters = []
+  cdict = MathUtils.make_clusters(minpts)
+  for key in cdict:
+    clusters.append(cdict[key])
 
-    # Add new curves to the face data.
-    res.insert(0, points)
-    paths[k][SVG_DATA] = res
+  # Choose top M clusters for drawing. Sorting is based on size of cluster.
+  M = 2
+  clusters = sorted(clusters, key=len, reverse=True)[:M]
 
-    paths[k][SVG_COLOR] = [ImageUtils.rgb_to_hex(ImageUtils.avg_color(img, maxpts))] + \
-      [ImageUtils.rgb_to_hex(ImageUtils.avg_color(img, minpts)) for i in range(M)]
-  return res
+  # Get boundary points of the clusters.
+  temp = []
+  for p in clusters:
+    bdpts = MathUtils.boundary_points(p)
+    if len(bdpts) == 0:
+      # Boundary points too small, no need to perform shading.
+      print ("No shading for label: ", k)
+      return
+    temp.append(bdpts)
+  clusters = temp
+
+  # Subdivide boundary points into delta intervals. Value of delta is emperical.
+  temp = []
+  for pts in clusters:
+    delta = 1 if len(pts) <= 50 else 10
+    temp.append([(int(pts[i][0]), int(pts[i][1])) for i in range(len(pts)) if i % delta == 0])
+  clusters = temp
+
+  # Add new curves paths.
+  paths[k][SVG_DATA] += clusters
+
+  mincolor = ImageUtils.rgb_to_hex(ImageUtils.avg_color(img, minpts))
+  for i in range(len(clusters)):
+    attr_copy = attr.copy()
+    attr_copy[STROKE] = "none"
+    attr_copy[FILL] = mincolor
+    attr_copy[CLOSED_PATH] = True
+    paths[k][SVG_ATTR].append(attr_copy)
 
 
 """
-label_map returns mapping from svg label to annotation label.
+label_map returns annotation label for given svg label.
 """
 def label_map(k):
   if k == SVG_HAIR:
@@ -747,15 +795,25 @@ def label_map(k):
     return EYEBROW
   if k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL:
     return EYEBALL
+  if k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
+    return EAR
+  raise Exception("label_map: SVG Label: ", k, " not found!")
 
 """
 get_ann_points returns annotation points for given label
-from ann.
+from ann. left indicates that the first instance of the label
+needs to be returned and right indicates that the second instance
+needs to be returned. This is to distinguish between left and right
+eyebrows, eyes, eyeballs and ears.
 """
-def get_ann_points(ann, label):
+def get_ann_points(ann, label, left=True):
+  idx = 0 if left else 1
   for c in ann:
     if c[CLASS] == label:
-      return c[DATA]
+      if idx == 0:
+       return c[DATA]
+      idx = 0
+  raise Exception("Label: ", label, "  not found in annotations!")
 
 """
 find_nose_points will return the leftmost, rightmost

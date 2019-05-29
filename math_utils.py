@@ -560,8 +560,8 @@ class MathUtils:
 
   @staticmethod
   def boundary_points(points):
-    if len(points) < 50:
-      return
+    if len(points) < 10:
+      return []
     xlims = MathUtils.xlims(points)
     pmap = MathUtils.toMap(points)
 
