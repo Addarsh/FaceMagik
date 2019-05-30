@@ -5,6 +5,7 @@ import numpy as np
 import scipy
 import queue
 import skimage
+import cv2
 
 from numpy.linalg import inv, eig
 from lmfit import minimize, Parameters
@@ -586,6 +587,29 @@ class MathUtils:
 
     return boundary
 
+  """
+  Returns boundary points of given points using
+  given gray scale image. Input is a list of connected
+  points that belong to the same label.
+  """
+  @staticmethod
+  def cv2_boundary_points(gray, clusters):
+    np.place(gray, gray>=0, [0])
+
+    for c in clusters:
+      for p in c:
+        gray[p[1], p[0]] = 255
+
+    contours, _ = cv2.findContours(gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    res = []
+    for c in contours:
+      pts = []
+      for p in c:
+        pts.append((p[0][0], p[0][1]))
+      res.append(pts)
+
+    return res
 
   @staticmethod
   def make_clusters(points):

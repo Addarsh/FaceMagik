@@ -18,6 +18,8 @@ SVG_RIGHT_EYEBALL = "SVG Right Eyeball"
 SVG_NOSE = "SVG Nose"
 SVG_LEFT_NOSTRIL = "SVG Left Nostril"
 SVG_RIGHT_NOSTRIL = "SVG Right Nostril"
+SVG_LOWER_LIP = "SVG Lower Lip"
+SVG_UPPER_LIP = "SVG Upper Lip"
 
 # SVG Attribute constants.
 STROKE = "stroke"
@@ -111,7 +113,9 @@ if __name__ == "__main__":
   outputMap = {}
   for k, p in d.items():
     err = 50
-    if k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
+    if k == SVG_UPPER_LIP or k == SVG_LOWER_LIP:
+      err = 10
+    elif k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
       err = 10
 
     outputMap[k] = {PATH: [], ATTR: [{STROKE: attr[STROKE], STROKE_WIDTH: attr[STROKE_WIDTH], FILL: attr[FILL]} for attr in p[SVG_ATTR]]}

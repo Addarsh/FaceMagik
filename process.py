@@ -7,6 +7,7 @@ import json
 import math
 import scipy
 import cv2
+import time
 from skimage.filters import sobel
 import numpy as np
 from inference import ANNOTATIONS_DIR, OUTPUT_DIR, CLASS, DATA
@@ -54,6 +55,8 @@ from output import (
   SVG_NOSE,
   SVG_LEFT_NOSTRIL,
   SVG_RIGHT_NOSTRIL,
+  SVG_UPPER_LIP,
+  SVG_LOWER_LIP,
 )
 
 PROCESSED_DIR = os.path.join(OUTPUT_DIR, "processed")
@@ -630,24 +633,40 @@ def process_nose(ann):
 
   return res
 
+"""
+process_mouth will process all elements of the mouth including
+upper lip, lower lip, tongue and teeth. In case lips are not aligned
+or a lip is missing, process_mouth will compensate accordingly.
+"""
+def process_mouth(ann):
+  res = []
+  for c in ann:
+    if c[CLASS] == UPPER_LIP:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Upper Lip Data points: ", len(c[DATA]), " is not 1")
+      res.append(to_points(c[DATA][0]))
+    elif c[CLASS] == LOWER_LIP:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Lower Lip Data points: ", len(c[DATA]), " is not 1")
+      res.append(to_points(c[DATA][0]))
+
+  return res
 
 """
 post_process will take input annotations and post process
 them so they can converted to vector graphics.
 """
 def post_process(args):
+  start = time.time()
+
   paths = {}
   image = cv2.imread(args.image)
   mergedPts, remEarPts, d = merge_face_ear(ann)
   addPointsToPath(image, paths, SVG_FACE_EAR, mergedPts, ann)
-  addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
-  if len(remEarPts) > 1:
-    addPointsToPath(image, paths, SVG_RIGHT_REM_EAR, remEarPts[1], ann, left=False)
 
   hairPts = merge_face_hair(mergedPts, d, image.shape[:2])
   addPointsToPath(image, paths, SVG_HAIR, hairPts, ann)
 
-  # Add eyes to image.
   for c in ann:
     if c[CLASS] == EYE_OPEN:
       if len(c[DATA]) != 1:
@@ -673,6 +692,14 @@ def post_process(args):
         addPointsToPath(image, paths, SVG_LEFT_NOSTRIL, nostrilPts, ann)
       else:
         addPointsToPath(image, paths, SVG_RIGHT_NOSTRIL, nostrilPts, ann, left=False)
+    elif c[CLASS] == UPPER_LIP:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Upper Lip data points: ", len(c[DATA]), " is not 1")
+      addPointsToPath(image, paths, SVG_UPPER_LIP, to_points(c[DATA][0]), ann)
+    elif c[CLASS] == LOWER_LIP:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Lower Lip data points: ", len(c[DATA]), " is not 1")
+      addPointsToPath(image, paths, SVG_LOWER_LIP, to_points(c[DATA][0]), ann)
 
   for c in ann:
     if c[CLASS] == EYEBALL:
@@ -686,6 +713,14 @@ def post_process(args):
 
   nosePts = process_nose(ann)
   addPointsToPath(image, paths, SVG_NOSE, nosePts, ann)
+
+  addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
+  if len(remEarPts) > 1:
+    addPointsToPath(image, paths, SVG_RIGHT_REM_EAR, remEarPts[1], ann, left=False)
+
+  #mouthPts = process_mouth(ann)
+  #addPointsToPath(image, paths, SVG ))
+  print ("Time taken: ", time.time() - start)
 
   view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
   with open("paths.json", "w") as outputfile:
@@ -705,10 +740,11 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
   # Close paths for certain labels.
   if k == SVG_FACE_EAR or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL or \
     k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL or k == SVG_LEFT_OPEN_EYE or\
-    k == SVG_RIGHT_OPEN_EYE:
+    k == SVG_RIGHT_OPEN_EYE or k == SVG_LEFT_EYEBROW or k == SVG_RIGHT_EYEBROW or\
+    k == SVG_UPPER_LIP or k == SVG_LOWER_LIP:
     attr[CLOSED_PATH] = True
 
-  if k == SVG_NOSE:
+  if k == SVG_NOSE or k == SVG_UPPER_LIP or k == SVG_LOWER_LIP:
     paths[k][SVG_ATTR].append(attr)
     return
   if k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL:
@@ -740,7 +776,7 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
     attr[STROKE_WIDTH] = 5
   paths[k][SVG_ATTR].append(attr)
 
-  # No need to calculate shading for labels other than face or hair.
+  # No need to calculate shading for labels other than face, hair and left and right ears.
   if k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
     return
 
@@ -754,22 +790,12 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
   M = 2
   clusters = sorted(clusters, key=len, reverse=True)[:M]
 
-  # Get boundary points of the clusters.
-  temp = []
-  for p in clusters:
-    bdpts = MathUtils.boundary_points(p)
-    if len(bdpts) == 0:
-      # Boundary points too small, no need to perform shading.
-      print ("No shading for label: ", k)
-      return
-    temp.append(bdpts)
-  clusters = temp
+  clusters = MathUtils.cv2_boundary_points(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), clusters)
 
   # Subdivide boundary points into delta intervals. Value of delta is emperical.
   temp = []
   for pts in clusters:
-    delta = 1 if len(pts) <= 50 else 10
-    temp.append([(int(pts[i][0]), int(pts[i][1])) for i in range(len(pts)) if i % delta == 0])
+    temp.append([(int(pts[i][0]), int(pts[i][1])) for i in range(len(pts))])
   clusters = temp
 
   # Add new curves paths.
@@ -783,6 +809,9 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
     attr_copy[CLOSED_PATH] = True
     paths[k][SVG_ATTR].append(attr_copy)
 
+  if  k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
+    paths[k][SVG_DATA] = list(reversed(paths[k][SVG_DATA]))
+    paths[k][SVG_ATTR] = list(reversed(paths[k][SVG_ATTR]))
 
 """
 label_map returns annotation label for given svg label.
