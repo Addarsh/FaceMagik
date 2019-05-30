@@ -29,6 +29,7 @@ CLOSED_PATH = "closed path"
 
 PATH = "path"
 ATTR = "attr"
+LABEL = "label"
 
 
 def find_intersection_points(hairPath, facePath):
@@ -86,14 +87,26 @@ def reverse_path(fullPath, ipts, path):
   path.append(p2.reversed())
 
 """
+find_label returns dictionary corresponding to given label
+in output list.
+"""
+def find_label(output, label):
+  for o in output:
+    if o[LABEL] == label:
+      return o
+
+  raise Exception("Label ", label, " not found in output!")
+
+"""
 merge_face_hair will merge face and hair
 paths so that they intersect. The function
 will modify the input map with the modified
 path and attributes.
 """
-def merge_face_hair(outputMap):
-  facePath = outputMap[SVG_FACE_EAR][PATH][0]
-  hairPath = outputMap[SVG_HAIR][PATH][0]
+def merge_face_hair(output):
+  facePath = find_label(output, SVG_FACE_EAR)[PATH][0]
+  hpd = find_label(output, SVG_HAIR)
+  hairPath = hpd[PATH][0]
 
   iPts, tpts = find_intersection_points(hairPath, facePath)
 
@@ -101,7 +114,7 @@ def merge_face_hair(outputMap):
   forward_path(hairPath, (iPts[0][0], iPts[1][0]), path)
   reverse_path(facePath, (iPts[1][1], iPts[0][1]), path)
 
-  outputMap[SVG_HAIR][PATH][0] = path
+  hpd[PATH][0] = path
 
   return tpts
 
@@ -110,31 +123,32 @@ if __name__ == "__main__":
   with open("paths.json", "r") as f:
     d = json.load(f)
 
-  outputMap = {}
+  output = []
   for k, p in d.items():
+
     err = 50
-    if k == SVG_UPPER_LIP or k == SVG_LOWER_LIP:
-      err = 10
-    elif k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
+    if k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
       err = 10
 
-    outputMap[k] = {PATH: [], ATTR: [{STROKE: attr[STROKE], STROKE_WIDTH: attr[STROKE_WIDTH], FILL: attr[FILL]} for attr in p[SVG_ATTR]]}
+    opd = {LABEL: k, PATH: [], ATTR: [{STROKE: attr[STROKE], STROKE_WIDTH: attr[STROKE_WIDTH], FILL: attr[FILL]} for attr in p[SVG_ATTR]]}
     for i, data in enumerate(p[SVG_DATA]):
       pf = fitpath(data, err)
       sp = pathtosvg(pf)
       if p[SVG_ATTR][i][CLOSED_PATH]:
         sp += " Z"
       path = parse_path(sp)
-      outputMap[k][PATH].append(path)
+      opd[PATH].append(path)
 
-  intersections = merge_face_hair(outputMap)
+    output.append(opd)
+
+  intersections = merge_face_hair(output)
   intersections = []
 
   pathList = []
   attrList = []
-  for k in outputMap:
-    for j, path in enumerate(outputMap[k][PATH]):
+  for opd in output:
+    for j, path in enumerate(opd[PATH]):
       pathList.append(path)
-      attrList.append(outputMap[k][ATTR][j])
+      attrList.append(opd[ATTR][j])
 
   wsvg(pathList, attributes=attrList, filename='test.svg', nodes=intersections, node_radii = [5]*len(intersections))
