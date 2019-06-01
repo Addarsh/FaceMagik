@@ -220,6 +220,7 @@ class PathFitter:
                 break
             self.reparameterize(first, last, uPrime, curve)
             maxError = maxerr
+            print ("Fitting failed: ", i)
         # Fitting failed -- split at max error point and fit recursively
         V1 = self.points[split - 1].subtract(self.points[split])
         V2 = self.points[split] - self.points[split + 1]
@@ -343,7 +344,7 @@ class PathFitter:
     # using relative distances between points.
     def chordLengthParameterize(self, first, last):
         u = {0: 0}
-        print(first, last)
+        #print(first, last)
         for i in range(first + 1, last + 1):
             u[i - first] = u[i - first - 1] + \
                 self.points[i].getDistance(self.points[i - 1])

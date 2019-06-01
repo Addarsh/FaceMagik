@@ -472,6 +472,54 @@ class MathUtils:
 
     return (min_y, max_y)
 
+  @staticmethod
+  def left_most_point(points):
+    if len(points) == 0:
+      raise Exception("left_most_point: input points is empty!")
+
+    minp = points[0]
+    for p in points:
+      if p[0] < minp[0]:
+        minp = p
+
+    return minp
+
+  @staticmethod
+  def right_most_point(points):
+    if len(points) == 0:
+      raise Exception("right_most_point: input points is empty!")
+
+    minp = points[0]
+    for p in points:
+      if p[0] > minp[0]:
+        minp = p
+
+    return minp
+
+  @staticmethod
+  def top_most_point(points):
+    if len(points) == 0:
+      raise Exception("top_most_point: input points is empty!")
+
+    minp = points[0]
+    for p in points:
+      if p[1] < minp[1]:
+        minp = p
+
+    return minp
+
+  @staticmethod
+  def bottom_most_point(points):
+    if len(points) == 0:
+      raise Exception("bottom_most_point: input points is empty!")
+
+    minp = points[0]
+    for p in points:
+      if p[1] > minp[1]:
+        minp = p
+
+    return minp
+
   """
   cluster recursively clusters all points in pset that are connected to p.
   Returns the cluster of points.

@@ -129,6 +129,14 @@ def merge_face_ear(ann):
       hair = c[DATA][0]
       continue
 
+  if len(pears) == 0:
+    d  = {}
+    face = to_points(face)
+    d[FACE] = face
+    d[EAR] = []
+    d[HAIR_ON_HEAD] = to_points(hair)
+    return rdp(face, epsilon=0.5), [], d
+
   if len(pears) == 0 or len(pears) > 2:
     print ("Incorrect number of ears: ", len(pears) ," review please!")
     return []
@@ -640,17 +648,43 @@ or a lip is missing, process_mouth will compensate accordingly.
 """
 def process_mouth(ann):
   res = []
+  upperPts = []
   for c in ann:
     if c[CLASS] == UPPER_LIP:
       if len(c[DATA]) != 1:
         raise Exception("Length of Upper Lip Data points: ", len(c[DATA]), " is not 1")
       res.append(to_points(c[DATA][0]))
+      upperPts = to_points(c[DATA][0])
     elif c[CLASS] == LOWER_LIP:
       if len(c[DATA]) != 1:
         raise Exception("Length of Lower Lip Data points: ", len(c[DATA]), " is not 1")
-      res.append(to_points(c[DATA][0]))
 
-  return res
+  # Find left and right points of upper lip.
+  lp = MathUtils.left_most_point(upperPts)
+  rp = MathUtils.right_most_point(upperPts)
+  tp = MathUtils.top_most_point(upperPts)
+  bp = MathUtils.bottom_most_point(upperPts)
+
+
+  lipWidth = bp[1] - tp[1]
+  edgeWidth = rp[0] - lp[0]
+
+  topPoint = (int((lp[0]+rp[0])/2), tp[1])
+  bottomPoint = (topPoint[0], topPoint[1] + lipWidth)
+
+  r = 2
+  leftPoint = (lp[0] -  int(edgeWidth/4) ,  lp[1] + r*lipWidth)
+  rightPoint = (rp[0] + int(edgeWidth/4) ,  rp[1] + r*lipWidth)
+
+  leftMidPoint = (int((leftPoint[0]+topPoint[0])/2), topPoint[1] + int((leftPoint[1]-topPoint[1])/4))
+  rightMidPoint = (int((rightPoint[0]+topPoint[0])/2), topPoint[1] + int((rightPoint[1]-topPoint[1])/4))
+
+
+  leftBottomPoint = (int((leftPoint[0]+topPoint[0])/2), leftMidPoint[1] + int(lipWidth))
+  righBottomPoint = (int((rightPoint[0]+topPoint[0])/2), rightMidPoint[1] + int(lipWidth))
+
+  return [leftPoint, leftMidPoint, topPoint, rightMidPoint, rightPoint]
+  #return [leftPoint, leftMidPoint, topPoint, rightMidPoint, rightPoint,  righBottomPoint, bottomPoint, leftBottomPoint ]
 
 """
 post_process will take input annotations and post process
@@ -714,12 +748,14 @@ def post_process(args):
   nosePts = process_nose(ann)
   addPointsToPath(image, paths, SVG_NOSE, nosePts, ann)
 
-  addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
+  if len(remEarPts) > 0:
+    addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
   if len(remEarPts) > 1:
     addPointsToPath(image, paths, SVG_RIGHT_REM_EAR, remEarPts[1], ann, left=False)
 
   #mouthPts = process_mouth(ann)
-  #addPointsToPath(image, paths, SVG ))
+  #addPointsToPath(image, paths, SVG_LOWER_LIP, mouthPts, ann)
+
   print ("Time taken: ", time.time() - start)
 
   view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
@@ -744,7 +780,7 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
     k == SVG_UPPER_LIP or k == SVG_LOWER_LIP:
     attr[CLOSED_PATH] = True
 
-  if k == SVG_NOSE or k == SVG_UPPER_LIP or k == SVG_LOWER_LIP:
+  if k == SVG_NOSE:
     paths[k][SVG_ATTR].append(attr)
     return
   if k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL:
@@ -827,6 +863,10 @@ def label_map(k):
     return EYEBALL
   if k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
     return EAR
+  if k == SVG_UPPER_LIP:
+    return UPPER_LIP
+  if k == SVG_LOWER_LIP:
+    return LOWER_LIP
   raise Exception("label_map: SVG Label: ", k, " not found!")
 
 """

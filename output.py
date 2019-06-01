@@ -1,6 +1,7 @@
 from svgpathtools import parse_path, wsvg, Path
 from path_fitter import fitpath, pathtosvg, drawsvg
 import json
+import time
 
 # SVG JSON file constants.
 SVG_DATA = "SVG Data"
@@ -119,6 +120,8 @@ def merge_face_hair(output):
   return tpts
 
 if __name__ == "__main__":
+  start = time.time()
+
   d =  {}
   with open("paths.json", "r") as f:
     d = json.load(f)
@@ -127,8 +130,12 @@ if __name__ == "__main__":
   for k, p in d.items():
 
     err = 50
-    if k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
+    if k == SVG_UPPER_LIP or k == SVG_LOWER_LIP:
+      err = 20
+    elif k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL:
       err = 10
+    elif k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
+      err = 50
 
     opd = {LABEL: k, PATH: [], ATTR: [{STROKE: attr[STROKE], STROKE_WIDTH: attr[STROKE_WIDTH], FILL: attr[FILL]} for attr in p[SVG_ATTR]]}
     for i, data in enumerate(p[SVG_DATA]):
@@ -152,3 +159,4 @@ if __name__ == "__main__":
       attrList.append(opd[ATTR][j])
 
   wsvg(pathList, attributes=attrList, filename='test.svg', nodes=intersections, node_radii = [5]*len(intersections))
+  print ("Total time: ", time.time()-start)
