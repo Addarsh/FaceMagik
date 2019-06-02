@@ -656,6 +656,23 @@ def process_nose(ann):
   rightPts = move_until(nosePts[topIdx], nosePts, positive=True, step=1, discard_pts=0)
   rightNosePt = rightPts[-1]
 
+  # Move one of the left/right nose points further along until
+  # Their y coordinate is less than equal to the other's y coordinate.
+  if leftNosePt[1] != rightNosePt[1]:
+    higherPt = leftNosePt if leftNosePt[1] < rightNosePt[1] else rightNosePt
+    lowerPt = leftNosePt if leftNosePt[1] > rightNosePt[1] else rightNosePt
+    clockwise = True if higherPt == rightNosePt else False
+    pdx = find_index(higherPt, nosePts)
+    ndx = pdx
+    while nosePts[ndx][1] <= lowerPt[1]:
+      pdx = ndx
+      ndx = next_index(pdx, nosePts, clockwise=clockwise)
+
+    if higherPt == leftNosePt:
+      leftNosePt = nosePts[pdx]
+    else:
+      rightNosePt = nosePts[pdx]
+
   # Get points from left point to right point.
   res = [leftNosePt]
   ndx = find_index(leftNosePt, nosePts)

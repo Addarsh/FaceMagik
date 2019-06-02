@@ -2,7 +2,7 @@ import os
 import argparse
 from PIL import Image
 
-max_dim = 1024
+max_dim = 1600
 
 def resize(imPath):
   img = Image.open(imPath)
