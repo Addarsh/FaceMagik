@@ -128,18 +128,20 @@ if __name__ == "__main__":
 
   output = []
   for k, p in d.items():
-
-    err = 50
-    if k == SVG_UPPER_LIP or k == SVG_LOWER_LIP:
-      err = 20
-    elif k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL:
-      err = 10
-    elif k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
+    err = 10
+    errDelta = 10
+    if k == SVG_FACE_EAR or k == SVG_HAIR or k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
       err = 50
 
+
     opd = {LABEL: k, PATH: [], ATTR: [{STROKE: attr[STROKE], STROKE_WIDTH: attr[STROKE_WIDTH], FILL: attr[FILL]} for attr in p[SVG_ATTR]]}
+    dErr = err
     for i, data in enumerate(p[SVG_DATA]):
-      pf = fitpath(data, err)
+      if i > 0 and k == SVG_FACE_EAR:
+        dErr = err*4
+      else:
+        dErr = err
+      pf = fitpath(data, dErr)
       sp = pathtosvg(pf)
       if p[SVG_ATTR][i][CLOSED_PATH]:
         sp += " Z"

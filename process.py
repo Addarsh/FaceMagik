@@ -107,6 +107,9 @@ counter clockwise direction.
 def merge_face_ear(ann):
   face = []
   pears = []
+  hair = []
+  nose = []
+
   for c in ann:
     if c[CLASS] == FACE:
       if len(c[DATA]) > 1:
@@ -129,12 +132,20 @@ def merge_face_ear(ann):
       hair = c[DATA][0]
       continue
 
+    if c[CLASS] == NOSE:
+      if len(c[DATA]) > 1:
+        print ("More than 1 nose not supported yet")
+        return []
+      nose = c[DATA][0]
+      continue
+
   if len(pears) == 0:
     d  = {}
     face = to_points(face)
     d[FACE] = face
     d[EAR] = []
     d[HAIR_ON_HEAD] = to_points(hair)
+    d[NOSE] = to_points(nose)
     return rdp(face, epsilon=0.5), [], d
 
   if len(pears) == 0 or len(pears) > 2:
@@ -154,6 +165,7 @@ def merge_face_ear(ann):
   d[FACE] = face
   d[EAR] = ears
   d[HAIR_ON_HEAD] = to_points(hair)
+  d[NOSE] = to_points(nose)
 
   allPoints = []
   for ear in ears:
@@ -332,7 +344,9 @@ def merge_face_hair(mergedPts, d, imdims):
 
     f = tpoints[i] if tpoints[i] in set(d[FACE]) else tpoints[i+1]
     h = tpoints[i+1] if f == tpoints[i] else tpoints[i]
-    gpts = vpoints_hair_face(h, hair, f, mergedPtsMask, clockwise=is_left(tpoints[i], tpoints[i-2]))
+
+    noseY = int((MathUtils.bottom_most_point(d[NOSE])[1] + MathUtils.top_most_point(d[NOSE])[1])/2)
+    gpts = vpoints_hair_face(h, hair, f, mergedPtsMask, mergedPts, noseY, clockwise=is_left(tpoints[i], tpoints[i-2]))
     if is_left(tpoints[i], tpoints[i-2]):
       vvpts.insert(0, gpts)
     else:
@@ -513,7 +527,7 @@ def vpoints_face_ear(p, points, clockwise=True, left=True, up=True, extraArg=Non
 vpoints_hair_face returns the extrapolated points from given hair point
 to face mask.
 """
-def vpoints_hair_face(h, hair, f, faceMask, clockwise=True):
+def vpoints_hair_face(h, hair, f, faceMask, face, noseY, clockwise=True):
   r = 10 # Num points in vicinity of h to determine polynomial curve. This number is emperical.
   idx = find_index(h, hair)
 
@@ -522,7 +536,16 @@ def vpoints_hair_face(h, hair, f, faceMask, clockwise=True):
   for i in range(r):
     ndx = next_index(ndx, hair, clockwise)
     polyPoints.append(hair[ndx])
-  polyPoints.append(f)
+
+  # Move up facePoints close to nose Point to get a more accurate merge point.
+  ndx = find_index(f, face)
+  ndx = next_index(ndx, face, clockwise)
+  count = 0
+  while face[ndx][1] >= noseY:
+    ndx = next_index(ndx,face, clockwise)
+    count += 1
+
+  polyPoints.append(face[ndx])
 
   # Flip vertices so polynomial can be fit.
   g = fit_polynomial([(p[1], p[0]) for p in polyPoints], k =2)
@@ -531,10 +554,12 @@ def vpoints_hair_face(h, hair, f, faceMask, clockwise=True):
   x = hair[idx][1]
   count = 0
   maskSet = set(faceMask)
-  while p not in maskSet:
+  maxcount = 1000
+  while p not in maskSet and count < maxcount:
     res.append(p)
     x += 1
     p = (int(g(x)), x)
+    count += 1
 
   # add a few more points so intersection is definite.
   for i in range(2*r):

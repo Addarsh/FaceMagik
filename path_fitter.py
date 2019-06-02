@@ -190,11 +190,11 @@ class PathFitter:
                           # Left Tangent
                           points[1].subtract(points[0]).normalize(),
                           # Right Tangent
-                          points[length - 2].subtract(points[length - 1]).normalize())
+                          points[length - 2].subtract(points[length - 1]).normalize(), err=self.error)
         return self.segments
 
     # Fit a Bezier curve to a (sub)set of digitized points
-    def fitCubic(self, first, last, tan1, tan2):
+    def fitCubic(self, first, last, tan1, tan2, err):
         #  Use heuristic if region only has two points in it
         if last - first == 1:
             pt1 = self.points[first]
@@ -205,13 +205,16 @@ class PathFitter:
             return
         # Parameterize points, and attempt to fit curve
         uPrime = self.chordLengthParameterize(first, last)
-        maxError = max(self.error, self.error * self.error)
+        maxError = max(err, err * err)
+
         # Try 4 iterations
         for i in range(5):
             curve = self.generateBezier(first, last, uPrime, tan1, tan2)
             #  Find max deviation of points to fitted curve
             maxerr, maxind = self.findMaxError(first, last, curve, uPrime)
-            if maxerr < self.error:
+            if last-first+1 <= 3:
+              print ("max error: ", maxerr, " points: ", first, last, " total pts: ", last-first+1, " uprime: ", uPrime)
+            if maxerr < err:
                 self.addCurve(curve)
                 return
             split = maxind
@@ -220,13 +223,17 @@ class PathFitter:
                 break
             self.reparameterize(first, last, uPrime, curve)
             maxError = maxerr
-            print ("Fitting failed: ", i)
+
         # Fitting failed -- split at max error point and fit recursively
         V1 = self.points[split - 1].subtract(self.points[split])
         V2 = self.points[split] - self.points[split + 1]
         tanCenter = V1.add(V2).divide(2).normalize()
-        self.fitCubic(first, split, tan1, tanCenter)
-        self.fitCubic(split, last, tanCenter.negate(), tan2)
+        if split-first+1 <= 3 or last-split+1 <= 3:
+          self.fitCubic(first, last, tan1, tan2, err+10)
+          return
+
+        self.fitCubic(first, split, tan1, tanCenter, err)
+        self.fitCubic(split, last, tanCenter.negate(), tan2, err)
 
     def addCurve(self, curve):
         prev = self.segments[len(self.segments) - 1]
