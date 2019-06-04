@@ -57,6 +57,7 @@ from output import (
   SVG_RIGHT_NOSTRIL,
   SVG_UPPER_LIP,
   SVG_LOWER_LIP,
+  SVG_FACIAL_HAIR,
 )
 
 PROCESSED_DIR = os.path.join(OUTPUT_DIR, "processed")
@@ -810,7 +811,13 @@ it will also segregate points in the label and add corresponding
 attributes to the path.
 """
 def addPointsToPath(image, paths, k, points, ann, left=True):
-  attr = {STROKE: "#000", STROKE_WIDTH: 2, FILL:"none", CLOSED_PATH: False}
+  attr = {STROKE: "#000", STROKE_WIDTH: 0, FILL:"none", CLOSED_PATH: False}
+  if k != SVG_LEFT_EYEBALL and k != SVG_RIGHT_EYEBALL and k != SVG_HAIR:
+    if k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE:
+      attr[STROKE_WIDTH] = 1
+    else:
+      attr[STROKE_WIDTH] = 4
+
   paths[k] = {}
   paths[k] = {SVG_DATA: [], SVG_ATTR: []}
   paths[k][SVG_DATA].append(points)
@@ -819,7 +826,7 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
   if k == SVG_FACE_EAR or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL or \
     k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL or k == SVG_LEFT_OPEN_EYE or\
     k == SVG_RIGHT_OPEN_EYE or k == SVG_LEFT_EYEBROW or k == SVG_RIGHT_EYEBROW or\
-    k == SVG_UPPER_LIP or k == SVG_LOWER_LIP:
+    k == SVG_UPPER_LIP or k == SVG_LOWER_LIP or k == FACIAL_HAIR:
     attr[CLOSED_PATH] = True
 
   if k == SVG_NOSE:
@@ -855,7 +862,8 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
   paths[k][SVG_ATTR].append(attr)
 
   # No need to calculate shading for labels other than face, hair and left and right ears.
-  if k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR:
+  if k != SVG_FACE_EAR and k != SVG_HAIR and k != SVG_LEFT_REM_EAR and k != SVG_RIGHT_REM_EAR \
+    and k != SVG_FACIAL_HAIR:
     return
 
   # Find clusters for minpts.
@@ -865,7 +873,7 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
     clusters.append(cdict[key])
 
   # Choose top M clusters for drawing. Sorting is based on size of cluster.
-  M = 2
+  M = 3
   clusters = sorted(clusters, key=len, reverse=True)[:M]
 
   clusters = MathUtils.cv2_boundary_points(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), clusters)
@@ -909,6 +917,8 @@ def label_map(k):
     return UPPER_LIP
   if k == SVG_LOWER_LIP:
     return LOWER_LIP
+  if k == SVG_FACIAL_HAIR:
+    return FACIAL_HAIR
   raise Exception("label_map: SVG Label: ", k, " not found!")
 
 """

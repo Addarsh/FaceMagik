@@ -212,8 +212,6 @@ class PathFitter:
             curve = self.generateBezier(first, last, uPrime, tan1, tan2)
             #  Find max deviation of points to fitted curve
             maxerr, maxind = self.findMaxError(first, last, curve, uPrime)
-            if last-first+1 <= 3:
-              print ("max error: ", maxerr, " points: ", first, last, " total pts: ", last-first+1, " uprime: ", uPrime)
             if maxerr < err:
                 self.addCurve(curve)
                 return
