@@ -215,19 +215,19 @@ def merge_face_ear(ann):
     """
     vpts is in clockwise order.
     """
-    if is_higher(f, e) and is_right(e, f):
+    if MathUtils.is_higher(f, e) and MathUtils.is_right(e, f):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=True, up=True)
       fvpts = vpoints_face_ear(f, face , clockwise=True, left=False, up=False, extraArg=e)
       hpts = fvpts + list(reversed(evpts))
-    elif is_higher(f, e) and is_left(e, f):
+    elif MathUtils.is_higher(f, e) and MathUtils.is_left(e, f):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=True, left=False, up=True)
       fvpts = vpoints_face_ear(f, face , clockwise=False, left=True, up=False, extraArg=e)
       hpts = evpts + list(reversed(fvpts))
-    elif is_higher(e, f) and is_right(e, f):
+    elif MathUtils.is_higher(e, f) and MathUtils.is_right(e, f):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=True, left=True, up=False)
       fvpts = vpoints_face_ear(f, face , clockwise=False, left=False, up=True, extraArg=e)
       hpts = evpts + list(reversed(fvpts))
-    elif is_higher(e, f) and is_left(e, f):
+    elif MathUtils.is_higher(e, f) and MathUtils.is_left(e, f):
       evpts = vpoints_face_ear(e, ears[0] if e in set(ears[0]) else ears[1] , clockwise=False, left=False, up=False)
       fvpts = vpoints_face_ear(f, face , clockwise=True, left=True, up=True, extraArg=e)
       hpts = fvpts + list(reversed(evpts))
@@ -332,8 +332,8 @@ def merge_face_hair(mergedPts, d, imdims):
       if tpoints[i] in set(epts) or tpoints[i+1] in set(epts):
         e = tpoints[i] if tpoints[i] in set(epts) else tpoints[i+1]
         h = tpoints[i+1] if e == tpoints[i] else tpoints[i]
-        gpts = vpoints_hair_ear(h, hair, e, epts, mergedPtsMask, clockwise=is_left(tpoints[i], tpoints[i-2]))
-        if is_left(tpoints[i], tpoints[i-2]):
+        gpts = vpoints_hair_ear(h, hair, e, epts, mergedPtsMask, clockwise=MathUtils.is_left(tpoints[i], tpoints[i-2]))
+        if MathUtils.is_left(tpoints[i], tpoints[i-2]):
           vvpts.insert(0, gpts)
         else:
           vvpts.append(gpts)
@@ -347,8 +347,8 @@ def merge_face_hair(mergedPts, d, imdims):
     h = tpoints[i+1] if f == tpoints[i] else tpoints[i]
 
     noseY = int((MathUtils.bottom_most_point(d[NOSE])[1] + MathUtils.top_most_point(d[NOSE])[1])/2)
-    gpts = vpoints_hair_face(h, hair, f, mergedPtsMask, mergedPts, noseY, clockwise=is_left(tpoints[i], tpoints[i-2]))
-    if is_left(tpoints[i], tpoints[i-2]):
+    gpts = vpoints_hair_face(h, hair, f, mergedPtsMask, mergedPts, noseY, clockwise=MathUtils.is_left(tpoints[i], tpoints[i-2]))
+    if MathUtils.is_left(tpoints[i], tpoints[i-2]):
       vvpts.insert(0, gpts)
     else:
       vvpts.append(gpts)
@@ -399,9 +399,9 @@ def merge_hairs(hairAnn):
     f2 = tpoints[i+1] if f1 == tpoints[i] else tpoints[i]
 
     vpts += list(reversed(pbetween[count]))
-    f1pts = move_until(f1, hairs[0], positive=is_left(f1,f2))
-    f2pts = move_until(f2, hairs[1], positive=is_left(f2,f1))
-    if is_left(f1, f2):
+    f1pts = move_until(f1, hairs[0], positive=MathUtils.is_left(f1,f2))
+    f2pts = move_until(f2, hairs[1], positive=MathUtils.is_left(f2,f1))
+    if MathUtils.is_left(f1, f2):
       vpts += f1pts + f2pts
     else:
       vpts += f2pts + f1pts
@@ -500,27 +500,27 @@ def vpoints_face_ear(p, points, clockwise=True, left=True, up=True, extraArg=Non
   vpoints = [p]
 
   # points contains points in counter clockwise manner.
-  idx = find_index(p, points)
+  idx = MathUtils.find_index(p, points)
 
   # move in counter clockwise manner.
   pdx = idx
-  ndx = next_index(pdx, points, clockwise)
+  ndx = MathUtils.next_index(pdx, points, clockwise)
 
-  upfunc = is_higher if up else is_lower
-  leftfunc = is_left if left else is_right
+  upfunc = MathUtils.is_higher if up else MathUtils.is_lower
+  leftfunc = MathUtils.is_left if left else MathUtils.is_right
 
   def always_True(p, e):
     return True
   if not extraArg:
     checkfunc = always_True
   else:
-    checkfunc = is_higher if not up else is_lower
+    checkfunc = MathUtils.is_higher if not up else MathUtils.is_lower
 
   while (leftfunc(points[ndx], points[pdx]) or upfunc(points[ndx], points[pdx])) \
     and checkfunc(points[ndx], extraArg):
     vpoints.append(points[ndx])
     pdx = ndx
-    ndx = next_index(pdx, points, clockwise)
+    ndx = MathUtils.next_index(pdx, points, clockwise)
 
   return vpoints
 
@@ -530,20 +530,20 @@ to face mask.
 """
 def vpoints_hair_face(h, hair, f, faceMask, face, noseY, clockwise=True):
   r = 10 # Num points in vicinity of h to determine polynomial curve. This number is emperical.
-  idx = find_index(h, hair)
+  idx = MathUtils.find_index(h, hair)
 
   polyPoints = [hair[idx]]
   ndx = idx
   for i in range(r):
-    ndx = next_index(ndx, hair, clockwise)
+    ndx = MathUtils.next_index(ndx, hair, clockwise)
     polyPoints.append(hair[ndx])
 
   # Move up facePoints close to nose Point to get a more accurate merge point.
-  ndx = find_index(f, face)
-  ndx = next_index(ndx, face, clockwise)
+  ndx = MathUtils.find_index(f, face)
+  ndx = MathUtils.next_index(ndx, face, clockwise)
   count = 0
   while face[ndx][1] >= noseY:
-    ndx = next_index(ndx,face, clockwise)
+    ndx = MathUtils.next_index(ndx,face, clockwise)
     count += 1
 
   polyPoints.append(face[ndx])
@@ -575,36 +575,36 @@ to face-ear mask with ear point as additional reference.
 """
 def vpoints_hair_ear(h, hair, e, ear, mergedPtsMask, clockwise=True):
   r = 10 # Num points in vicinity of h to determine polynomial curve. This number is emperical.
-  idx = find_index(h, hair)
+  idx = MathUtils.find_index(h, hair)
 
   polyPoints = [hair[idx]]
   ndx = idx
   # Add points before given transition point.
   for i in range(r):
-    ndx = next_index(ndx, hair, clockwise)
+    ndx = MathUtils.next_index(ndx, hair, clockwise)
     polyPoints.append(hair[ndx])
 
   polyPoints = list(reversed(polyPoints))
 
   # Add points before given transition point.
   pdx = idx
-  ndx = next_index(pdx, hair, not clockwise)
-  upfunc = is_lower if not clockwise else is_higher
+  ndx = MathUtils.next_index(pdx, hair, not clockwise)
+  upfunc = MathUtils.is_lower if not clockwise else MathUtils.is_higher
   rcount = 0
   while upfunc(hair[ndx], hair[pdx]) and rcount < r:
     polyPoints.append(hair[ndx])
     pdx = ndx
-    ndx = next_index(pdx, hair, not clockwise)
+    ndx = MathUtils.next_index(pdx, hair, not clockwise)
     rcount += 1
 
   # Get the top most ear point.
   topEpt = e
-  pdx = find_index(e, ear)
-  ndx = next_index(pdx, ear, clockwise)
-  while is_higher(ear[ndx], ear[pdx]):
+  pdx = MathUtils.find_index(e, ear)
+  ndx = MathUtils.next_index(pdx, ear, clockwise)
+  while MathUtils.is_higher(ear[ndx], ear[pdx]):
     topEpt = ear[ndx]
     pdx = ndx
-    ndx = next_index(pdx, ear, clockwise)
+    ndx = MathUtils.next_index(pdx, ear, clockwise)
 
   # Append ear point to curve.
   polyPoints.append(topEpt)
@@ -646,9 +646,9 @@ def process_nose(ann):
 
   # Find the 3 important points in the convex hull.
   topPt, leftPt, rightPt = find_nose_points(chull)
-  topIdx = find_index((topPt[0], topPt[1]), nosePts)
-  leftIdx = find_index((leftPt[0], leftPt[1]), nosePts)
-  rightIdx = find_index((rightPt[0], rightPt[1]), nosePts)
+  topIdx = MathUtils.find_index((topPt[0], topPt[1]), nosePts)
+  leftIdx = MathUtils.find_index((leftPt[0], leftPt[1]), nosePts)
+  rightIdx = MathUtils.find_index((rightPt[0], rightPt[1]), nosePts)
 
   # Go to the left from the top most point.
   # Go to the right from top most point.
@@ -663,11 +663,11 @@ def process_nose(ann):
     higherPt = leftNosePt if leftNosePt[1] < rightNosePt[1] else rightNosePt
     lowerPt = leftNosePt if leftNosePt[1] > rightNosePt[1] else rightNosePt
     clockwise = True if higherPt == rightNosePt else False
-    pdx = find_index(higherPt, nosePts)
+    pdx = MathUtils.find_index(higherPt, nosePts)
     ndx = pdx
     while nosePts[ndx][1] <= lowerPt[1]:
       pdx = ndx
-      ndx = next_index(pdx, nosePts, clockwise=clockwise)
+      ndx = MathUtils.next_index(pdx, nosePts, clockwise=clockwise)
 
     if higherPt == leftNosePt:
       leftNosePt = nosePts[pdx]
@@ -676,10 +676,10 @@ def process_nose(ann):
 
   # Get points from left point to right point.
   res = [leftNosePt]
-  ndx = find_index(leftNosePt, nosePts)
-  fdx = find_index(rightNosePt, nosePts)
+  ndx = MathUtils.find_index(leftNosePt, nosePts)
+  fdx = MathUtils.find_index(rightNosePt, nosePts)
   while ndx != fdx:
-    ndx = next_index(ndx, nosePts, clockwise=False)
+    ndx = MathUtils.next_index(ndx, nosePts, clockwise=False)
     res.append(nosePts[ndx])
 
   return res
@@ -730,6 +730,120 @@ def process_mouth(ann):
   #return [leftPoint, leftMidPoint, topPoint, rightMidPoint, rightPoint,  righBottomPoint, bottomPoint, leftBottomPoint ]
 
 """
+add_smile adds smile to given facial expression.
+"""
+def add_smile(image, ann):
+  leftEyePts = []
+  leftEyeballPts = []
+  rightEyePts = []
+  rightEyeballPts = []
+  nosePts = []
+  upperLipPts = []
+  lowerLipPts = []
+  leftEyebrowPts = []
+  rightEyebrowPts = []
+  facePts = []
+
+  for c in ann:
+    if c[CLASS] == EYE_OPEN:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Data points for label: ", c[CLASS], " is: ", len(c[DATA]), " which is not 1")
+      if len(leftEyePts) == 0:
+        leftEyePts = c[DATA][0]
+      else:
+        rightEyePts = c[DATA][0]
+    elif c[CLASS] == EYEBALL:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Data points for label: ", c[CLASS], " is: ", len(c[DATA]), " which is not 1")
+      if len(leftEyeballPts) == 0:
+        leftEyeballPts = c[DATA][0]
+      else:
+        rightEyeballPts = c[DATA][0]
+    elif c[CLASS] == NOSE:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Data points for label: ", c[CLASS], " is: ", len(c[DATA]), " which is not 1")
+      nosePts = c[DATA][0]
+    elif c[CLASS] == UPPER_LIP:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Data points for label: ", c[CLASS], " is: ", len(c[DATA]), " which is not 1")
+      upperLipPts = c[DATA][0]
+    elif c[CLASS] == LOWER_LIP:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Data points for label: ", c[CLASS], " is: ", len(c[DATA]), " which is not 1")
+      lowerLipPts = c[DATA][0]
+    if c[CLASS] == EYEBROW:
+      if len(c[DATA]) != 1:
+        raise Exception("Length of Data points for label: ", c[CLASS], " is: ", len(c[DATA]), " which is not 1")
+      if len(leftEyebrowPts) == 0:
+        leftEyebrowPts = c[DATA][0]
+      else:
+        rightEyebrowPts = c[DATA][0]
+
+  if len(leftEyePts) == 0 or len(leftEyeballPts) == 0 or len(rightEyePts) == 0 \
+    or len(rightEyeballPts) == 0 or len(nosePts) == 0 or len(upperLipPts) == 0 \
+    or len(lowerLipPts) == 0 or len(leftEyebrowPts) == 0 or \
+    len(rightEyebrowPts) == 0:
+    raise Exception("Some face properties for smile may be missing")
+
+
+  if not MathUtils.is_left(MathUtils.centroid(leftEyeballPts), MathUtils.centroid(rightEyeballPts)):
+    temp = leftEyeballPts
+    leftEyeballPts = rightEyeballPts
+    rightEyeballPts = temp
+
+  if not MathUtils.is_left(MathUtils.centroid(leftEyePts), MathUtils.centroid(rightEyePts)):
+    temp = leftEyePts
+    leftEyePts = rightEyePts
+    rightEyePts = temp
+
+  if not MathUtils.is_left(MathUtils.centroid(leftEyebrowPts), MathUtils.centroid(rightEyebrowPts)):
+    temp = leftEyebrowPts
+    leftEyebrowPts = rightEyebrowPts
+    rightEyebrowPts = temp
+
+  # Draw eyebrow lines.
+  ebpts = draw_eyebrow_expr(image, leftEyebrowPts, rightEyebrowPts)
+
+  return ebpts
+
+"""
+draw_eyebrow_expr will draw a given eyebrow expression.
+For now, it will only draw smile eyebrow.
+"""
+def draw_eyebrow_expr(image, leftEyebrowPts, rightEyebrowPts):
+  leftEyebrowMask = get_mask(image, [leftEyebrowPts])
+  lebMap = MathUtils.toMap(leftEyebrowMask)
+  llpt, lrpt = MathUtils.left_bottom_point(leftEyebrowPts), MathUtils.right_bottom_point(leftEyebrowPts)
+
+  # Heuristics.
+  xwidth = int((lrpt[0] - llpt[0]+1)/4)
+  given_angle = MathUtils.angle(llpt,  (llpt[0] + xwidth, lebMap[llpt[0] + xwidth][-1]) )
+  print ("given angle: ", given_angle)
+  angle = given_angle -  15 # in degrees.
+  m = MathUtils.slope(angle)
+
+  fpt = (llpt[0] + xwidth, int(llpt[1] + xwidth*m))
+  spt = MathUtils.mid_point(fpt, lrpt)
+
+  f = MathUtils.interp([llpt, fpt, spt, lrpt])
+
+  lcurve = [(x, int(f(x))) for x in range(llpt[0], lrpt[0]+1)]
+
+  ucurve = []
+  # Find upper curve now.
+  for x in range(llpt[0], lrpt[0]+1):
+    if x not in lebMap:
+      continue
+    ypts = lebMap[x]
+    if len(ypts) == 1:
+      continue
+    yheight = ypts[-1] - ypts[0] + 1
+    ucurve.append((x, int(f(x)) - yheight))
+
+  # [llpt, fpt, spt, lrpt],
+  return [lcurve, ucurve]
+
+"""
 post_process will take input annotations and post process
 them so they can converted to vector graphics.
 """
@@ -743,6 +857,8 @@ def post_process(args):
 
   hairPts = merge_face_hair(mergedPts, d, image.shape[:2])
   addPointsToPath(image, paths, SVG_HAIR, hairPts, ann)
+
+  smilePts = add_smile(image, ann)
 
   for c in ann:
     if c[CLASS] == EYE_OPEN:
@@ -801,7 +917,8 @@ def post_process(args):
 
   print ("Time taken: ", time.time() - start)
 
-  view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
+  #view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
+  view_image(image, smilePts)
   with open("paths.json", "w") as outputfile:
     json.dump(paths, outputfile)
 
@@ -844,8 +961,7 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
   # Remaining labels will be shaded according to inherent colors.
   # Get annotation mask for given label.
   bpts = get_ann_points(ann, label_map(k), left)
-  mask = Polygons(bpts).mask(width=image.shape[1], height=image.shape[0])
-  mask = [(p[1], p[0]) for p in np.argwhere(mask.array)]
+  mask = get_mask(image, bpts)
 
   # CV2 image is BGR by default; convert it to RGB.
   img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -898,6 +1014,14 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
   if  k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
     paths[k][SVG_DATA] = list(reversed(paths[k][SVG_DATA]))
     paths[k][SVG_ATTR] = list(reversed(paths[k][SVG_ATTR]))
+
+"""
+get_mask returns mask for given input list of polygons.
+Note that the input is a list of list of points.
+"""
+def get_mask(image, bpts):
+  mask = Polygons(bpts).mask(width=image.shape[1], height=image.shape[0])
+  return [(p[1], p[0]) for p in np.argwhere(mask.array)]
 
 """
 label_map returns annotation label for given svg label.
@@ -968,7 +1092,7 @@ def move_until(p, points, positive=True, step=-1, discard_pts=2):
   r = 5
   res = [p]
   clockwise = not is_counter_clockwise(p, points, positive)
-  func = is_right if positive else is_left
+  func = MathUtils.is_right if positive else MathUtils.is_left
   pp = p
   np = move_x_points(pp, points, clockwise, step)
   while func(np, pp):
@@ -993,10 +1117,10 @@ def move_x_points(p, points, clockwise=True, step = -1):
     r = step
   else:
     r = 1 if len(points) < 10 else int(len(points)/20)
-  idx = find_index(p, points)
+  idx = MathUtils.find_index(p, points)
   ndx = idx
   for i in range(r):
-    ndx = next_index(ndx, points, clockwise)
+    ndx = MathUtils.next_index(ndx, points, clockwise)
   return points[ndx]
 
 """
@@ -1007,10 +1131,10 @@ of the label.
 def is_counter_clockwise(p, points, positive=True):
   d = 1 if positive else -1
   r = 5
-  idx = find_index(p, points)
+  idx = MathUtils.find_index(p, points)
   ndx = idx
   for i in range(r):
-    ndx = next_index(ndx, points)
+    ndx = MathUtils.next_index(ndx, points)
 
   return (points[ndx][0] - p[0])*d >= 0
 
@@ -1046,26 +1170,18 @@ points. Note that that point a and point b are assumed to be one after
 the other while moving in clockwise direction.
 """
 def points_between(a, b, points):
-  i = find_index(a, points)
-  j = find_index(b, points)
+  i = MathUtils.find_index(a, points)
+  j = MathUtils.find_index(b, points)
 
   ndx = i
   res = []
   while True:
-    ndx = next_index(ndx, points, clockwise=True)
+    ndx = MathUtils.next_index(ndx, points, clockwise=True)
     if ndx == j:
       break
     res.append(points[ndx])
 
   return res
-
-"""
-next_index returns next index to given index along given direction.
-"""
-def next_index(i, points, clockwise=False):
-  if clockwise:
-    return len(points)-1 if i == 0 else i-1
-  return 0 if i == len(points)-1 else i+1
 
 """
 check_short_transition is a general transition
@@ -1109,39 +1225,6 @@ def set_color(img, points, radius=0):
   clr = (r(), r(), r())
   for p in points:
     cv2.circle(img, (p[0], p[1]), 0, clr, radius)
-
-"""
-Returns true if p1 is higher than p2 (y coord); else returns false.
-"""
-def is_higher(p1, p2):
-  return p1[1] < p2[1]
-
-"""
-Returns true if p1 is lower than p2 (y coord); else returns false.
-"""
-def is_lower(p1, p2):
-  return p1[1] > p2[1]
-
-"""
-Returns true if p1 is to the right of p2 (x coord); else returns false.
-"""
-def is_right(p1, p2):
-  return p1[0] > p2[0]
-
-"""
-Returns true if p1 is to the left of p2 (x coord); else returns false.
-"""
-def is_left(p1, p2):
-  return p1[0] < p2[0]
-
-"""
-find_index returns the index of given point among given set of points.
-"""
-def find_index(p, points):
-  for i in range(len(points)):
-    if p == points[i]:
-      return i
-  raise Exception("Point: ", p, " not found in point set: ", points)
 
 
 if __name__ == "__main__":

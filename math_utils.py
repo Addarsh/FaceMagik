@@ -10,7 +10,7 @@ import cv2
 from numpy.linalg import inv, eig
 from lmfit import minimize, Parameters
 from image_utils import ImageUtils
-from scipy.interpolate import make_lsq_spline
+from scipy.interpolate import make_lsq_spline, interp1d
 
 class MathUtils:
   """
@@ -175,16 +175,7 @@ class MathUtils:
     x = [p[0] for p in points]
     y = [p[1] for p in points]
 
-    f = scipy.interpolate.interp1d(x, y, kind=kind)
-    r = np.linspace(int(points[0][0]), int(points[-1][0]), (int(points[-1][0])-int(points[0][0])+1)*20)
-    ipts = f(r)
-
-    res = []
-    for i in range(len(ipts)):
-      m = int(round(r[i]))
-      n = int(round(ipts[i]))
-      res.append((m,n))
-    return res
+    return scipy.interpolate.interp1d(x, y, kind=kind)
 
   @staticmethod
   def vline(points):
@@ -402,6 +393,23 @@ class MathUtils:
     return (m, y1-m*x1)
 
   """
+  slope takes input angle in degrees and
+  returns the slope.
+  """
+  @staticmethod
+  def slope(degrees):
+    return math.tan(math.radians(degrees))
+
+  """
+  angle returns angle in degrees of slope
+  between two points.
+  """
+  def angle(p1, p2):
+    x1, y1 = p1
+    x2, y2 = p2
+    return math.degrees(math.atan((y2-y1)/(x2-x1)))
+
+  """
   line_distance returns distance of point p
   from line.
   """
@@ -519,6 +527,94 @@ class MathUtils:
         minp = p
 
     return minp
+
+  """
+  left_bottom_point returns the point that is left most and bottom most
+  point in given set of points. We assume that the given set of points
+  are in counter-clockwise direction.
+  """
+  @staticmethod
+  def left_bottom_point(points):
+    lpt = MathUtils.left_most_point(points)
+
+    # Continue to move in counter clockwise direction till y coordinate
+    # increases.
+    pdx = MathUtils.find_index(lpt, points)
+    ndx = MathUtils.next_index(pdx, points, clockwise=False)
+    while MathUtils.is_lower(points[ndx], points[pdx]):
+      pdx = ndx
+      ndx = MathUtils.next_index(pdx, points, clockwise=False)
+
+    return points[pdx]
+
+  """
+  right_bottom_point returns the point that is right most and bottom most
+  point in given set of points. We assume that the given set of points
+  are in counter-clockwise direction.
+  """
+  @staticmethod
+  def right_bottom_point(points):
+    lpt = MathUtils.right_most_point(points)
+
+    # Continue to move in clockwise direction till y coordinate
+    # increases.
+    pdx = MathUtils.find_index(lpt, points)
+    ndx = MathUtils.next_index(pdx, points, clockwise=True)
+    while MathUtils.is_lower(points[ndx], points[pdx]):
+      pdx = ndx
+      ndx = MathUtils.next_index(pdx, points, clockwise=True)
+
+    return points[pdx]
+
+  """
+  find_index returns the index of given point among given set of points.
+  We assume that the given set of points are in counter-clockwise direction.
+  """
+  @staticmethod
+  def find_index(p, points):
+    for i in range(len(points)):
+      if p == points[i]:
+        return i
+    raise Exception("Point: ", p, " not found in point set: ", points)
+
+  """
+  next_index returns next index to given index along given direction.
+  Assumption is that input points are arranged in counterclockwise manner.
+  """
+  @staticmethod
+  def next_index(i, points, clockwise=False):
+    if clockwise:
+      return len(points)-1 if i == 0 else i-1
+    return 0 if i == len(points)-1 else i+1
+
+  """
+  Returns true if p1 is higher than p2 (y coord); else returns false.
+  """
+  @staticmethod
+  def is_higher(p1, p2):
+    return p1[1] < p2[1]
+
+  """
+  Returns true if p1 is lower than p2 (y coord); else returns false.
+  """
+  @staticmethod
+  def is_lower(p1, p2):
+    return p1[1] > p2[1]
+
+  """
+  Returns true if p1 is to the right of p2 (x coord); else returns false.
+  """
+  @staticmethod
+  def is_right(p1, p2):
+    return p1[0] > p2[0]
+
+  """
+  Returns true if p1 is to the left of p2 (x coord); else returns false.
+  """
+  @staticmethod
+  def is_left(p1, p2):
+    return p1[0] < p2[0]
+
 
   """
   cluster recursively clusters all points in pset that are connected to p.
@@ -769,7 +865,13 @@ class MathUtils:
       s[0] += p[0]
       s[1] += p[1]
     n = len(points)
-    return (s[0]/n, s[1]/n)
+    return (int(s[0]/n), int(s[1]/n))
+
+  """
+  mid_point returns mid point of given two points.
+  """
+  def mid_point(p1, p2):
+    return (int((p1[0]+p2[0])/2), int((p1[1]+p2[1])/2))
 
   """
   find_next_point returns the next point (moving clockwise) that is part
