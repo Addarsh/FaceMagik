@@ -801,7 +801,7 @@ def add_smile(image, ann):
     leftEyebrowPts = rightEyebrowPts
     rightEyebrowPts = temp
 
-  # Draw eyebrow lines.
+  # Draw smiling eyebrows.
   ebpts = draw_eyebrow_expr(image, leftEyebrowPts, rightEyebrowPts)
 
   return ebpts
@@ -811,26 +811,40 @@ draw_eyebrow_expr will draw a given eyebrow expression.
 For now, it will only draw smile eyebrow.
 """
 def draw_eyebrow_expr(image, leftEyebrowPts, rightEyebrowPts):
-  leftEyebrowMask = get_mask(image, [leftEyebrowPts])
+  theta = 15
+  ratio = 5
+  lpts = draw_left_eyebrow_smile(get_mask(image, [leftEyebrowPts]), leftEyebrowPts, theta, ratio)
+  rpts = draw_right_eyebrow_smile(get_mask(image, [rightEyebrowPts]), rightEyebrowPts, theta, ratio)
+  return [lpts, rpts]
+
+"""
+draw_left_eyebrow_smile returns the left eyebrow
+when the person is smiling normally. theta and ratio
+are Heuristics for calculating the smiling eyebrow.
+"""
+def draw_left_eyebrow_smile(leftEyebrowMask, leftEyebrowPts, theta, ratio):
   lebMap = MathUtils.toMap(leftEyebrowMask)
   llpt, lrpt = MathUtils.left_bottom_point(leftEyebrowPts), MathUtils.right_bottom_point(leftEyebrowPts)
 
   # Heuristics.
-  xwidth = int((lrpt[0] - llpt[0]+1)/4)
+  xwidth = int((lrpt[0] - llpt[0]+1)/ratio)
   given_angle = MathUtils.angle(llpt,  (llpt[0] + xwidth, lebMap[llpt[0] + xwidth][-1]) )
-  print ("given angle: ", given_angle)
-  angle = given_angle -  15 # in degrees.
+  angle = -31 if given_angle > -31 else given_angle - theta # in degrees.
   m = MathUtils.slope(angle)
 
+  # First and second intermediate points on the eyebrow.
   fpt = (llpt[0] + xwidth, int(llpt[1] + xwidth*m))
-  spt = MathUtils.mid_point(fpt, lrpt)
+  spt = MathUtils.k_point(fpt, lrpt, 4/5)
 
+  # Draw cubic interpolation spline through key points.
+  # This will be the lower curve.
   f = MathUtils.interp([llpt, fpt, spt, lrpt])
-
   lcurve = [(x, int(f(x))) for x in range(llpt[0], lrpt[0]+1)]
 
+  # Find left eyebrow upper curve.
+  # Using points on lower curve, we maintain the height
+  # of the eyebrow at each given x position.
   ucurve = []
-  # Find upper curve now.
   for x in range(llpt[0], lrpt[0]+1):
     if x not in lebMap:
       continue
@@ -840,8 +854,46 @@ def draw_eyebrow_expr(image, leftEyebrowPts, rightEyebrowPts):
     yheight = ypts[-1] - ypts[0] + 1
     ucurve.append((x, int(f(x)) - yheight))
 
-  # [llpt, fpt, spt, lrpt],
-  return [lcurve, ucurve]
+  return lcurve + list(reversed(ucurve))
+
+"""
+draw_left_eyebrow_smile returns the left eyebrow
+when the person is smiling normally. theta and ratio
+are Heuristics for calculating the smiling eyebrow.
+"""
+def draw_right_eyebrow_smile(rightEyebrowMask, rightEyebrowPts, theta, ratio):
+  rebMap = MathUtils.toMap(rightEyebrowMask)
+  rlpt, rrpt = MathUtils.left_bottom_point(rightEyebrowPts), MathUtils.right_bottom_point(rightEyebrowPts)
+
+  # Heuristics.
+  xwidth = int((rrpt[0] - rlpt[0]+1)/ratio)
+  given_angle = MathUtils.angle(rrpt,  (rrpt[0] - xwidth, rebMap[rrpt[0] - xwidth][-1]))
+  angle = 37 if given_angle < 37 else given_angle + theta   # in degrees.
+  m = MathUtils.slope(angle)
+
+  # First and second intermediate points on the eyebrow.
+  fpt = (rrpt[0] - xwidth, int(rrpt[1] - xwidth*m))
+  spt = MathUtils.k_point(rlpt, fpt, 1/5)
+
+  # Draw cubic interpolation spline through key points.
+  # This will be the lower curve.
+  f = MathUtils.interp([rlpt, spt, fpt, rrpt])
+  lcurve = [(x, int(f(x))) for x in range(rlpt[0], rrpt[0]+1)]
+
+  # Find left eyebrow upper curve.
+  # Using points on lower curve, we maintain the height
+  # of the eyebrow at each given x position.
+  ucurve = []
+  for x in range(rlpt[0], rrpt[0]+1):
+    if x not in rebMap:
+      continue
+    ypts = rebMap[x]
+    if len(ypts) == 1:
+      continue
+    yheight = ypts[-1] - ypts[0] + 1
+    ucurve.append((x, int(f(x)) - yheight))
+
+  return lcurve + list(reversed(ucurve))
 
 """
 post_process will take input annotations and post process

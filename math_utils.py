@@ -868,10 +868,11 @@ class MathUtils:
     return (int(s[0]/n), int(s[1]/n))
 
   """
-  mid_point returns mid point of given two points.
+  k_point returns point between p1 and p2 that divides
+  p1 and p2 in ratio k i.e dist(p1->k)/dist(p1->p2) = k.
   """
-  def mid_point(p1, p2):
-    return (int((p1[0]+p2[0])/2), int((p1[1]+p2[1])/2))
+  def k_point(p1, p2, k):
+    return (int((1-k)*p1[0] + k*p2[0]), int((1-k)*p1[1] + k*p2[1]))
 
   """
   find_next_point returns the next point (moving clockwise) that is part
