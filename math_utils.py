@@ -107,7 +107,7 @@ class MathUtils:
     rxc, ryc = int(round(out.params['xc'].value)), int(round(out.params['yc'].value))
     rad = sum([math.sqrt((i-rxc)**2 + (j-ryc)**2) for (i,j) in zip(x,y)])/len(x)
 
-    return MathUtils.circle_points((rxc, ryc), rad)
+    return (rxc, ryc), rad
 
   """
   best_bezier_curve returns the bezier curve that is most likely at the
@@ -344,10 +344,9 @@ class MathUtils:
   The input is the center of the circle and the radius.
   """
   @staticmethod
-  def circle_points(c, r):
+  def circle_points(c, r, n=200):
     xc, yc = c
     points = []
-    n = 200
     for i in range(n):
       theta = ((2*math.pi)/n)*i
 
@@ -487,7 +486,7 @@ class MathUtils:
 
     minp = points[0]
     for p in points:
-      if p[0] < minp[0]:
+      if p[0] < minp[0] or (p[0] == minp[0] and p[1] > minp[1]):
         minp = p
 
     return minp
@@ -499,7 +498,7 @@ class MathUtils:
 
     minp = points[0]
     for p in points:
-      if p[0] > minp[0]:
+      if p[0] > minp[0] or (p[0] == minp[0] and p[1] > minp[1]):
         minp = p
 
     return minp

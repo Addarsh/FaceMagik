@@ -415,7 +415,7 @@ plot given points on given image.
 """
 def view_image(image, points):
   for pts in points:
-    set_color(image, pts, 4)
+    set_color(image, pts, 2)
 
   windowName = "image"
   cv2.namedWindow(windowName,cv2.WINDOW_NORMAL)
@@ -801,10 +801,92 @@ def add_smile(image, ann):
     leftEyebrowPts = rightEyebrowPts
     rightEyebrowPts = temp
 
-  # Draw smiling eyebrows.
-  ebpts = draw_eyebrow_expr(image, leftEyebrowPts, rightEyebrowPts)
+  # Draw smiling face.
+  ebrowpts = draw_eyebrow_expr(image, leftEyebrowPts, rightEyebrowPts)
+  epts = draw_eye_expr(image, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPts)
 
-  return ebpts
+  return ebrowpts + epts
+
+"""
+draw_eye_expr will draw eyes and eyeballs with given expression.
+For now, it will draw only smile eyes.
+"""
+def draw_eye_expr(image, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPts):
+  ratio = 10
+
+  leMask = get_mask(image, [leftEyePts])
+  leMap = MathUtils.toMap(leMask)
+  lelpt, lerpt = MathUtils.left_most_point(leMask), MathUtils.right_most_point(leMask)
+
+  # Draw lower eye arc.
+  # Heuristics.
+  h = int((lerpt[0] - lelpt[0]+1)/ratio)
+  apt = (int((lelpt[0] + lerpt[0])/2), MathUtils.k_point(lelpt, lerpt, 0.5)[1] + h)
+
+  # Draw quadratic interpolation spline through key points.
+  # This will be the lower curve.
+  f = MathUtils.interp([lelpt, apt, lerpt])
+  lcurve = [(x, int(f(x))) for x in range(lelpt[0], lerpt[0]+1)]
+
+  # For upper curve we need to get the height of the eyeball.
+  lebMask = get_mask(image, [leftEyeballPts])
+  lebMap = MathUtils.toMap(lebMask)
+  leblpt, lebrpt = MathUtils.left_most_point(lebMask), MathUtils.right_most_point(lebMask)
+  np = 3
+  # Take np points from the left and right and
+  cpoints = []
+  for x in range(leblpt[0], leblpt[0]+np):
+    if x not in lebMap:
+      continue
+    cpoints.append((x, lebMap[x][-1]))
+  for x in range(lebrpt[0], lebrpt[0]-np, -1):
+    if x not in lebMap:
+      continue
+    cpoints.append((x, lebMap[x][-1]))
+
+  center, rad = MathUtils.best_fit_circle(cpoints)
+
+  # Find intersection Point.
+  ipt = ()
+  for p in lcurve:
+    if p[0] == center[0]:
+      ipt = p
+      break
+
+  # Find upper arc point and then draw the quadratic interpolation.
+  upt = (ipt[0], ipt[1] - int(rad))
+  f = MathUtils.interp([lelpt, upt, lerpt])
+  ucurve = [(x, int(f(x))) for x in range(lelpt[0]+1, lerpt[0])]
+
+  # Add eyeball from new center.
+  newCenter = MathUtils.k_point(ipt, upt, 0.5)
+  eyeballPts = MathUtils.circle_points(newCenter, rad, n=int(len(lebMask)/20))
+
+  # Add pupil to eyeball.
+  puplilPts =  MathUtils.circle_points(newCenter, int(rad/10), n=10)
+
+  # Add upper eyelid.
+  eyd = 10
+  ledpt = (lelpt[0] -eyd, lelpt[1])
+  redpt = (lerpt[0], lerpt[1]-eyd)
+  uedpt = (upt[0], upt[1]-eyd)
+  sedpt = (upt[0]-eyd, upt[1]-eyd)
+  fedpt = (upt[0]+eyd, upt[1]-eyd)
+
+  f = MathUtils.interp([ledpt, sedpt, uedpt, fedpt, redpt])
+  uedcurve = [(x, int(f(x))) for x in range(ledpt[0], redpt[0]+1)]
+
+  # Add lower eyelid.
+  nd = int((lerpt[0] - lelpt[0]+1)/5)
+  delta = int((lerpt[0] - lelpt[0]+1)/10)
+  rndpt = (lerpt[0]-delta, lerpt[1]+nd)
+  sndpt = (ipt[0], lerpt[1]+nd+delta)
+  lndpt = (lelpt[0], lerpt[1]+nd+int(1.2*delta))
+
+  f = MathUtils.interp([lndpt, sndpt, rndpt])
+  ledcurve = [(x, int(f(x))) for x in range(lndpt[0], rndpt[0]+1)]
+
+  return [lcurve, ucurve, eyeballPts, puplilPts, uedcurve, ledcurve]
 
 """
 draw_eyebrow_expr will draw a given eyebrow expression.
@@ -829,7 +911,7 @@ def draw_left_eyebrow_smile(leftEyebrowMask, leftEyebrowPts, theta, ratio):
   # Heuristics.
   xwidth = int((lrpt[0] - llpt[0]+1)/ratio)
   given_angle = MathUtils.angle(llpt,  (llpt[0] + xwidth, lebMap[llpt[0] + xwidth][-1]) )
-  angle = -31 if given_angle > -31 else given_angle - theta # in degrees.
+  angle = max(-31, given_angle - theta) # in degrees.
   m = MathUtils.slope(angle)
 
   # First and second intermediate points on the eyebrow.
@@ -868,7 +950,7 @@ def draw_right_eyebrow_smile(rightEyebrowMask, rightEyebrowPts, theta, ratio):
   # Heuristics.
   xwidth = int((rrpt[0] - rlpt[0]+1)/ratio)
   given_angle = MathUtils.angle(rrpt,  (rrpt[0] - xwidth, rebMap[rrpt[0] - xwidth][-1]))
-  angle = 37 if given_angle < 37 else given_angle + theta   # in degrees.
+  angle = min(37, given_angle + theta)   # in degrees.
   m = MathUtils.slope(angle)
 
   # First and second intermediate points on the eyebrow.
