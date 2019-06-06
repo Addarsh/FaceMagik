@@ -812,6 +812,11 @@ draw_eye_expr will draw eyes and eyeballs with given expression.
 For now, it will draw only smile eyes.
 """
 def draw_eye_expr(image, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPts):
+  leftPts = draw_eye_helper(image, leftEyePts, leftEyeballPts, left=True)
+  rightPts = draw_eye_helper(image, rightEyePts, rightEyeballPts, left=False)
+  return leftPts + rightPts
+
+def draw_eye_helper(image, leftEyePts, leftEyeballPts, left=True):
   ratio = 10
 
   leMask = get_mask(image, [leftEyePts])
@@ -854,7 +859,7 @@ def draw_eye_expr(image, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPt
       break
 
   # Find upper arc point and then draw the quadratic interpolation.
-  upt = (ipt[0], ipt[1] - int(rad))
+  upt = (ipt[0], ipt[1] - int(1.2*rad))
   f = MathUtils.interp([lelpt, upt, lerpt])
   ucurve = [(x, int(f(x))) for x in range(lelpt[0]+1, lerpt[0])]
 
@@ -867,8 +872,13 @@ def draw_eye_expr(image, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPt
 
   # Add upper eyelid.
   eyd = 10
-  ledpt = (lelpt[0] -eyd, lelpt[1])
-  redpt = (lerpt[0], lerpt[1]-eyd)
+  if left:
+    ledpt = (lelpt[0] -eyd, lelpt[1])
+    redpt = (lerpt[0], lerpt[1]-eyd)
+  else:
+    ledpt = (lelpt[0], lelpt[1]-eyd)
+    redpt = (lerpt[0] +eyd, lerpt[1])
+
   uedpt = (upt[0], upt[1]-eyd)
   sedpt = (upt[0]-eyd, upt[1]-eyd)
   fedpt = (upt[0]+eyd, upt[1]-eyd)
@@ -879,9 +889,15 @@ def draw_eye_expr(image, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPt
   # Add lower eyelid.
   nd = int((lerpt[0] - lelpt[0]+1)/5)
   delta = int((lerpt[0] - lelpt[0]+1)/10)
-  rndpt = (lerpt[0]-delta, lerpt[1]+nd)
-  sndpt = (ipt[0], lerpt[1]+nd+delta)
-  lndpt = (lelpt[0], lerpt[1]+nd+int(1.2*delta))
+
+  if left:
+    rndpt = (lerpt[0]-delta, lerpt[1]+nd)
+    sndpt = (ipt[0], lerpt[1]+nd+delta)
+    lndpt = (lelpt[0], lerpt[1]+nd+int(1.2*delta))
+  else:
+    lndpt = (lelpt[0]+delta, lelpt[1]+nd)
+    sndpt = (ipt[0], lelpt[1]+nd+delta)
+    rndpt = (lerpt[0], lelpt[1]+nd+int(1.2*delta))
 
   f = MathUtils.interp([lndpt, sndpt, rndpt])
   ledcurve = [(x, int(f(x))) for x in range(lndpt[0], rndpt[0]+1)]
