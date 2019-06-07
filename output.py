@@ -22,6 +22,12 @@ SVG_RIGHT_NOSTRIL = "SVG Right Nostril"
 SVG_LOWER_LIP = "SVG Lower Lip"
 SVG_UPPER_LIP = "SVG Upper Lip"
 SVG_FACIAL_HAIR = "SVG Facial Hair"
+SVG_LEFT_PUPIL = "SVG Left Pupil"
+SVG_RIGHT_PUPIL = "SVG Right Pupil"
+SVG_LEFT_LOWER_EYELID = "SVG Left Lower Eyelid"
+SVG_LEFT_UPPER_EYELID = "SVG Left Upper Eyelid"
+SVG_RIGHT_LOWER_EYELID = "SVG Right Lower Eyelid"
+SVG_RIGHT_UPPER_EYELID = "SVG Right Upper Eyelid"
 
 # SVG Attribute constants.
 STROKE = "stroke"
@@ -132,8 +138,11 @@ if __name__ == "__main__":
     err = 10
     if k == SVG_FACE_EAR or k == SVG_HAIR or k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
       err = 20
-    elif k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL or k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE:
+    elif k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL or k == SVG_LEFT_OPEN_EYE \
+    or k == SVG_RIGHT_OPEN_EYE:
       err = 1
+    elif k == SVG_LEFT_EYEBROW or k == SVG_RIGHT_EYEBROW:
+      err = 5
 
     opd = {LABEL: k, PATH: [], ATTR: [{STROKE: attr[STROKE], STROKE_WIDTH: attr[STROKE_WIDTH], FILL: attr[FILL]} for attr in p[SVG_ATTR]]}
     dErr = err

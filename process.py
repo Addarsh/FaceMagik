@@ -58,6 +58,12 @@ from output import (
   SVG_UPPER_LIP,
   SVG_LOWER_LIP,
   SVG_FACIAL_HAIR,
+  SVG_LEFT_PUPIL,
+  SVG_RIGHT_PUPIL,
+  SVG_LEFT_UPPER_EYELID,
+  SVG_LEFT_LOWER_EYELID,
+  SVG_RIGHT_UPPER_EYELID,
+  SVG_RIGHT_LOWER_EYELID,
 )
 
 PROCESSED_DIR = os.path.join(OUTPUT_DIR, "processed")
@@ -732,7 +738,7 @@ def process_mouth(ann):
 """
 add_smile adds smile to given facial expression.
 """
-def add_smile(image, ann):
+def add_smile(image, paths, ann):
   leftEyePts = []
   leftEyeballPts = []
   rightEyePts = []
@@ -802,21 +808,21 @@ def add_smile(image, ann):
     rightEyebrowPts = temp
 
   # Draw smiling face.
-  ebrowpts = draw_eyebrow_expr(image, leftEyebrowPts, rightEyebrowPts)
-  epts = draw_eye_expr(image, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPts)
+  ebrowpts = draw_eyebrow_expr(image, paths, ann, leftEyebrowPts, rightEyebrowPts)
+  eyepts = draw_eye_expr(image, paths, ann, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPts)
 
-  return ebrowpts + epts
+  return ebrowpts + eyepts
 
 """
 draw_eye_expr will draw eyes and eyeballs with given expression.
 For now, it will draw only smile eyes.
 """
-def draw_eye_expr(image, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPts):
-  leftPts = draw_eye_helper(image, leftEyePts, leftEyeballPts, left=True)
-  rightPts = draw_eye_helper(image, rightEyePts, rightEyeballPts, left=False)
+def draw_eye_expr(image, paths, ann, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPts):
+  leftPts = draw_eye_helper(image, paths, ann, leftEyePts, leftEyeballPts, left=True)
+  rightPts = draw_eye_helper(image, paths, ann, rightEyePts, rightEyeballPts, left=False)
   return leftPts + rightPts
 
-def draw_eye_helper(image, leftEyePts, leftEyeballPts, left=True):
+def draw_eye_helper(image, paths, ann, leftEyePts, leftEyeballPts, left=True):
   ratio = 10
 
   leMask = get_mask(image, [leftEyePts])
@@ -871,7 +877,7 @@ def draw_eye_helper(image, leftEyePts, leftEyeballPts, left=True):
   puplilPts =  MathUtils.circle_points(newCenter, int(rad/10), n=10)
 
   # Add upper eyelid.
-  eyd = 10
+  eyd = int((lerpt[0] - lelpt[0]+1)/10)
   if left:
     ledpt = (lelpt[0] -eyd, lelpt[1])
     redpt = (lerpt[0], lerpt[1]-eyd)
@@ -888,19 +894,29 @@ def draw_eye_helper(image, leftEyePts, leftEyeballPts, left=True):
 
   # Add lower eyelid.
   nd = int((lerpt[0] - lelpt[0]+1)/5)
-  delta = int((lerpt[0] - lelpt[0]+1)/10)
 
   if left:
-    rndpt = (lerpt[0]-delta, lerpt[1]+nd)
-    sndpt = (ipt[0], lerpt[1]+nd+delta)
-    lndpt = (lelpt[0], lerpt[1]+nd+int(1.2*delta))
+    redpt = (lerpt[0], lerpt[1]+nd)
+    ledpt = (ipt[0], ipt[1]+nd)
   else:
-    lndpt = (lelpt[0]+delta, lelpt[1]+nd)
-    sndpt = (ipt[0], lelpt[1]+nd+delta)
-    rndpt = (lerpt[0], lelpt[1]+nd+int(1.2*delta))
+    ledpt = (lelpt[0], lelpt[1]+nd)
+    redpt = (ipt[0], ipt[1]+nd)
 
-  f = MathUtils.interp([lndpt, sndpt, rndpt])
-  ledcurve = [(x, int(f(x))) for x in range(lndpt[0], rndpt[0]+1)]
+  f = MathUtils.interp([ledpt, redpt])
+  ledcurve = [(x, int(f(x))) for x in range(ledpt[0], redpt[0]+1)]
+
+  if left:
+    addPointsToPath(image, paths, SVG_LEFT_OPEN_EYE, lcurve + list(reversed(ucurve)) , ann)
+    addPointsToPath(image, paths, SVG_LEFT_EYEBALL, eyeballPts, ann)
+    addPointsToPath(image, paths, SVG_LEFT_PUPIL, puplilPts, ann)
+    addPointsToPath(image, paths, SVG_LEFT_UPPER_EYELID, uedcurve, ann)
+    addPointsToPath(image, paths, SVG_LEFT_LOWER_EYELID, ledcurve, ann)
+  else:
+    addPointsToPath(image, paths, SVG_RIGHT_OPEN_EYE, lcurve + list(reversed(ucurve)) , ann)
+    addPointsToPath(image, paths, SVG_RIGHT_EYEBALL, eyeballPts, ann)
+    addPointsToPath(image, paths, SVG_RIGHT_PUPIL, puplilPts, ann)
+    addPointsToPath(image, paths, SVG_RIGHT_UPPER_EYELID, uedcurve, ann)
+    addPointsToPath(image, paths, SVG_RIGHT_LOWER_EYELID, ledcurve, ann)
 
   return [lcurve, ucurve, eyeballPts, puplilPts, uedcurve, ledcurve]
 
@@ -908,11 +924,15 @@ def draw_eye_helper(image, leftEyePts, leftEyeballPts, left=True):
 draw_eyebrow_expr will draw a given eyebrow expression.
 For now, it will only draw smile eyebrow.
 """
-def draw_eyebrow_expr(image, leftEyebrowPts, rightEyebrowPts):
+def draw_eyebrow_expr(image, paths, ann, leftEyebrowPts, rightEyebrowPts):
   theta = 15
   ratio = 5
   lpts = draw_left_eyebrow_smile(get_mask(image, [leftEyebrowPts]), leftEyebrowPts, theta, ratio)
+  addPointsToPath(image, paths, SVG_LEFT_EYEBROW, lpts, ann)
+
   rpts = draw_right_eyebrow_smile(get_mask(image, [rightEyebrowPts]), rightEyebrowPts, theta, ratio)
+  addPointsToPath(image, paths, SVG_RIGHT_EYEBROW, rpts, ann)
+
   return [lpts, rpts]
 
 """
@@ -1008,8 +1028,6 @@ def post_process(args):
   hairPts = merge_face_hair(mergedPts, d, image.shape[:2])
   addPointsToPath(image, paths, SVG_HAIR, hairPts, ann)
 
-  smilePts = add_smile(image, ann)
-
   for c in ann:
     if c[CLASS] == EYE_OPEN:
       if len(c[DATA]) != 1:
@@ -1057,6 +1075,8 @@ def post_process(args):
   nosePts = process_nose(ann)
   addPointsToPath(image, paths, SVG_NOSE, nosePts, ann)
 
+  #smilePts = add_smile(image, paths, ann)
+
   if len(remEarPts) > 0:
     addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
   if len(remEarPts) > 1:
@@ -1068,7 +1088,7 @@ def post_process(args):
   print ("Time taken: ", time.time() - start)
 
   #view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
-  view_image(image, smilePts)
+  #view_image(image, smilePts)
   with open("paths.json", "w") as outputfile:
     json.dump(paths, outputfile)
 
@@ -1080,8 +1100,14 @@ attributes to the path.
 def addPointsToPath(image, paths, k, points, ann, left=True):
   attr = {STROKE: "#000", STROKE_WIDTH: 0, FILL:"none", CLOSED_PATH: False}
   if k != SVG_LEFT_EYEBALL and k != SVG_RIGHT_EYEBALL and k != SVG_HAIR:
-    if k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE:
+    if k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE or k == SVG_LEFT_LOWER_EYELID \
+    or k == SVG_RIGHT_LOWER_EYELID:
       attr[STROKE_WIDTH] = 1
+    elif k == SVG_LEFT_EYEBROW or k == SVG_RIGHT_EYEBROW or k == SVG_NOSE or \
+    k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
+      attr[STROKE_WIDTH] = 2
+    elif k == SVG_LEFT_UPPER_EYELID or k == SVG_RIGHT_UPPER_EYELID:
+      attr[STROKE_WIDTH] = 3
     else:
       attr[STROKE_WIDTH] = 4
 
@@ -1093,17 +1119,20 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
   if k == SVG_FACE_EAR or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL or \
     k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL or k == SVG_LEFT_OPEN_EYE or\
     k == SVG_RIGHT_OPEN_EYE or k == SVG_LEFT_EYEBROW or k == SVG_RIGHT_EYEBROW or\
-    k == SVG_UPPER_LIP or k == SVG_LOWER_LIP or k == FACIAL_HAIR:
+    k == SVG_UPPER_LIP or k == SVG_LOWER_LIP or k == FACIAL_HAIR or k == SVG_LEFT_PUPIL or \
+    k == SVG_RIGHT_PUPIL or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL:
     attr[CLOSED_PATH] = True
 
-  if k == SVG_NOSE:
+  if k == SVG_NOSE or k == SVG_LEFT_UPPER_EYELID or k == SVG_LEFT_LOWER_EYELID or \
+  k == SVG_RIGHT_LOWER_EYELID or k == SVG_RIGHT_UPPER_EYELID or k == SVG_LEFT_LOWER_EYELID or \
+  k == SVG_RIGHT_LOWER_EYELID:
     paths[k][SVG_ATTR].append(attr)
     return
-  if k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL:
+  if k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL:
     attr[FILL] = "#000"
     paths[k][SVG_ATTR].append(attr)
     return
-  if k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE:
+  if k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE or k == SVG_LEFT_PUPIL or k == SVG_RIGHT_PUPIL:
     attr[FILL] = "#fff"
     paths[k][SVG_ATTR].append(attr)
     return
@@ -1171,7 +1200,7 @@ Note that the input is a list of list of points.
 """
 def get_mask(image, bpts):
   mask = Polygons(bpts).mask(width=image.shape[1], height=image.shape[0])
-  return [(p[1], p[0]) for p in np.argwhere(mask.array)]
+  return [(int(p[1]), int(p[0])) for p in np.argwhere(mask.array)]
 
 """
 label_map returns annotation label for given svg label.
