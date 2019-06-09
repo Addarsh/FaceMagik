@@ -341,7 +341,8 @@ class MathUtils:
 
   """
   circle points returns points that lie on the circumference.
-  The input is the center of the circle and the radius.
+  The input is the center of the circle and the radius. The returned
+  points are in counterclockwise order.
   """
   @staticmethod
   def circle_points(c, r, n=200):

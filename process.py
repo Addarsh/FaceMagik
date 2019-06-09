@@ -421,7 +421,7 @@ plot given points on given image.
 """
 def view_image(image, points):
   for pts in points:
-    set_color(image, pts, 2)
+    set_color(image, pts, 0)
 
   windowName = "image"
   cv2.namedWindow(windowName,cv2.WINDOW_NORMAL)
@@ -865,7 +865,7 @@ def draw_eye_helper(image, paths, ann, leftEyePts, leftEyeballPts, left=True):
       break
 
   # Find upper arc point and then draw the quadratic interpolation.
-  upt = (ipt[0], ipt[1] - int(1.2*rad))
+  upt = (ipt[0], ipt[1] - int(1.6*rad))
   f = MathUtils.interp([lelpt, upt, lerpt])
   ucurve = [(x, int(f(x))) for x in range(lelpt[0]+1, lerpt[0])]
 
@@ -908,13 +908,13 @@ def draw_eye_helper(image, paths, ann, leftEyePts, leftEyeballPts, left=True):
   if left:
     addPointsToPath(image, paths, SVG_LEFT_OPEN_EYE, lcurve + list(reversed(ucurve)) , ann)
     addPointsToPath(image, paths, SVG_LEFT_EYEBALL, eyeballPts, ann)
-    addPointsToPath(image, paths, SVG_LEFT_PUPIL, puplilPts, ann)
+    addPointsToPath(image, paths, SVG_LEFT_PUPIL, (newCenter, int(rad/3)), ann)
     addPointsToPath(image, paths, SVG_LEFT_UPPER_EYELID, uedcurve, ann)
     addPointsToPath(image, paths, SVG_LEFT_LOWER_EYELID, ledcurve, ann)
   else:
     addPointsToPath(image, paths, SVG_RIGHT_OPEN_EYE, lcurve + list(reversed(ucurve)) , ann)
     addPointsToPath(image, paths, SVG_RIGHT_EYEBALL, eyeballPts, ann)
-    addPointsToPath(image, paths, SVG_RIGHT_PUPIL, puplilPts, ann)
+    addPointsToPath(image, paths, SVG_RIGHT_PUPIL, (newCenter, int(rad/3)), ann)
     addPointsToPath(image, paths, SVG_RIGHT_UPPER_EYELID, uedcurve, ann)
     addPointsToPath(image, paths, SVG_RIGHT_LOWER_EYELID, ledcurve, ann)
 
@@ -1075,7 +1075,7 @@ def post_process(args):
   nosePts = process_nose(ann)
   addPointsToPath(image, paths, SVG_NOSE, nosePts, ann)
 
-  #smilePts = add_smile(image, paths, ann)
+  smilePts = add_smile(image, paths, ann)
 
   if len(remEarPts) > 0:
     addPointsToPath(image, paths, SVG_LEFT_REM_EAR, remEarPts[0], ann)
@@ -1088,7 +1088,7 @@ def post_process(args):
   print ("Time taken: ", time.time() - start)
 
   #view_image(image, [mergedPts, hairPts, nosePts] + remEarPts)
-  #view_image(image, smilePts)
+  view_image(image, smilePts)
   with open("paths.json", "w") as outputfile:
     json.dump(paths, outputfile)
 
@@ -1119,20 +1119,21 @@ def addPointsToPath(image, paths, k, points, ann, left=True):
   if k == SVG_FACE_EAR or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL or \
     k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL or k == SVG_LEFT_OPEN_EYE or\
     k == SVG_RIGHT_OPEN_EYE or k == SVG_LEFT_EYEBROW or k == SVG_RIGHT_EYEBROW or\
-    k == SVG_UPPER_LIP or k == SVG_LOWER_LIP or k == FACIAL_HAIR or k == SVG_LEFT_PUPIL or \
-    k == SVG_RIGHT_PUPIL or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL:
+    k == SVG_UPPER_LIP or k == SVG_LOWER_LIP or k == FACIAL_HAIR or k == SVG_LEFT_EYEBALL \
+    or k == SVG_RIGHT_EYEBALL:
     attr[CLOSED_PATH] = True
 
   if k == SVG_NOSE or k == SVG_LEFT_UPPER_EYELID or k == SVG_LEFT_LOWER_EYELID or \
   k == SVG_RIGHT_LOWER_EYELID or k == SVG_RIGHT_UPPER_EYELID or k == SVG_LEFT_LOWER_EYELID or \
-  k == SVG_RIGHT_LOWER_EYELID:
+  k == SVG_RIGHT_LOWER_EYELID or k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR or \
+  k == SVG_LEFT_PUPIL or k == SVG_RIGHT_PUPIL:
     paths[k][SVG_ATTR].append(attr)
     return
   if k == SVG_LEFT_NOSTRIL or k == SVG_RIGHT_NOSTRIL or k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL:
     attr[FILL] = "#000"
     paths[k][SVG_ATTR].append(attr)
     return
-  if k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE or k == SVG_LEFT_PUPIL or k == SVG_RIGHT_PUPIL:
+  if k == SVG_LEFT_OPEN_EYE or k == SVG_RIGHT_OPEN_EYE:
     attr[FILL] = "#fff"
     paths[k][SVG_ATTR].append(attr)
     return
