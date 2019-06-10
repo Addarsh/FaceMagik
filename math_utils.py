@@ -388,9 +388,58 @@ class MathUtils:
     x1, y1 = p1
     x2, y2 = p2
     if x1 == x2:
-      return ()
+      return sys.maxsize # large slope value
     m = (y2-y1)/(x2-x1)
     return (m, y1-m*x1)
+
+  """
+  get_point_on_line returns the point on given line at given
+  distance from given point. Input must specify if direction of
+  movement will increase or decrease x or specify if
+  it will increase of decrease y.
+  """
+  def get_point_on_line(p, distance, m, x_change="none", y_change="none"):
+    if x_change == "none" and y_change == "none":
+      raise Exception("Must specify only one of the two directions")
+    if x_change != "none" and y_change != "none":
+      raise Exception("Cannot specify both x and y direction values")
+
+    x, y = p
+    if x_change != "none":
+      distance = distance if x_change== "positive" else -distance
+      cos = math.cos(math.atan(m))
+      sin = math.sin(math.atan(m))
+      return (x + int(distance*cos), y + int(distance*sin))
+
+    k = 1 if y_change == "positive" else -1
+    distance = distance if m*k >= 0 else -distance
+    cos = math.cos(math.atan(m))
+    sin = math.sin(math.atan(m))
+    return (x + int(distance*cos), y + int(distance*sin))
+
+
+  """
+  line_intersection returns the intersection of two lines.
+  Each line is characterised by a point and an associated slope.
+  """
+  def line_intersection(p1, m1, p2, m2):
+    if abs(m1 -m2) <= 1e-2:
+      raise Exception("line_intersection: slopes are too close: ", m1, m2)
+    if m1 == 0 or m2 == 0:
+      px = p1 if m1 == 0 else p2
+      py = p2 if px == p1 else p1
+      return (py[0], px[1])
+
+    x1, y1 = p1
+    c1 = y1 - m1*x1
+
+    x2, y2 = p2
+    c2 = y2 - m2*x2
+
+    xp = (c2-c1)/(m1-m2)
+    yp = xp*m1 + c1
+
+    return (int(xp), int(yp))
 
   """
   slope takes input angle in degrees and

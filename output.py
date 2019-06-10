@@ -254,7 +254,7 @@ if __name__ == "__main__":
   for k, p in d.items():
     err = 10
     if k == SVG_FACE_EAR or k == SVG_HAIR or k == SVG_LEFT_REM_EAR or k == SVG_RIGHT_REM_EAR:
-      err = 20
+      err = 30
     elif k == SVG_LEFT_EYEBALL or k == SVG_RIGHT_EYEBALL or k == SVG_LEFT_OPEN_EYE \
     or k == SVG_RIGHT_OPEN_EYE or k == SVG_NOSE:
       err = 2

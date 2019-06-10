@@ -421,7 +421,7 @@ plot given points on given image.
 """
 def view_image(image, points):
   for pts in points:
-    set_color(image, pts, 0)
+    set_color(image, pts, 2)
 
   windowName = "image"
   cv2.namedWindow(windowName,cv2.WINDOW_NORMAL)
@@ -691,51 +691,6 @@ def process_nose(ann):
   return res
 
 """
-process_mouth will process all elements of the mouth including
-upper lip, lower lip, tongue and teeth. In case lips are not aligned
-or a lip is missing, process_mouth will compensate accordingly.
-"""
-def process_mouth(ann):
-  res = []
-  upperPts = []
-  for c in ann:
-    if c[CLASS] == UPPER_LIP:
-      if len(c[DATA]) != 1:
-        raise Exception("Length of Upper Lip Data points: ", len(c[DATA]), " is not 1")
-      res.append(to_points(c[DATA][0]))
-      upperPts = to_points(c[DATA][0])
-    elif c[CLASS] == LOWER_LIP:
-      if len(c[DATA]) != 1:
-        raise Exception("Length of Lower Lip Data points: ", len(c[DATA]), " is not 1")
-
-  # Find left and right points of upper lip.
-  lp = MathUtils.left_most_point(upperPts)
-  rp = MathUtils.right_most_point(upperPts)
-  tp = MathUtils.top_most_point(upperPts)
-  bp = MathUtils.bottom_most_point(upperPts)
-
-
-  lipWidth = bp[1] - tp[1]
-  edgeWidth = rp[0] - lp[0]
-
-  topPoint = (int((lp[0]+rp[0])/2), tp[1])
-  bottomPoint = (topPoint[0], topPoint[1] + lipWidth)
-
-  r = 2
-  leftPoint = (lp[0] -  int(edgeWidth/4) ,  lp[1] + r*lipWidth)
-  rightPoint = (rp[0] + int(edgeWidth/4) ,  rp[1] + r*lipWidth)
-
-  leftMidPoint = (int((leftPoint[0]+topPoint[0])/2), topPoint[1] + int((leftPoint[1]-topPoint[1])/4))
-  rightMidPoint = (int((rightPoint[0]+topPoint[0])/2), topPoint[1] + int((rightPoint[1]-topPoint[1])/4))
-
-
-  leftBottomPoint = (int((leftPoint[0]+topPoint[0])/2), leftMidPoint[1] + int(lipWidth))
-  righBottomPoint = (int((rightPoint[0]+topPoint[0])/2), rightMidPoint[1] + int(lipWidth))
-
-  return [leftPoint, leftMidPoint, topPoint, rightMidPoint, rightPoint]
-  #return [leftPoint, leftMidPoint, topPoint, rightMidPoint, rightPoint,  righBottomPoint, bottomPoint, leftBottomPoint ]
-
-"""
 add_smile adds smile to given facial expression.
 """
 def add_smile(image, paths, ann):
@@ -810,8 +765,108 @@ def add_smile(image, paths, ann):
   # Draw smiling face.
   ebrowpts = draw_eyebrow_expr(image, paths, ann, leftEyebrowPts, rightEyebrowPts)
   eyepts = draw_eye_expr(image, paths, ann, leftEyePts, rightEyePts, leftEyeballPts, rightEyeballPts)
+  lipPts = draw_smile_lips(image, paths, ann, upperLipPts, lowerLipPts, leftEyeballPts, rightEyeballPts)
 
-  return ebrowpts + eyepts
+  return ebrowpts + eyepts + lipPts
+
+"""
+draw_smile_lips will draw smile expression for given lips.
+"""
+def draw_smile_lips(image, paths, ann, upperLipPts, lowerLipPts, leftEyeballPts, rightEyeballPts):
+  # Find edges of current upper lip.
+  lpt, rpt = MathUtils.left_most_point(upperLipPts), MathUtils.right_most_point(upperLipPts)
+
+  # Find slope of upper lip.
+  m, c = MathUtils.get_line(lpt, rpt)
+  perpm = -1/m if m != 0 else sys.maxsize
+
+  topt = MathUtils.get_point_on_line(MathUtils.k_point(lpt, rpt, 0.5) , MathUtils.line_distance((m,c), MathUtils.top_most_point(upperLipPts)) , perpm, y_change="negative")
+
+  r = 0.4
+
+  # Find left and right smile points.
+  llpt = left_smile_lip_point(topt, leftEyeballPts, r, (m, perpm))
+  rlpt = right_smile_lip_point(topt, rightEyeballPts, r, (m, perpm))
+
+  # Find midpoint.
+  midpt = MathUtils.k_point(llpt, rlpt, 0.5)
+
+  # Find upper lip lower point.
+  spt = midpt
+  ulipMaskSet = set(get_mask(image, [upperLipPts]))
+  while spt not in ulipMaskSet:
+    spt = MathUtils.get_point_on_line(spt, 2, perpm, y_change="positive")
+
+  jpt = MathUtils.get_point_on_line(spt, 2, perpm, y_change="positive")
+  while jpt in ulipMaskSet:
+    spt = jpt
+    jpt = MathUtils.get_point_on_line(spt, 2, perpm, y_change="positive")
+  lowerLipPt = spt
+
+  lipHeight = MathUtils.distance(lowerLipPt, midpt)
+
+  # Find additional points to the left and right of midpoint
+  # That can be used for drawing upper lip curve.
+  lipWidth = MathUtils.distance(llpt, rlpt)
+  kr = 0.5
+
+  # left point and right points.
+  mlpt = MathUtils.get_point_on_line(midpt, (lipWidth/2)*kr, m, x_change="negative")
+  mrpt = MathUtils.get_point_on_line(midpt, (lipWidth/2)*kr, m, x_change="positive")
+
+  # move points in y direction by given pixels.
+  km = 0.3
+  yp = max(lipHeight*km,3)
+  mlpt = MathUtils.get_point_on_line(mlpt, yp, perpm, y_change="negative")
+  mrpt = MathUtils.get_point_on_line(mrpt, yp, perpm, y_change="negative")
+
+  # Join upper lip points.
+  f = MathUtils.interp([llpt, mlpt, midpt])
+  lcurve = [(x, int(f(x))) for x in range(llpt[0], midpt[0]+1)]
+
+  f = MathUtils.interp([midpt, mrpt, rlpt])
+  lcurve += [(x, int(f(x))) for x in range(midpt[0]+1, rlpt[0]+1)]
+
+  # Add points near left and right lip points to get lower
+  # portion of upper lip.
+  kh = max(0.3*lipHeight, 3)
+  llowerpt = MathUtils.get_point_on_line(llpt, kh, perpm, y_change="positive")
+  rlowerpt = MathUtils.get_point_on_line(rlpt, kh, perpm, y_change="positive")
+
+  # Add one more point near the lower left and right points.
+  dh = lipWidth*0.1
+  lowermlpt = MathUtils.get_point_on_line(llowerpt, dh, m, x_change="positive")
+  lowermrpt = MathUtils.get_point_on_line(rlowerpt, dh, m, x_change="negative")
+
+  return [ lcurve, [lowerLipPt], [llowerpt, rlowerpt], [lowermlpt, lowermrpt]]
+
+
+"""
+left_smile_lip_point returns the left starting point of the upper lip for a smile.
+"""
+def left_smile_lip_point(topt, leftEyeballPts, r, slopes):
+  m, perpm = slopes
+  # Find the left eyeball point according to given slope.
+  lmostEbpt = MathUtils.left_most_point(leftEyeballPts)
+  diameter = abs(lmostEbpt[0] - MathUtils.right_most_point(leftEyeballPts)[0])
+  llpt = MathUtils.get_point_on_line(lmostEbpt, diameter*r, m, x_change="positive")
+
+  # Find perpendicular intersection.
+  return MathUtils.line_intersection(llpt, perpm, topt, m)
+
+"""
+right_smile_lip_point returns the right starting point of the upper lip for a smile.
+"""
+def right_smile_lip_point(topt, rightEyeballPts, r, slopes):
+  m, perpm = slopes
+  # Find the right eyeball point according to given slope.
+  rmostEbpt = MathUtils.right_most_point(rightEyeballPts)
+  diameter = abs(rmostEbpt[0] - MathUtils.left_most_point(rightEyeballPts)[0])
+  rlpt = MathUtils.get_point_on_line(rmostEbpt, diameter*r, m, x_change="negative")
+
+  # Find perpendicular intersection.
+  return MathUtils.line_intersection(rlpt, perpm, topt, m)
+
 
 """
 draw_eye_expr will draw eyes and eyeballs with given expression.
@@ -874,7 +929,7 @@ def draw_eye_helper(image, paths, ann, leftEyePts, leftEyeballPts, left=True):
   eyeballPts = MathUtils.circle_points(newCenter, rad, n=int(len(lebMask)/20))
 
   # Add pupil to eyeball.
-  puplilPts =  MathUtils.circle_points(newCenter, int(rad/10), n=10)
+  puplilPts =  MathUtils.circle_points(newCenter, int(rad/3), n=10)
 
   # Add upper eyelid.
   eyd = int((lerpt[0] - lelpt[0]+1)/10)
@@ -1082,8 +1137,6 @@ def post_process(args):
   if len(remEarPts) > 1:
     addPointsToPath(image, paths, SVG_RIGHT_REM_EAR, remEarPts[1], ann, left=False)
 
-  #mouthPts = process_mouth(ann)
-  #addPointsToPath(image, paths, SVG_LOWER_LIP, mouthPts, ann)
 
   print ("Time taken: ", time.time() - start)
 
