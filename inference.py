@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import argparse
 import json
+import time
 import random
 import skimage.draw
 from train import FaceConfig, DATASET_DIR, CHECKPOINT_DIR, modellib, label_id_map
@@ -26,6 +27,9 @@ from train import (
   EAR,
 )
 from imantics import Mask
+from math_utils import MathUtils
+from image_utils import ImageUtils
+
 CLASS = "class"
 DATA = "data"
 
@@ -52,12 +56,79 @@ def color(image, mask, class_ids):
     list_polygons = []
     for p in polygons.points:
       list_polygons.append(p.tolist())
+
     ann.append({CLASS: id_label_map[class_id], DATA: list_polygons})
     gmask = np.reshape(mask[:,:, i], (image.shape[0], image.shape[1], 1))
     m = np.where(gmask, color_map[class_id], m).astype(np.uint8)
 
   return m, ann
 
+# maskPoints returns points in the mask that are True.
+def maskPoints(mask):
+  points = []
+  for x in range(mask.shape[0]):
+    for y in range(mask.shape[1]):
+      if mask[x,y]:
+        points.append((x,y))
+  return points
+
+# newMask returns a new boolean mask which is
+# True for given set of points.
+def newMask(dims, points):
+  mask = np.zeros(dims, dtype=bool)
+  for p in points:
+    x, y = p
+    mask[x, y] = True
+  mask = np.reshape(mask, (dims[0], dims[1], 1))
+  return mask
+
+# shadwo_masks constructs shadows from given input points
+# and applies them to input mask.
+def shadow_masks(m, image, maskPts):
+  gray = skimage.color.gray2rgb(skimage.color.rgb2gray(image)) * 255
+
+  pts1, pts2 = MathUtils.segregate_points(image, maskPts)
+  pts1_mean, pts2_mean = ImageUtils.avg_intensity(gray, pts1), ImageUtils.avg_intensity(gray, pts2)
+
+  darker_pts = pts1 if pts1_mean[0] < pts2_mean[0] else pts2
+  lighter_pts = pts1 if pts1_mean[0] >= pts2_mean[0] else pts2
+  d = pts1_mean if pts1_mean[0] < pts2_mean[0] else pts2_mean
+  l = pts1_mean if pts1_mean[0] >= pts2_mean[0] else pts2_mean
+
+  darkMask = newMask(m.shape[:2], darker_pts)
+  lightMask = newMask(m.shape[:2], lighter_pts)
+
+  m = np.where(darkMask, d, m).astype(np.uint8)
+  m = np.where(lightMask, l, m).astype(np.uint8)
+
+  return m, darker_pts, lighter_pts
+
+"""
+detect face is responsible for finding the face segmentation pixels
+and clustering them by similarity.
+"""
+def detect_face(model, image_path):
+  print("Running on {}".format(args.image))
+  # Read image
+  image = skimage.io.imread(args.image)
+  # Detect objects
+  preds = model.detect([image], verbose=1)[0]
+
+  print ("len mask: ", len(preds["masks"]))
+
+  m = np.zeros(image.shape)
+
+  for i, class_id in enumerate(preds["class_ids"]):
+    if id_label_map[class_id] != FACE:
+      continue
+    m, dpts, lpts = shadow_masks(m, image, maskPoints(preds["masks"][:, :, i]))
+    m, _, _ = shadow_masks(m, image, lpts)
+    m , _, _ = shadow_masks(m, image, dpts)
+    break
+
+
+  # Save output
+  skimage.io.imsave(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(image_path)[1])[0]+".jpg"), m)
 
 """
 detect runs detection algorithm for face masks.
@@ -83,6 +154,8 @@ def detect(model, image_path):
     json.dump(ann, outfile)
 
 if __name__ == '__main__':
+  start_time = time.time()
+  
   # Parse command line arguments
   parser = argparse.ArgumentParser(
       description='Train Mask R-CNN to detect balloons.')
@@ -118,5 +191,8 @@ if __name__ == '__main__':
   print("Loading weights ", weights_path)
   model.load_weights(weights_path, by_name=True)
 
+  detect_start_time = time.time()
   # Run inference.
-  detect(model, args.image)
+  detect_face(model, args.image)
+
+  print ("Total time taken: ", time.time()-start_time, time.time() - detect_start_time)

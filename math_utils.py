@@ -261,7 +261,7 @@ class MathUtils:
   def segregate_points(img, points):
     m = np.zeros((len(points), img.shape[2]))
     for i in range(len(points)):
-      m[i, :] = img[points[i][1], points[i][0]]
+      m[i, :] = img[points[i][0], points[i][1]]
 
     q = np.reshape(np.mean(m, axis=0), (m.shape[1],1))
     v = MathUtils.max_eigen_vector(m.T)
@@ -279,6 +279,27 @@ class MathUtils:
       else:
         points_b.append(points[i])
     return points_a, points_b
+
+  """
+  segregate_points_1d segregates given points in given 1D array
+  dimension. This is done by comapring with the mean.
+  """
+  def segregate_points_1d(arr, points):
+    mean = 0.0
+    for p in points:
+      x, y = p
+      mean += arr[x,y]
+    mean = mean/len(points)
+
+    darker, lighter = [], []
+    for p in points:
+      x, y = p
+      if arr[x,y] < mean:
+        darker.append(p)
+      else:
+        lighter.append(p)
+
+    return darker, lighter
 
   """
   find best points among given set of points.

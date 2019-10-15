@@ -109,12 +109,24 @@ class ImageUtils:
       return
     c = (0,0,0)
     for _, p in enumerate(pts):
-      nc = img[p[1],p[0]]
+      nc = img[p[0],p[1]]
       c = (c[0] + nc[0]**2, c[1] + nc[1]**2, c[2] + nc[2]**2)
 
     l = len(pts)
     #return ImageUtils.brighter((int(c[0]/l),int(c[1]/l),int(c[2]/l)))
     return (int(math.sqrt(c[0]/l)),int(math.sqrt(c[1]/l)),int(math.sqrt(c[2]/l)))
+
+  """
+  average intensity returns the average intensity of the given set of points.
+  Input img must be dimension 1.
+  """
+  @staticmethod
+  def avg_intensity(img, pts):
+    avg = 0.0
+    for p in pts:
+      x, y = p
+      avg += img[x, y]
+    return avg/len(pts)
 
   """
   brighter makes the color by multiplying by constant.
