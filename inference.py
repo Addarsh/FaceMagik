@@ -107,7 +107,9 @@ def shadow_masks(m, image, maskPts):
 detect face is responsible for finding the face segmentation pixels
 and clustering them by similarity.
 """
-def detect_face(model, image_path):
+def detect_face():
+  model = construct_model(1)
+
   print("Running on {}".format(args.image))
   # Read image
   image = skimage.io.imread(args.image)
@@ -128,7 +130,71 @@ def detect_face(model, image_path):
 
 
   # Save output
-  skimage.io.imsave(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(image_path)[1])[0]+".jpg"), m)
+  skimage.io.imsave(os.path.split(args.image)[1], m)
+
+# save_images saves the images in the given list to directory.
+def save_images(model, imgList):
+  preds = model.detect([t[0] for t in imgList], verbose=1)
+  for i, pred in enumerate(preds):
+    image, iDir = imgList[i]
+    m = np.zeros(image.shape)
+    for j, class_id in enumerate(pred["class_ids"]):
+      if id_label_map[class_id] != FACE:
+        continue
+      m, dpts, lpts = shadow_masks(m, image, maskPoints(pred["masks"][:, :, j]))
+      m, _, _ = shadow_masks(m, image, lpts)
+      m , _, _ = shadow_masks(m, image, dpts)
+      break
+    skimage.io.imsave(os.path.join(iDir, "shadow.jpg"), m)
+
+# Run detection on AWS to get multiple faces for training.
+def detect_on_aws():
+  k = 3 # Number of images on which to perform detection.
+  dirpath = "train"
+  model = construct_model(k)
+  imgList = []
+  for d in os.listdir(dirpath):
+    if not os.path.isdir(os.path.join(dirpath, d)):
+      continue
+    for sd in os.listdir(os.path.join(dirpath, d)):
+      if not os.path.isdir(os.path.join(os.path.join(dirpath, d), sd)):
+        continue
+      imPath = os.path.join(os.path.join(os.path.join(dirpath, d), sd), "image.jpg")
+      imgList.append((skimage.io.imread(imPath),os.path.join(os.path.join(dirpath, d), sd)))
+
+      if len(imgList) == k:
+        save_images(model, imgList)
+        imgList = []
+
+  if len(imgList) > 0:
+    model = construct_model(len(imgList))
+    save_images(model, imgList)
+    imgList = []
+
+# construct_model constructs a model and returns it.
+def construct_model(imagesPerGPU):
+  class InferenceConfig(FaceConfig):
+      # Set batch size to 1 since we'll be running inference on
+      # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+      GPU_COUNT = 1
+      IMAGES_PER_GPU = imagesPerGPU
+
+  config = InferenceConfig()
+
+  # Create model
+  model = modellib.MaskRCNN(mode="inference", config=config,
+                                model_dir=CHECKPOINT_DIR)
+  # Select weights file to load
+  weights_path = ""
+  try:
+    weights_path = model.find_last()
+  except Exception as e:
+    raise
+
+  # Load weights
+  print("Loading weights ", weights_path)
+  model.load_weights(weights_path, by_name=True)
+  return model
 
 """
 detect runs detection algorithm for face masks.
@@ -155,11 +221,11 @@ def detect(model, image_path):
 
 if __name__ == '__main__':
   start_time = time.time()
-  
+
   # Parse command line arguments
   parser = argparse.ArgumentParser(
       description='Train Mask R-CNN to detect balloons.')
-  parser.add_argument('--image', required=True,
+  parser.add_argument('--image', required=False,
                       metavar="path or URL to image",
                       help='Image to apply the color splash effect on')
   args = parser.parse_args()
@@ -167,32 +233,11 @@ if __name__ == '__main__':
   print("Dataset: ", DATASET_DIR)
   print("Logs: ", CHECKPOINT_DIR)
 
-  # Configurations
-  class InferenceConfig(FaceConfig):
-      # Set batch size to 1 since we'll be running inference on
-      # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-      GPU_COUNT = 1
-      IMAGES_PER_GPU = 1
-  config = InferenceConfig()
-  config.display()
-
-  # Create model
-  model = modellib.MaskRCNN(mode="inference", config=config,
-                                model_dir=CHECKPOINT_DIR)
-
-  # Select weights file to load
-  weights_path = ""
-  try:
-    weights_path = model.find_last()
-  except Exception as e:
-    raise
-
-  # Load weights
-  print("Loading weights ", weights_path)
-  model.load_weights(weights_path, by_name=True)
-
   detect_start_time = time.time()
   # Run inference.
-  detect_face(model, args.image)
+  if args.image != "":
+    detect_face()
+  else:
+    detect_on_aws()
 
-  print ("Total time taken: ", time.time()-start_time, time.time() - detect_start_time)
+  print ("Total detection time taken: ", time.time() - detect_start_time)
