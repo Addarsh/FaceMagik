@@ -7,8 +7,9 @@ import numpy as np
 import math
 
 from skimage import color
-from colormath.color_objects import LabColor
+from colormath.color_objects import LabColor, sRGBColor
 from colormath.color_diff import delta_e_cie2000
+from colormath.color_conversions import convert_color
 
 class ImageUtils:
   windowName = ""
@@ -57,8 +58,8 @@ class ImageUtils:
   """
   @staticmethod
   def lab_diff(c1, c2):
-    color1 = LabColor(lab_l=c1[0], lab_a=c1[1], lab_b=-c1[2])
-    color2 = LabColor(lab_l=c2[0], lab_a=c2[1], lab_b=-c2[2])
+    color1 = LabColor(lab_l=c1[0], lab_a=c1[1], lab_b=c1[2])
+    color2 = LabColor(lab_l=c2[0], lab_a=c2[1], lab_b=c2[2])
     return delta_e_cie2000(color1, color2)
 
   """
@@ -101,12 +102,13 @@ class ImageUtils:
       cv2.circle(img, p, 0, clr, radius)
 
   """
-  avg_color returns the average color of the given points.
+  avg_color returns the average color of the given points. The points
+  and image are in RGB LAB color space.
   """
   @staticmethod
   def avg_color(img, pts):
     if len(pts) == 0:
-      return
+      return None
     c = (0,0,0)
     for _, p in enumerate(pts):
       nc = img[p[0],p[1]]
@@ -115,6 +117,21 @@ class ImageUtils:
     l = len(pts)
     #return ImageUtils.brighter((int(c[0]/l),int(c[1]/l),int(c[2]/l)))
     return (int(math.sqrt(c[0]/l)),int(math.sqrt(c[1]/l)),int(math.sqrt(c[2]/l)))
+
+  """
+  avg_lab_color is the average color of the given points. The points and
+  image are in LAB color space.
+  """
+  def avg_lab_color(img, pts):
+    if len(pts) == 0:
+      return None
+    c = [0, 0, 0]
+    l = len(pts)
+    for p in pts:
+      nc = img[p[0], p[1]]
+      c = [sum(x) for x in zip(c,nc)]
+
+    return (int(c[0]/l), int(c[1]/l), int(c[1]/l))
 
   """
   average intensity returns the average intensity of the given set of points.
@@ -127,6 +144,86 @@ class ImageUtils:
       x, y = p
       avg += img[x, y]
     return avg/len(pts)
+
+  """
+  additiveBlendChannel will blend given RGB color channels additively.
+  """
+  @staticmethod
+  def additiveBlendChannel(a, b, t):
+    return int(math.sqrt(t*a*a + (1-t)*b*b))
+
+  """
+  additiveBlendRGB will additively blend the given RGB colors with the given
+  ratio alpha:1-alpha in that order.
+  """
+  @staticmethod
+  def additiveBlendRGB(c1, c2, alpha):
+    r = ImageUtils.additiveBlendRGB(c1[0], c2[0], alpha)
+    g = ImageUtils.additiveBlendRGB(c1[1], c2[1], alpha)
+    b = ImageUtils.additiveBlendRGB(c1[2], c2[2], alpha)
+    return (r,g,b)
+
+  """
+  Convert from RGB color to CYMK space.
+  """
+  @staticmethod
+  def rgb_to_cmyk(r,g,b):
+    rgb_scale = 255
+    cmyk_scale = 100
+
+    if (r == 0) and (g == 0) and (b == 0):
+        # black
+        return 0, 0, 0, cmyk_scale
+
+    # rgb [0,255] -> cmy [0,1]
+    c = 1 - r / float(rgb_scale)
+    m = 1 - g / float(rgb_scale)
+    y = 1 - b / float(rgb_scale)
+
+    # extract out k [0,1]
+    min_cmy = min(c, m, y)
+    c = (c - min_cmy)
+    m = (m - min_cmy)
+    y = (y - min_cmy)
+    k = min_cmy
+
+    # rescale to the range [0,cmyk_scale]
+    return c*cmyk_scale, m*cmyk_scale, y*cmyk_scale, k*cmyk_scale
+
+  """
+  Convert from CMYK color to RGB space.
+  """
+  @staticmethod
+  def cmyk_to_rgb(c,m,y,k):
+    rgb_scale = 255
+    cmyk_scale = 100
+
+    r = rgb_scale*(1.0-(c+k)/float(cmyk_scale))
+    g = rgb_scale*(1.0-(m+k)/float(cmyk_scale))
+    b = rgb_scale*(1.0-(y+k)/float(cmyk_scale))
+    return (r,g,b)
+
+  """
+  subtractiveBlendRGB blends given list of color subtractively.
+  """
+  @staticmethod
+  def subtractiveBlendRGB(list_of_colours):
+    """input: list of rgb, opacity (r,g,b,o) colours to be added, o acts as weights.
+    output (r,g,b)
+    """
+    C = 0
+    M = 0
+    Y = 0
+    K = 0
+
+    for (r,g,b,o) in list_of_colours:
+        c,m,y,k = ImageUtils.rgb_to_cmyk(r, g, b)
+        C+= o*c
+        M+=o*m
+        Y+=o*y
+        K+=o*k
+
+    return ImageUtils.cmyk_to_rgb(C, M, Y, K)
 
   """
   brighter makes the color by multiplying by constant.
