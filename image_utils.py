@@ -5,11 +5,14 @@ an image.
 import cv2
 import numpy as np
 import math
+import csv
+import matplotlib.pyplot as plt
 
 from skimage import color
 from colormath.color_objects import LabColor, sRGBColor
 from colormath.color_diff import delta_e_cie2000
 from colormath.color_conversions import convert_color
+from scipy.sparse import diags
 
 class ImageUtils:
   windowName = ""
@@ -247,6 +250,145 @@ class ImageUtils:
     return points
 
   """
+  rspectrum_lhtss calculates the reflectance spectrum for the
+  given RGB color using the Leasr Hyperbolic Tangent Slop Squared (LHTSS)
+  specified by Scott Burns on his site: http://scottburns.us/reflectance-curves-from-srgb/.
+  This is the Python version of the specified MATLAB code.
+  The reflectance spans the wavelength range 380-730 nm in 10 nm increments.
+  rgb is a 3 element tuple of color in 0-255 range.
+  rho is a (36,1) numpy array of reconstructed reflectance values, all (0->1).
+  """
+  def rspectrum_lhtss(rgb):
+    T = ImageUtils.read_T_matrix()
+
+    # convert from rgb tuple to list.
+    rgb = [rgb[0], rgb[1], rgb[2]]
+
+    numIntervals = T.shape[1]
+    rho = np.zeros(numIntervals)
+
+    # Black input color.
+    if rgb == (0,0,0):
+      rho = 0.0001*np.ones(numIntervals)
+      return rho
+
+    # White input color.
+    if rgb == (255, 255, 255):
+      rho = np.ones(numIntervals)
+      return rho
+
+    # 36 by 36 Jacobian having 4 main diagonal
+    # and -2 on off diagonals, except for first and
+    # last main diagonal are 2.
+    D = diags([-2, 4, -2], [-1, 0, 1], shape=(numIntervals, numIntervals)).toarray()
+    D[0][0] = 2
+    D[numIntervals-1, numIntervals-1] = 2
+
+    # Scale RGB values to between 0-1 and remove
+    # gamma correction.
+    for i in range(3):
+      rgb[i] = rgb[i]/255.0
+      if rgb[i] < 0.04045:
+        rgb[i] = rgb[i]/12.92
+      else:
+        rgb[i] = math.pow((rgb[i] + 0.055)/1.055, 2.4)
+
+    # Initialize paramters in optimization.
+    z = np.zeros(numIntervals)
+    lamda = np.zeros(3)
+    ftol = math.pow(10, -8)
+    count = 0
+    NUM_ITERS = 100
+
+    # Newton's method iteration.
+    while count <= NUM_ITERS:
+      d0 = (np.tanh(z) + 1)/2
+      d1 = np.diag(np.power(1/np.cosh(z), 2)/2)
+      d2 = np.diag(-np.power(1/np.cosh(z), 2)*np.tanh(z))
+      F = np.concatenate((np.matmul(D,z) + np.matmul(d1, np.matmul(np.transpose(T), lamda)), np.matmul(T, d0)-rgb))
+      J1 = np.concatenate((D+np.diag(np.matmul(d2, np.matmul(np.transpose(T), lamda))), np.matmul(d1, np.transpose(T))), axis=1)
+      J2 = np.concatenate((np.matmul(T,d1), np.zeros((3,3))), axis=1)
+      J = np.concatenate((J1, J2), axis=0)
+      delta = np.matmul(np.linalg.inv(J), -F)
+      z = z + delta[:numIntervals]
+      lamda = lamda + delta[numIntervals:]
+      if np.all(np.less(np.absolute(F)-ftol, np.zeros(numIntervals+3))):
+        # Found solution.
+        rho = (np.tanh(z) + 1)/2
+        return rho
+      count += 1
+
+    raise Exception("rspectrum_lhtss: No solution found in iteration")
+
+  """
+  read_T_matrix reads the T matrix CSV containing T matrix used for predicting
+  reflectance spectrum for a given color. Refer to http://scottburns.us/subtractive-color-mixture/
+  for more details.
+  Returned T is a (3,36) numpy array converting reflectance to D65 weighted linear rgb.
+  """
+  def read_T_matrix():
+    T_matrix = []
+    with open("T_matrix.csv") as f:
+      csv_reader = csv.reader(f, delimiter=",")
+      rows = []
+      for i, row in enumerate(csv_reader):
+        if i == 0:
+          continue
+        rows.append(row[1:])
+
+      return np.stack(rows, axis = 0).astype(np.float)
+
+  """
+  reflectance_coeffs returns the absorption, scattering coefficient, a and b for
+  given reflectance spectrum assumed to be at infinity. The optical
+  depth is assumed to be 2mm at given reflectance.
+  """
+  def reflectance_coeffs(rho_infinity):
+    D = 2# 2 mm.
+    a = 0.5 * (1/rho_infinity + rho_infinity)
+    b = np.sqrt(np.power(a,2)-1)
+
+    rho = rho_infinity*0.99
+    S = (np.arctanh(b/(a-rho))-np.arctanh(b/a))/(b*D)
+    K = S*(a-1)
+
+    return K, S, a, b
+
+  """
+  r_and_t_helper computes the reflectance and transmittance
+  of given reflectance spectrum (at inifinite thickness) at given thickness
+  for a foundation.
+  """
+  def r_and_t_helper(rho_infinity, x):
+    K, S, a,b = ImageUtils.reflectance_coeffs(rho_infinity)
+    R = np.sinh(b*S*x)/(a*np.sinh(b*S*x) + b*np.cosh(b*S*x))
+    T = b/(a*np.sinh(b*S*x) + b*np.cosh(b*S*x))
+    return R, T
+
+  """
+  get_reflectance_and_transmittance gets the reflectance of the given RGB color
+  foundation at the given optical depth in mm.
+  """
+  def get_reflectance_and_transmittance(rgb, d):
+    rho_infinity = ImageUtils.rspectrum_lhtss(rgb)
+    R, T = ImageUtils.r_and_t_helper(rho_infinity, d)
+    return R, T
+
+  """
+  plot_reflectance is a rest function to plot the reflectance of
+  an RGB color for different optical depths ranging between 0.1 to 2 mm.
+  """
+  def plot_reflectance():
+    rho_infinity  = ImageUtils.rspectrum_lhtss((191, 133, 111))
+    x = [i for i in range(380, 731, 10)]
+    for d in [0.1, 0.4, 0.7, 1, 1.3, 1.6, 1.9, 2.2]:
+      R, _ = ImageUtils.r_and_t_helper(rho_infinity, d)
+      plt.plot(x, R)
+
+    plt.plot(x, rho_infinity)
+    plt.show()
+
+  """
   show plots the image and blocks until user presses a key.
   If user presses 'q', returns False to indicate user wants to quit
   else returns True.
@@ -257,3 +399,9 @@ class ImageUtils:
     if key & 0xff == ord("q"):
       return False
     return True
+
+if __name__ == "__main__":
+  #rho = ImageUtils.rspectrum_lhtss((129, 132, 125))
+  #plt.plot([i for i in range(380, 731, 10)], rho)
+  #plt.show()
+  ImageUtils.plot_reflectance()
