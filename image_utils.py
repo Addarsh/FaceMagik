@@ -2,10 +2,17 @@
 image_utils is has helpul functions to process
 an image.
 """
+import os
 import cv2
 import numpy as np
 import math
 import csv
+import json
+import random
+import time
+import boto3
+import bisect
+import ijson
 import matplotlib.pyplot as plt
 
 from skimage import color
@@ -88,6 +95,12 @@ class ImageUtils:
     h = hexcolor.lstrip('#')
     return tuple(int(h[i:i+2], 16) for i in (0, 2 ,4))
 
+  """
+  HEX2RGB returns RGB numpy array for given hex color.
+  """
+  def HEX2RGB(hexcolor):
+    h = hexcolor.lstrip('#')
+    return np.array([int(h[i:i+2], 16) for i in (0, 2 ,4)])
 
   """
   rgb_to_hex converts given RGB tuple to a hex string.
@@ -366,20 +379,11 @@ class ImageUtils:
     return R, T
 
   """
-  get_reflectance_and_transmittance gets the reflectance of the given RGB color
-  foundation at the given optical depth in mm.
-  """
-  def get_reflectance_and_transmittance(rgb, d):
-    rho_infinity = ImageUtils.rspectrum_lhtss(rgb)
-    R, T = ImageUtils.r_and_t_helper(rho_infinity, d)
-    return R, T
-
-  """
   plot_reflectance is a rest function to plot the reflectance of
   an RGB color for different optical depths ranging between 0.1 to 2 mm.
   """
   def plot_reflectance():
-    rho_infinity  = ImageUtils.rspectrum_lhtss((191, 133, 111))
+    rho_infinity  = ImageUtils.rspectrum_lhtss((255, 255, 0))
     x = [i for i in range(380, 731, 10)]
     for d in [0.1, 0.4, 0.7, 1, 1.3, 1.6, 1.9, 2.2]:
       R, _ = ImageUtils.r_and_t_helper(rho_infinity, d)
@@ -387,6 +391,111 @@ class ImageUtils:
 
     plt.plot(x, rho_infinity)
     plt.show()
+
+  """
+  hash_tuple provides a string representation of the given tuple
+  to use as key when saving dictionary as JSON.
+  """
+  def hash_tuple(t):
+    return str(t[0]) + "-" + str(t[1]) + "-" + str(t[2])
+
+  """
+  reverse_hash_tuple returns a tuple from given string representing the dictionary
+  key when saving to JSON.
+  """
+  def reverse_hash_tuple(tstr):
+    tvals = tstr.split("-")
+    return (int(tvals[0]), int(tvals[1]), int(tvals[2]))
+
+  """
+  compute_all_reflectances will compute reflectance (infinite optical depth)
+  for all colors in the RGB space and store them in a JSON file.
+  """
+  def compute_all_reflectances():
+    d = {}
+    total = 256*256*256
+    print ("Total: ", total)
+    next_milestone = 0
+    for i in range(256):
+      for j in range(256):
+        for k in range(256):
+          rho_infinity = ImageUtils.rspectrum_lhtss((i, j, k))
+          d[ImageUtils.hash_tuple((i, j, k))] = rho_infinity.tolist()
+          if int(len(d)/total)*100 >= next_milestone:
+            print (str(next_milestone) + "% complete")
+            next_milestone += 1
+
+    with open("reflectance.json", "w") as f:
+      json.dump(d, f)
+
+
+  """
+  random_color generates a random RGB color each time it is called.
+  """
+  def random_color():
+    return tuple(np.random.choice(range(256), size=3))
+
+  """
+  RGB2HEX converts RGB tuple to Hex string.
+  """
+  def RGB2HEX(color):
+    return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
+
+  """
+  flatten_rgb flattens the given RGB tuple into its corresponding index number
+  from 1 to 256*256*256.
+  """
+  def flatten_rgb(rgb):
+    return rgb[0]*256*256 + rgb[1]*256 + rgb[2] + 1
+
+  """
+  get_sorted_reflectance_list returns sorted reflectance list for all parts from S3.
+  """
+  def get_sorted_reflectance_list():
+    # Find all reflectance files.
+    s3 = boto3.resource("s3")
+    my_bucket = s3.Bucket("addboxdrop")
+    allobjs = []
+    for obj in my_bucket.objects.all():
+      if not obj.key.startswith("parts"):
+        continue
+      allobjs.append(obj.key)
+
+    return sorted([int(obj.split("/")[1].split(".")[0]) for obj in allobjs])
+
+  """
+  get_reflectances returns the reflectance spectrum for all input RGBs.
+  Input is (n, 3) and output is (n, 36).
+  """
+  def get_reflectances(rgbList):
+    # Set of all colors for which we need to find the reflectance.
+    rgbSet = set(rgbList)
+
+    # Walk through entire reflectance file and map reflectance value
+    # a given rgb color.
+    refMap = {}
+    with open("reflectance.json", "r") as f:
+      currKey = None
+      currRef = []
+      for prefix, the_type, value in ijson.parse(f):
+        if the_type == "map_key":
+          keyTuple = ImageUtils.reverse_hash_tuple(value)
+          if keyTuple in rgbSet:
+            currKey = keyTuple
+            continue
+        if not currKey:
+          continue
+        if the_type == "number":
+          currRef.append(float(value))
+        elif the_type == "end_array":
+          refMap[currKey] = currRef
+          rgbSet.remove(currKey)
+          currKey = None
+          currRef = []
+          if len(rgbSet) == 0:
+            break
+
+    return np.array([refMap[rgb] for rgb in rgbList])
 
   """
   show plots the image and blocks until user presses a key.
@@ -401,7 +510,7 @@ class ImageUtils:
     return True
 
 if __name__ == "__main__":
-  #rho = ImageUtils.rspectrum_lhtss((129, 132, 125))
-  #plt.plot([i for i in range(380, 731, 10)], rho)
-  #plt.show()
-  ImageUtils.plot_reflectance()
+  rhoList = ImageUtils.get_reflectances([(0, 255, 0)])
+  x = [i for i in range(380, 731, 10)]
+  plt.plot(x, rhoList)
+  plt.show()

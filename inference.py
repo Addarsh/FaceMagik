@@ -5,9 +5,10 @@ import argparse
 import json
 import time
 import random
+import h5py
 import skimage.draw
 import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MeanShift, estimate_bandwidth
 from train import FaceConfig, DATASET_DIR, CHECKPOINT_DIR, modellib, label_id_map
 from train import (
   EYE_OPEN,
@@ -208,39 +209,56 @@ def detect_strictly_face():
   skimage.io.imsave(os.path.join(IMAGE_DIR, os.path.split(args.image)[1]), m)
 
 """
-detect dominant colors uses K means clustering to find the top K colors
-in the face.
+get_face_arr is a helper function to retrieve face points numpy array minus the eyes, nose,
+ear and mouth points. It checks to see if the annotation already exists and returns
+if it does. If not, it calculates the facepoints and saves it.
 """
-def detect_dominant_colors(K=5):
+def get_face_arr():
+  # Read image
+  image = skimage.io.imread(args.image)
+
+  fname = os.path.splitext(os.path.split(args.image)[1])[0]
+
+  if os.path.exists(os.path.join(ANNOTATIONS_DIR, fname+".json")):
+    with open(os.path.join(ANNOTATIONS_DIR, fname+".json"), 'r') as f:
+      d = json.load(f)
+      return np.array(d[FACE])
+
   model = construct_model(1)
 
   print("Running on {}".format(args.image))
-  # Read image
-  image = skimage.io.imread(args.image)
   # Detect objects
   preds = model.detect([image], verbose=1)[0]
 
-  print ("len mask: ", len(preds["masks"]))
-
-  facePts = set()
-  for i, class_id in enumerate(preds["class_ids"]):
-    if id_label_map[class_id] != FACE:
-      continue
-    facePts = set(maskPoints(preds["masks"][:, :, i]))
-    break
-
-  if len(facePts) == 0:
-    raise Exception("Face not found in image")
-
+  faceArr = np.zeros(image.shape[:2], dtype=bool)
+  faceFound = False
   for i, class_id in enumerate(preds["class_ids"]):
     if id_label_map[class_id] == EYE_OPEN or id_label_map[class_id] == EYE_CLOSED \
       or id_label_map[class_id] == NOSTRIL or id_label_map[class_id] == TEETH \
       or id_label_map[class_id] == TONGUE or id_label_map[class_id] == UPPER_LIP \
       or id_label_map[class_id] == LOWER_LIP or id_label_map[class_id] == SUNGLASSES \
-      or id_label_map[class_id] == EYEBROW:
-      facePts -= set(maskPoints(preds["masks"][:, :, i]))
+      or id_label_map[class_id] == EYEBROW or id_label_map[class_id] == FACE:
+      faceArr = np.bitwise_xor(faceArr, preds["masks"][:, :, i])
+      if id_label_map[class_id] == FACE:
+        faceFound = True
 
-  facePts = list(facePts)
+  if not faceFound:
+    raise Exception("Face not found in image")
+
+  with open(os.path.join(ANNOTATIONS_DIR, fname+".json"), 'w') as f:
+    json.dump({FACE:  faceArr.tolist()}, f)
+
+  return faceArr
+
+
+"""
+detect dominant colors uses K means clustering to find the top K colors
+in the face.
+"""
+def detect_dominant_colors(K=1):
+  faceArr = get_face_arr()
+
+  image = skimage.io.imread(args.image)
 
   clusterArray = np.zeros((len(facePts), 3))
   for i, p in enumerate(facePts):
@@ -253,61 +271,65 @@ def detect_dominant_colors(K=5):
   counts = Counter(labels)
   center_colors = clf.cluster_centers_
 
-  def RGB2HEX(color):
-    return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
 
   ordered_colors = [center_colors[i] for i in counts.keys()]
-  hex_colors = [RGB2HEX(ordered_colors[i]) for i in counts.keys()]
+  hex_colors = [ImageUtils.RGB2HEX(ordered_colors[i]) for i in counts.keys()]
   rgb_colors = [ordered_colors[i] for i in counts.keys()]
 
   plt.figure(figsize=(8,6))
   plt.pie(counts.values(), labels = hex_colors, colors = hex_colors)
-  plt.savefig(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0] + "_pie.jpg"))
+  plt.savefig(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0] + "_pie_" + str(K) + ".jpg"))
+
+"""
+mean_shift_clustering calculates the clusters in the image based on mean shift
+algorithm.
+"""
+def mean_shift_clustering():
+  # Read image
+  image = skimage.io.imread(args.image)
+
+  faceArr = get_face_arr()
+
+  flatfaceRGB = np.reshape(image[faceArr], (-1, 3))
+
+  bandwidth = estimate_bandwidth(flatfaceRGB, quantile=0.2, n_samples=500)
+  ms = MeanShift(bandwidth, bin_seeding=True)
+  ms.fit(flatfaceRGB)
+  labels = ms.labels_
+  cluster_centers = ms.cluster_centers_
+  print ("Number of clusters: ", len(cluster_centers))
+
+  bins = np.bincount(labels)
+  randomColors = np.random.choice(256, size=(bins.shape[0], 3))
+  image[faceArr] = randomColors[labels]
+
+  print ("dominant color: ", ImageUtils.RGB2HEX(cluster_centers[np.argmax(bins)]))
+
+  plt.imshow(image)
+  plt.show()
+
 
 """
 apply_foundation applies foundation on given image face with given
 hex color and given blend ratio.
 """
-def apply_foundation(alpha=0.6):
-  model = construct_model(1)
-
-  print("Running on {}".format(args.image))
-  # Read image
+def apply_foundation():
   image = skimage.io.imread(args.image)
-  # Detect objects
-  preds = model.detect([image], verbose=1)[0]
+  faceArr = get_face_arr()
+  rgbArr = np.concatenate((image[faceArr[:, 0], faceArr[:, 1]], [ImageUtils.HEX2RGB(args.color)]))
 
-  print ("len mask: ", len(preds["masks"]))
-
-  facePts = set()
-  for i, class_id in enumerate(preds["class_ids"]):
-    if id_label_map[class_id] != FACE:
-      continue
-    facePts = set(maskPoints(preds["masks"][:, :, i]))
-    break
-
-  if len(facePts) == 0:
-    raise Exception("Face not found in image")
-
-  for i, class_id in enumerate(preds["class_ids"]):
-    if id_label_map[class_id] == EYE_OPEN or id_label_map[class_id] == EYE_CLOSED \
-      or id_label_map[class_id] == NOSTRIL or id_label_map[class_id] == TEETH \
-      or id_label_map[class_id] == TONGUE or id_label_map[class_id] == UPPER_LIP \
-      or id_label_map[class_id] == LOWER_LIP or id_label_map[class_id] == SUNGLASSES \
-      or id_label_map[class_id] == EYEBROW:
-      facePts -= set(maskPoints(preds["masks"][:, :, i]))
-
-  facePts = list(facePts)
-
-  rgbColor = ImageUtils.color(args.color)
-  for p in facePts:
-    c1 = image[p[0], p[1]]
-    c2 = rgbColor
-    image[p[0], p[1]] = ImageUtils.subtractiveBlendRGB([(c1[0], c1[1], c1[2], 0.8), (c2[0], c2[1], c2[2], alpha)])
+  with h5py.File("reflectance.hdf5", "r") as f:
+    flatRGBArr = rgbArr[:, 0]*256*256 + rgbArr[:, 1]*256 + rgbArr[:, 2]
+    uniqueRGB = np.unique(flatRGBArr)
+    R_unique = f["reflectance"][uniqueRGB]
+    sorted_idx = np.searchsorted(uniqueRGB, flatRGBArr)
+    R_matrix = R_unique[sorted_idx]
+  R_skin = R_matrix[:-1]
+  R_foundation = R_matrix[-1:]
+  image[faceArr[:, 0], faceArr[:, 1]] = np.transpose(np.matmul(ImageUtils.read_T_matrix(), np.transpose(np.power(R_skin, args.alpha)*np.power(R_foundation, 1-args.alpha)))*255)
 
   # Save output
-  skimage.io.imsave(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0] + "_" + args.color + "_" + str(alpha) + ".jpg"), image)
-
+  skimage.io.imsave(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0] + "_" + args.color + "_" + str(args.alpha) + ".jpg"), image)
 
 """
 hsv is responsible for converting RGB image to HSV and writing it.
@@ -422,6 +444,9 @@ if __name__ == '__main__':
   parser.add_argument('--color', required=False,
                       metavar="path or URL to image",
                       help='Image to apply the color splash effect on')
+  parser.add_argument('--alpha', type=float, required=False,
+                      metavar="path or URL to image",
+                      help='Image to apply the color splash effect on')
   args = parser.parse_args()
 
   print("Dataset: ", DATASET_DIR)
@@ -433,7 +458,9 @@ if __name__ == '__main__':
     #hsv()
     #detect_dominant_colors()
     apply_foundation()
+    #mean_shift_clustering()
     #detect_strictly_face()
+    #get_face_arr()
   else:
     detect_on_aws()
 
