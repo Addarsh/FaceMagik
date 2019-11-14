@@ -209,11 +209,11 @@ def detect_strictly_face():
   skimage.io.imsave(os.path.join(IMAGE_DIR, os.path.split(args.image)[1]), m)
 
 """
-get_face_arr is a helper function to retrieve face points numpy array minus the eyes, nose,
+get_face_mask is a helper function to retrieve face mask numpy array minus the eyes, nose,
 ear and mouth points. It checks to see if the annotation already exists and returns
-if it does. If not, it calculates the facepoints and saves it.
+if it does. If not, it calculates the face mask and saves it.
 """
-def get_face_arr():
+def get_face_mask():
   # Read image
   image = skimage.io.imread(args.image)
 
@@ -230,7 +230,7 @@ def get_face_arr():
   # Detect objects
   preds = model.detect([image], verbose=1)[0]
 
-  faceArr = np.zeros(image.shape[:2], dtype=bool)
+  faceMask = np.zeros(image.shape[:2], dtype=bool)
   faceFound = False
   for i, class_id in enumerate(preds["class_ids"]):
     if id_label_map[class_id] == EYE_OPEN or id_label_map[class_id] == EYE_CLOSED \
@@ -238,7 +238,7 @@ def get_face_arr():
       or id_label_map[class_id] == TONGUE or id_label_map[class_id] == UPPER_LIP \
       or id_label_map[class_id] == LOWER_LIP or id_label_map[class_id] == SUNGLASSES \
       or id_label_map[class_id] == EYEBROW or id_label_map[class_id] == FACE:
-      faceArr = np.bitwise_xor(faceArr, preds["masks"][:, :, i])
+      faceMask = np.bitwise_xor(faceMask, preds["masks"][:, :, i])
       if id_label_map[class_id] == FACE:
         faceFound = True
 
@@ -246,9 +246,9 @@ def get_face_arr():
     raise Exception("Face not found in image")
 
   with open(os.path.join(ANNOTATIONS_DIR, fname+".json"), 'w') as f:
-    json.dump({FACE:  faceArr.tolist()}, f)
+    json.dump({FACE:  faceMask.tolist()}, f)
 
-  return faceArr
+  return faceMask
 
 
 """
@@ -288,9 +288,9 @@ def mean_shift_clustering():
   # Read image
   image = skimage.io.imread(args.image)
 
-  faceArr = get_face_arr()
+  faceMask = get_face_mask()
 
-  flatfaceRGB = np.reshape(image[faceArr], (-1, 3))
+  flatfaceRGB = image[faceMask]
 
   bandwidth = estimate_bandwidth(flatfaceRGB, quantile=0.2, n_samples=500)
   ms = MeanShift(bandwidth, bin_seeding=True)
@@ -301,7 +301,7 @@ def mean_shift_clustering():
 
   bins = np.bincount(labels)
   randomColors = np.random.choice(256, size=(bins.shape[0], 3))
-  image[faceArr] = randomColors[labels]
+  image[faceMask] = randomColors[labels]
 
   print ("dominant color: ", ImageUtils.RGB2HEX(cluster_centers[np.argmax(bins)]))
 
@@ -315,8 +315,8 @@ hex color and given blend ratio.
 """
 def apply_foundation():
   image = skimage.io.imread(args.image)
-  faceArr = get_face_arr()
-  rgbArr = np.concatenate((image[faceArr[:, 0], faceArr[:, 1]], [ImageUtils.HEX2RGB(args.color)]))
+  faceMask = get_face_mask()
+  rgbArr = np.concatenate((image[faceMask], [ImageUtils.HEX2RGB(args.color)]))
 
   with h5py.File("reflectance.hdf5", "r") as f:
     flatRGBArr = rgbArr[:, 0]*256*256 + rgbArr[:, 1]*256 + rgbArr[:, 2]
@@ -326,10 +326,21 @@ def apply_foundation():
     R_matrix = R_unique[sorted_idx]
   R_skin = R_matrix[:-1]
   R_foundation = R_matrix[-1:]
-  image[faceArr[:, 0], faceArr[:, 1]] = np.transpose(np.matmul(ImageUtils.read_T_matrix(), np.transpose(np.power(R_skin, args.alpha)*np.power(R_foundation, 1-args.alpha)))*255)
 
-  # Save output
-  skimage.io.imsave(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0] + "_" + args.color + "_" + str(args.alpha) + ".jpg"), image)
+  for alpha in [0.8, 0.9]:
+    localImage = image.copy()
+    localImage[faceMask] = ImageUtils.add_gamma_correction_matrix(np.transpose(np.matmul(ImageUtils.read_T_matrix(), np.transpose(np.power(R_skin, alpha)*np.power(R_foundation, 1-alpha)))))
+
+    dirpath = os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0])
+    if not os.path.exists(dirpath):
+      os.mkdir(dirpath)
+
+    foundpath = os.path.join(dirpath, args.color)
+    if not os.path.exists(foundpath):
+      os.mkdir(foundpath)
+
+    # Save output
+    skimage.io.imsave(os.path.join(foundpath, str(alpha) + ".jpg"), localImage)
 
 """
 hsv is responsible for converting RGB image to HSV and writing it.
@@ -442,9 +453,6 @@ if __name__ == '__main__':
                       metavar="path or URL to image",
                       help='Image to apply the color splash effect on')
   parser.add_argument('--color', required=False,
-                      metavar="path or URL to image",
-                      help='Image to apply the color splash effect on')
-  parser.add_argument('--alpha', type=float, required=False,
                       metavar="path or URL to image",
                       help='Image to apply the color splash effect on')
   args = parser.parse_args()

@@ -334,6 +334,39 @@ class ImageUtils:
     raise Exception("rspectrum_lhtss: No solution found in iteration")
 
   """
+  add_gamma_correction adds gamma correction to given RGB value and
+  returns the new value. Input rgb has to be between 0-1.
+  """
+  def add_gamma_correction(rgb):
+    for i in range(3):
+      if rgb[i] < 0.0031308:
+        rgb[i] = int(12.92*rgb[i]*255)
+      else:
+        rgb[i] = int(255*(1.055*(math.pow(rgb[i], 1/2.4))-0.055))
+
+    return rgb
+
+
+  """
+  numpy version of adding gamma correction to given array of RGB colors
+  that have values between 0-1.
+  """
+  def add_gamma_correction_matrix(rgbArr):
+    return np.where(rgbArr < 0.0031308, 12.92*rgbArr*255, 255*(1.055*(np.power(rgbArr, 1/2.4))-0.055)).astype(int)
+
+  """
+  geometric_mean_mixing takes input as the given hex colors and then returns
+  the color mix (geometric mean of reflectances).
+  """
+  def geometric_mean_mixing(c1, c2, alpha):
+    rgb1, rgb2 = ImageUtils.color(c1), ImageUtils.color(c2)
+    T = ImageUtils.read_T_matrix()
+    rgb = np.matmul(T, np.power(ImageUtils.rspectrum_lhtss(rgb1), alpha)*np.power(ImageUtils.rspectrum_lhtss(rgb2), 1-alpha))
+    return 255*rgb
+    return ImageUtils.add_gamma_correction(rgb)
+
+
+  """
   read_T_matrix reads the T matrix CSV containing T matrix used for predicting
   reflectance spectrum for a given color. Refer to http://scottburns.us/subtractive-color-mixture/
   for more details.
@@ -449,55 +482,6 @@ class ImageUtils:
     return rgb[0]*256*256 + rgb[1]*256 + rgb[2] + 1
 
   """
-  get_sorted_reflectance_list returns sorted reflectance list for all parts from S3.
-  """
-  def get_sorted_reflectance_list():
-    # Find all reflectance files.
-    s3 = boto3.resource("s3")
-    my_bucket = s3.Bucket("addboxdrop")
-    allobjs = []
-    for obj in my_bucket.objects.all():
-      if not obj.key.startswith("parts"):
-        continue
-      allobjs.append(obj.key)
-
-    return sorted([int(obj.split("/")[1].split(".")[0]) for obj in allobjs])
-
-  """
-  get_reflectances returns the reflectance spectrum for all input RGBs.
-  Input is (n, 3) and output is (n, 36).
-  """
-  def get_reflectances(rgbList):
-    # Set of all colors for which we need to find the reflectance.
-    rgbSet = set(rgbList)
-
-    # Walk through entire reflectance file and map reflectance value
-    # a given rgb color.
-    refMap = {}
-    with open("reflectance.json", "r") as f:
-      currKey = None
-      currRef = []
-      for prefix, the_type, value in ijson.parse(f):
-        if the_type == "map_key":
-          keyTuple = ImageUtils.reverse_hash_tuple(value)
-          if keyTuple in rgbSet:
-            currKey = keyTuple
-            continue
-        if not currKey:
-          continue
-        if the_type == "number":
-          currRef.append(float(value))
-        elif the_type == "end_array":
-          refMap[currKey] = currRef
-          rgbSet.remove(currKey)
-          currKey = None
-          currRef = []
-          if len(rgbSet) == 0:
-            break
-
-    return np.array([refMap[rgb] for rgb in rgbList])
-
-  """
   show plots the image and blocks until user presses a key.
   If user presses 'q', returns False to indicate user wants to quit
   else returns True.
@@ -510,7 +494,4 @@ class ImageUtils:
     return True
 
 if __name__ == "__main__":
-  rhoList = ImageUtils.get_reflectances([(0, 255, 0)])
-  x = [i for i in range(380, 731, 10)]
-  plt.plot(x, rhoList)
-  plt.show()
+  print ("Mixed color: ", ImageUtils.RGB2HEX(ImageUtils.geometric_mean_mixing("#D0B9C1", "#DAC4BC", 0.8)))
