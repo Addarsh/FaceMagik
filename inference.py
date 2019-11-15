@@ -3,6 +3,8 @@ import sys
 import numpy as np
 import argparse
 import json
+import cv2
+import imageio
 import time
 import random
 import h5py
@@ -37,9 +39,8 @@ from collections import Counter
 CLASS = "class"
 DATA = "data"
 
-OUTPUT_DIR = "output"
-IMAGE_DIR = os.path.join(OUTPUT_DIR, "images")
-ANNOTATIONS_DIR = os.path.join(OUTPUT_DIR, "annotations")
+IMAGE_DIR = "output"
+ANNOTATIONS_DIR = os.path.join(IMAGE_DIR, "annotations")
 
 id_label_map = {v: k for k, v in label_id_map.items()}
 
@@ -217,12 +218,11 @@ def get_face_mask():
   # Read image
   image = skimage.io.imread(args.image)
 
-  fname = os.path.splitext(os.path.split(args.image)[1])[0]
+  dirpath = os.path.join(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0]), "annotations")
 
-  if os.path.exists(os.path.join(ANNOTATIONS_DIR, fname+".json")):
-    with open(os.path.join(ANNOTATIONS_DIR, fname+".json"), 'r') as f:
-      d = json.load(f)
-      return np.array(d[FACE])
+  if os.path.exists(os.path.join(dirpath, "face_mask.hdf5")):
+    with h5py.File(os.path.join(dirpath, "face_mask.hdf5"), 'r') as f:
+      return f["face_mask"][:]
 
   model = construct_model(1)
 
@@ -245,8 +245,12 @@ def get_face_mask():
   if not faceFound:
     raise Exception("Face not found in image")
 
-  with open(os.path.join(ANNOTATIONS_DIR, fname+".json"), 'w') as f:
-    json.dump({FACE:  faceMask.tolist()}, f)
+  if not os.path.exists(dirpath):
+    os.makedirs(dirpath)
+
+  with h5py.File(os.path.join(dirpath, "face_mask.hdf5"), 'w') as f:
+    dset = f.create_dataset("face_mask", faceMask.shape, dtype=bool, chunks=True, compression="gzip")
+    dset[...] = faceMask
 
   return faceMask
 
@@ -308,6 +312,17 @@ def mean_shift_clustering():
   plt.imshow(image)
   plt.show()
 
+"""
+get_reflectance_matrix returns the reflectance matrix for given RGB numpy array.
+Input is (n,3) and output is (n, 36).
+"""
+def get_reflectance_matrix(rgbArr):
+  with h5py.File("reflectance.hdf5", "r") as f:
+    flatRGBArr = rgbArr[:, 0]*256*256 + rgbArr[:, 1]*256 + rgbArr[:, 2]
+    uniqueRGB = np.unique(flatRGBArr)
+    R_unique = f["reflectance"][uniqueRGB]
+    sorted_idx = np.searchsorted(uniqueRGB, flatRGBArr)
+    return R_unique[sorted_idx]
 
 """
 apply_foundation applies foundation on given image face with given
@@ -316,31 +331,34 @@ hex color and given blend ratio.
 def apply_foundation():
   image = skimage.io.imread(args.image)
   faceMask = get_face_mask()
-  rgbArr = np.concatenate((image[faceMask], [ImageUtils.HEX2RGB(args.color)]))
 
-  with h5py.File("reflectance.hdf5", "r") as f:
-    flatRGBArr = rgbArr[:, 0]*256*256 + rgbArr[:, 1]*256 + rgbArr[:, 2]
-    uniqueRGB = np.unique(flatRGBArr)
-    R_unique = f["reflectance"][uniqueRGB]
-    sorted_idx = np.searchsorted(uniqueRGB, flatRGBArr)
-    R_matrix = R_unique[sorted_idx]
-  R_skin = R_matrix[:-1]
-  R_foundation = R_matrix[-1:]
+  dirpath = os.path.join(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0]), "annotations")
+  if os.path.exists(os.path.join(dirpath, "R_skin.hdf5")):
+    with h5py.File(os.path.join(dirpath, "R_skin.hdf5"), "r") as f:
+      R_skin = f["reflectance"][:]
+      R_foundation = get_reflectance_matrix(np.array([ImageUtils.HEX2RGB(args.color)]))
+  else:
+    R_matrix = get_reflectance_matrix(np.concatenate((image[faceMask], [ImageUtils.HEX2RGB(args.color)])))
+    R_skin = R_matrix[:-1]
+    R_foundation = R_matrix[-1:]
+    # Save to file.
+    with h5py.File(os.path.join(dirpath, "R_skin.hdf5"), "w") as f:
+      dset = f.create_dataset("reflectance", R_skin.shape, dtype='f', chunks=True, compression="gzip")
+      dset[...] = R_skin
 
-  for alpha in [0.8, 0.9]:
-    localImage = image.copy()
-    localImage[faceMask] = ImageUtils.add_gamma_correction_matrix(np.transpose(np.matmul(ImageUtils.read_T_matrix(), np.transpose(np.power(R_skin, alpha)*np.power(R_foundation, 1-alpha)))))
+  # Create video and save it.
+  foundpath = os.path.join(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0]), args.color)
+  if not os.path.exists(foundpath):
+    os.makedirs(foundpath)
 
-    dirpath = os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0])
-    if not os.path.exists(dirpath):
-      os.mkdir(dirpath)
+  all_images = []
+  for alpha in np.linspace(0.9, 0.5, 10).tolist():
+    image_copy = image.copy()
+    image_copy[faceMask] = ImageUtils.add_gamma_correction_matrix(np.transpose(np.matmul(ImageUtils.read_T_matrix(), np.transpose(np.power(R_skin, alpha)*np.power(R_foundation, 1-alpha)))))
+    all_images.append(image_copy)
 
-    foundpath = os.path.join(dirpath, args.color)
-    if not os.path.exists(foundpath):
-      os.mkdir(foundpath)
+  imageio.mimwrite(os.path.join(foundpath, "output.mp4"), np.array(all_images) , fps = 1.0)
 
-    # Save output
-    skimage.io.imsave(os.path.join(foundpath, str(alpha) + ".jpg"), localImage)
 
 """
 hsv is responsible for converting RGB image to HSV and writing it.
@@ -443,6 +461,12 @@ def detect(model, image_path):
   with open(os.path.join(ANNOTATIONS_DIR, fname+".json"), 'w') as outfile:
     json.dump(ann, outfile)
 
+def change_ref():
+  with h5py.File("reflectance.hdf5", "r") as f:
+    with h5py.File("c_reflectance.hdf5", "w") as g:
+      dset = g.create_dataset("reflectance", (256*256*256, 36), dtype='f', chunks=True, compression="gzip")
+      dset[...] = f["reflectance"][:]
+
 if __name__ == '__main__':
   start_time = time.time()
 
@@ -469,6 +493,7 @@ if __name__ == '__main__':
     #mean_shift_clustering()
     #detect_strictly_face()
     #get_face_arr()
+    #change_ref()
   else:
     detect_on_aws()
 
