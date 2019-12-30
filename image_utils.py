@@ -13,6 +13,7 @@ import time
 import boto3
 import bisect
 import ijson
+import colour
 import matplotlib.pyplot as plt
 
 from skimage import color
@@ -20,6 +21,7 @@ from colormath.color_objects import LabColor, sRGBColor
 from colormath.color_diff import delta_e_cie2000
 from colormath.color_conversions import convert_color
 from scipy.sparse import diags
+from scipy.optimize import minimize
 
 class ImageUtils:
   windowName = ""
@@ -44,7 +46,8 @@ class ImageUtils:
     img = cv2.imread(imagePath)
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    return gray, lab, img
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    return gray, lab, img, hsv
 
   """
   Performs histogram equalization to adjust contrast in gray image.
@@ -119,7 +122,7 @@ class ImageUtils:
 
   """
   avg_color returns the average color of the given points. The points
-  and image are in RGB LAB color space.
+  and image are in RGB color space.
   """
   @staticmethod
   def avg_color(img, pts):
@@ -264,7 +267,7 @@ class ImageUtils:
 
   """
   rspectrum_lhtss calculates the reflectance spectrum for the
-  given RGB color using the Leasr Hyperbolic Tangent Slop Squared (LHTSS)
+  given RGB color using the Least Hyperbolic Tangent Slope Squared (LHTSS)
   specified by Scott Burns on his site: http://scottburns.us/reflectance-curves-from-srgb/.
   This is the Python version of the specified MATLAB code.
   The reflectance spans the wavelength range 380-730 nm in 10 nm increments.
@@ -314,10 +317,11 @@ class ImageUtils:
     NUM_ITERS = 100
 
     # Newton's method iteration.
+    divider = 2
     while count <= NUM_ITERS:
-      d0 = (np.tanh(z) + 1)/2
-      d1 = np.diag(np.power(1/np.cosh(z), 2)/2)
-      d2 = np.diag(-np.power(1/np.cosh(z), 2)*np.tanh(z))
+      d0 = (np.tanh(z) + 1)/divider
+      d1 = np.diag(np.power(1/np.cosh(z), 2)/divider)
+      d2 = np.diag(-np.power(1/np.cosh(z), 2)*np.tanh(z)*(2/divider))
       F = np.concatenate((np.matmul(D,z) + np.matmul(d1, np.matmul(np.transpose(T), lamda)), np.matmul(T, d0)-rgb))
       J1 = np.concatenate((D+np.diag(np.matmul(d2, np.matmul(np.transpose(T), lamda))), np.matmul(d1, np.transpose(T))), axis=1)
       J2 = np.concatenate((np.matmul(T,d1), np.zeros((3,3))), axis=1)
@@ -327,11 +331,284 @@ class ImageUtils:
       lamda = lamda + delta[numIntervals:]
       if np.all(np.less(np.absolute(F)-ftol, np.zeros(numIntervals+3))):
         # Found solution.
-        rho = (np.tanh(z) + 1)/2
+        rho = (np.tanh(z) + 1)/divider
         return rho
       count += 1
 
     raise Exception("rspectrum_lhtss: No solution found in iteration")
+
+  """
+  rspectrum_lhtss calculates the reflectance spectrum for the
+  given RGB color using the Iterative Least Slope Squared (LHTSS)
+  specified by Scott Burns on his site: http://scottburns.us/reflectance-curves-from-srgb/.
+  This is the Python version of the specified MATLAB code.
+  The reflectance spans the wavelength range 380-730 nm in 10 nm increments.
+  rgb is a 3 element tuple of color in 0-255 range.
+  rho is a (36,1) numpy array of reconstructed reflectance values, all (0->1).
+  """
+  def rspectrum_ilss(rgb):
+    T = np.power(ImageUtils.read_T_matrix(), 1)
+
+    # convert from rgb tuple to list.
+    rgb = np.array([rgb[0], rgb[1], rgb[2]], dtype=np.float)
+
+    numIntervals = T.shape[1]
+    rho = np.ones(numIntervals)/2.0
+    rhomin = 0.00001
+    rhomax = 1
+
+    if np.array_equal(rgb ,[0,0,0]):
+      return rhomin*np.ones(numIntervals)
+
+    if np.array_equal(rgb, [1, 1, 1]):
+      return rhomax*np.ones(numIntervals)
+
+    # Scale RGB values to between 0-1 and remove
+    # gamma correction.
+    for i in range(3):
+      rgb[i] = rgb[i]/255.0
+      if rgb[i] < 0.04045:
+        rgb[i] = rgb[i]/12.92
+      else:
+        rgb[i] = math.pow((rgb[i] + 0.055)/1.055, 2.4)
+
+    # 36 by 36 Jacobian having 4 main diagonal
+    # and -2 on off diagonals, except for first and
+    # last main diagonal are 2.
+    #D = diags([-2, 4, -2], [-1, 0, 1], shape=(numIntervals, numIntervals)).toarray()
+    D = diags([-6, 20, -6], [-1, 0, 1], shape=(numIntervals, numIntervals)).toarray()
+    D[0][0] = 2
+    D[numIntervals-1, numIntervals-1] = 2
+
+
+    B = np.linalg.inv(np.concatenate((np.concatenate((D, np.transpose(T)), axis=1), np.concatenate((T, np.zeros((3, 3))), axis=1)), axis=0))
+
+    R = np.matmul(B[:numIntervals,numIntervals:], rgb)
+
+    NUM_ITERS = 10
+    count = 0
+    while count == 0 or (count <= NUM_ITERS and (np.any(np.less(rho-rhomin, np.zeros(numIntervals))) or np.any(np.less(rhomax-rho, np.zeros(numIntervals))))):
+      # Create K1 for fixed reflectance at rhomax.
+      fixed_upper_logical = rho >= rhomax
+      fixed_upper = np.nonzero(fixed_upper_logical)[0]
+      num_upper = len(fixed_upper)
+      K1 = np.zeros((num_upper, numIntervals))
+      K1[range(K1.shape[0]), fixed_upper] = 1
+
+      # Create K0 for fixed reflectance at rhomin.
+      fixed_lower_logical = rho <= rhomin
+      fixed_lower = np.nonzero(fixed_lower_logical)[0]
+      num_lower = len(fixed_lower)
+      K0 = np.zeros((num_lower, numIntervals))
+      K0[range(K0.shape[0]), fixed_lower] = 1
+
+      # Set up linear system.
+      K = np.concatenate((K1, K0), axis=0)
+      C = np.matmul(np.matmul(B[:numIntervals,:numIntervals], np.transpose(K)), np.linalg.inv(np.matmul(K, np.matmul(B[:numIntervals, :numIntervals], np.transpose(K)))))
+      rho = R - np.matmul(C, np.matmul(K, R) - np.concatenate((rhomax*np.ones(num_upper), rhomin*np.ones(num_lower)), axis=0))
+      rho[fixed_upper_logical] = rhomax
+      rho[fixed_lower_logical] = rhomin
+
+      count += 1
+
+    if count > NUM_ITERS:
+      raise Exception("No solution found after: ", str(NUM_ITERS), " iterations")
+
+    return rho
+
+  """
+  rspectrum_foundation estimates the reflectance of a given foundation color.
+  """
+  def rspectrum_foundation(rgb):
+    T = ImageUtils.read_T_matrix()
+
+    # convert from rgb tuple to list.
+    rgb = np.array([rgb[0], rgb[1], rgb[2]], dtype=np.float)
+    numIntervals = T.shape[1]
+    rhomin = 0.0001
+    rhomax = 1.0
+
+    if np.array_equal(rgb ,[0,0,0]):
+      return rhomin*np.zeros(numIntervals)
+
+    if np.array_equal(rgb, [1, 1, 1]):
+      return rhomax*np.ones(numIntervals)
+
+    # Scale RGB values to between 0-1 and remove
+    # gamma correction.
+    for i in range(3):
+      rgb[i] = rgb[i]/255.0
+      if rgb[i] < 0.04045:
+        rgb[i] = rgb[i]/12.92
+      else:
+        rgb[i] = math.pow((rgb[i] + 0.055)/1.055, 2.4)
+
+    rho0 = 0.01*np.ones(numIntervals)
+
+    def loss_fn(rho):
+      return np.sum(np.diff(rho)**2)
+
+    # Define constraints and bounds.
+    cons = [{'type': 'eq', 'fun': lambda rho: (T @ rho) -rgb}, {'type': 'eq', 'fun': lambda rho: rho[0] -0.01}, {'type': 'ineq', 'fun': lambda rho: rho[-1] -0.4}]
+    bounds = [(rhomin, rhomax)] * numIntervals
+
+    minout = minimize(loss_fn, rho0, method='SLSQP',bounds=bounds,constraints=cons)
+    print ("success: ", minout.success, minout.message)
+
+    return minout.x
+
+
+  """
+  rspectrum_skin estimates the reflectance of a given skin color.
+  """
+  def rspectrum_skin(rgb):
+    T = ImageUtils.read_T_matrix()
+
+    # convert from rgb tuple to list.
+    rgb = np.array([rgb[0], rgb[1], rgb[2]], dtype=np.float)
+    numIntervals = T.shape[1]
+    rhomin = 0.0001
+    rhomax = 1
+
+    if np.array_equal(rgb ,[0,0,0]):
+      return rhomin*np.zeros(numIntervals)
+
+    if np.array_equal(rgb, [1, 1, 1]):
+      return rhomax*np.ones(numIntervals)
+
+    # Scale RGB values to between 0-1 and remove
+    # gamma correction.
+    for i in range(3):
+      rgb[i] = rgb[i]/255.0
+      if rgb[i] < 0.04045:
+        rgb[i] = rgb[i]/12.92
+      else:
+        rgb[i] = math.pow((rgb[i] + 0.055)/1.055, 2.4)
+
+    rho0 = 0.01*np.ones(numIntervals)
+
+    def loss_fn(rho):
+      return np.sum(np.diff(rho)**2)
+
+    # Define constraints and bounds.
+    cons = [{'type': 'eq', 'fun': lambda rho: (T @ rho) -rgb}, {'type': 'eq', 'fun': lambda rho: rho[0] -0.01}, {'type': 'ineq', 'fun': lambda rho: rho[-1] -0.4}]
+    bounds = [(rhomin, rhomax)] * numIntervals
+
+    minout = minimize(loss_fn, rho0, method='SLSQP',bounds=bounds,constraints=cons)
+    print ("success: ", minout.success, minout.message)
+
+    return minout.x
+
+  """
+  sRGB_to_XYZ converts given sRGB array (0-255) to XYZ (0-1) under D65 illuminant.
+  """
+  def sRGB_to_XYZ(rgb):
+    # Convert RGB to [0-1] and remove gamma correction.
+    rgb = ImageUtils.remove_gamma_correction(np.array(rgb, dtype=float))
+    illuminant_D65 = np.array([0.31270, 0.32900])
+    RGB_to_XYZ_matrix = np.array([[0.4124564, 0.3575761, 0.1804375], [0.2126729, 0.7151522, 0.0721750],[0.0193339, 0.1191920, 0.9503041]])
+    return colour.RGB_to_XYZ(rgb, illuminant_D65, illuminant_D65, RGB_to_XYZ_matrix, None)
+
+  """
+  sRGB_to_XYZ_matrix converts given sRGB array (n,3) (0-255) into XYZ array(n,3) (0-1).
+  """
+  def sRGB_to_XYZ_matrix(rgbArr):
+    rgbArr = ImageUtils.remove_gamma_correction_matrix(rgbArr)
+    RGB_to_XYZ_matrix = np.array([[0.4124564, 0.3575761, 0.1804375], [0.2126729, 0.7151522, 0.0721750],[0.0193339, 0.1191920, 0.9503041]])
+    return np.transpose(RGB_to_XYZ_matrix @ np.transpose(rgbArr))
+
+  """
+  sRGB_to_XYZ converts given XYZ array (0-1) to sRGB (0-255) under D65 illuminant.
+  """
+  def XYZ_to_sRGB(xyz):
+    XYZ_to_RGB_matrix = np.array([[3.2404542, -1.5371385, -0.4985314],[-0.9692660, 1.8760108, 0.0415560],[0.0556434, -0.2040259, 1.0572252]])
+    illuminant_D65 = np.array([0.31270, 0.32900])
+    rgb = colour.XYZ_to_RGB(xyz, illuminant_D65, illuminant_D65, XYZ_to_RGB_matrix, None)
+    return ImageUtils.add_gamma_correction(rgb)
+
+  """
+  XYZ_to_sRGB_matrix converts given XYZ array (n, 3)(0-1) to sRGB(n,3) (0-255) under D65 illuminant.
+  """
+  def XYZ_to_sRGB_matrix(xyzArr):
+    XYZ_to_RGB_matrix = np.array([[3.2404542, -1.5371385, -0.4985314],[-0.9692660, 1.8760108, 0.0415560],[0.0556434, -0.2040259, 1.0572252]])
+    srgbArr = np.transpose(XYZ_to_RGB_matrix @ np.transpose(xyzArr))
+    return ImageUtils.add_gamma_correction_matrix(srgbArr)
+
+  """
+  sRGB_to_uv converts given sRGB array(0-255) to uv(0-1) chromaticity.
+  """
+  def sRGB_to_uv(srgb):
+    xyz = ImageUtils.sRGB_to_XYZ(srgb)
+    xy = colour.XYZ_to_xy(xyz)
+    return colour.xy_to_Luv_uv(xy)
+
+
+  """
+  chromatic_adaptation converts given
+  """
+  def chromatic_adaptation(imagePath, source_white):
+    swhite_xyz = ImageUtils.sRGB_to_XYZ_matrix(np.array(source_white))
+    d65_xyz = colour.xy_to_XYZ(np.array([0.31270, 0.32900]))
+
+    m_bradford = np.array([[0.8951, 0.2664000, -0.1614000],[-0.7502000, 1.7135000, 0.0367000],[0.0389000, -0.0685000, 1.0296000]])
+    m_gain = np.diag((m_bradford @ d65_xyz)/(m_bradford @ swhite_xyz))
+    m_transform = np.linalg.inv(m_bradford) @ m_gain @ m_bradford
+
+    # Chromatically adapt given image.
+    _, _, img, _ = ImageUtils.read(imagePath)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    flat_img = np.reshape(img, (-1,3))
+    flat_xyz = ImageUtils.sRGB_to_XYZ_matrix(flat_img)
+    adapted_xyz = np.transpose(m_transform @ np.transpose(flat_xyz))
+    adapted_img = np.clip(ImageUtils.XYZ_to_sRGB_matrix(adapted_xyz), 0, 255).astype(np.uint8)
+    img = cv2.cvtColor(np.reshape(adapted_img, img.shape), cv2.COLOR_RGB2BGR)
+
+    print ("imgs shape: ", img.shape)
+    cv2.namedWindow("image",cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("image", 900,900)
+    cv2.imshow("image", img)
+    cv2.waitKey(0)
+
+
+  """
+  sRGB_to_SD converts given sRGB numpy array
+  to a spectral distribution using color science library.
+  """
+  def sRGB_to_SD(srgb):
+    # Convert RGB to [0-1] and remove gamma correction.
+    rgb = ImageUtils.remove_gamma_correction(np.array(srgb, dtype=float))
+
+    # D65
+    illuminant_RGB = np.array([0.31270, 0.32900])
+    illuminant_XYZ = np.array([0.31270, 0.32900])
+
+    RGB_to_XYZ_matrix = np.array([[0.4124564, 0.3575761, 0.1804375], [0.2126729, 0.7151522, 0.0721750],[0.0193339, 0.1191920, 0.9503041]])
+
+    xyz = colour.RGB_to_XYZ(rgb, illuminant_RGB, illuminant_XYZ, RGB_to_XYZ_matrix, None)
+    cmfs = colour.STANDARD_OBSERVERS_CMFS['CIE 1931 2 Degree Standard Observer'].copy().align(colour.SpectralShape(380, 730, 10))
+    sd = colour.recovery.XYZ_to_sd_Meng2015(xyz, cmfs, colour.ILLUMINANTS_SDS['D65'])
+    return sd.values
+
+  """
+  SD_to_RGB converts given spectral distribution values to sRGB using color
+  science library.
+  """
+  def SD_to_RGB(sd_values):
+    x = ImageUtils.wavelength_arr()
+    assert len(sd_values) == len(x)
+    d = {}
+    for i, l in enumerate(x):
+      d[l] = sd_values[i]
+
+    sd = colour.SpectralDistribution(d)
+    xyz = colour.sd_to_XYZ(sd, colour.CMFS['CIE 1931 2 Degree Standard Observer'], colour.ILLUMINANTS_SDS['D65'])/100.0
+
+    # D65
+    illuminant_RGB = np.array([0.31270, 0.32900])
+    illuminant_XYZ = np.array([0.31270, 0.32900])
+    XYZ_to_RGB_matrix = np.array([[3.2404542, -1.5371385, -0.4985314],[-0.9692660, 1.8760108, 0.0415560],[0.0556434, -0.2040259, 1.0572252]])
+    rgb = colour.XYZ_to_RGB(xyz, illuminant_XYZ, illuminant_RGB, XYZ_to_RGB_matrix, None)
+    return ImageUtils.add_gamma_correction(rgb)
 
   """
   add_gamma_correction adds gamma correction to given RGB value and
@@ -346,6 +623,33 @@ class ImageUtils:
 
     return rgb
 
+  """
+  wavelength_arr returns the numpy array of wavelengths for which
+  we are interested in Spectral distribution.
+  """
+  def wavelength_arr():
+    return [i for i in range(380, 731, 10)]
+
+  """
+  remove_gamma_correction removes gamma correction from sRGB to given Linear RGB value.
+  Input sRGB has to be between 0-255.
+  """
+  def remove_gamma_correction(rgb):
+    for i in range(3):
+      rgb[i] = rgb[i]/255.0
+      if rgb[i] < 0.04045:
+        rgb[i] = rgb[i]/12.92
+      else:
+        rgb[i] = math.pow((rgb[i] + 0.055)/1.055, 2.4)
+    return rgb
+
+  """
+  numpy version of removing gamma correction to given array of RGB colors
+  that have values between 0-255.
+  """
+  def remove_gamma_correction_matrix(rgbArr):
+    rgbArr = (rgbArr/255.0).astype(np.float)
+    return np.where(rgbArr < 0.04045, rgbArr/12.92, np.power((rgbArr + 0.055)/1.055, 2.4)).astype(np.float)
 
   """
   numpy version of adding gamma correction to given array of RGB colors
@@ -364,7 +668,6 @@ class ImageUtils:
     rgb = np.matmul(T, np.power(ImageUtils.rspectrum_lhtss(rgb1), alpha)*np.power(ImageUtils.rspectrum_lhtss(rgb2), 1-alpha))
     return 255*rgb
     return ImageUtils.add_gamma_correction(rgb)
-
 
   """
   read_T_matrix reads the T matrix CSV containing T matrix used for predicting
@@ -385,44 +688,105 @@ class ImageUtils:
       return np.stack(rows, axis = 0).astype(np.float)
 
   """
-  reflectance_coeffs returns the absorption, scattering coefficient, a and b for
-  given reflectance spectrum assumed to be at infinity. The optical
-  depth is assumed to be 2mm at given reflectance.
+  R_foundation_depth given the reflectance and transmittance of the given foundation matrix
+  at given depth percent (between 0-1 inclusive).
   """
-  def reflectance_coeffs(rho_infinity):
-    D = 2# 2 mm.
-    a = 0.5 * (1/rho_infinity + rho_infinity)
-    b = np.sqrt(np.power(a,2)-1)
+  def R_foundation_depth(R_foundation, x_percent):
+    # Assume 2 mm is the maximum depth of the foundation.
+    D = 2
+    a = 0.5 * ((1/R_foundation) + R_foundation)
+    b = np.sqrt((a**2)-1)
 
-    rho = rho_infinity*0.99
+    rho = R_foundation*0.99
     S = (np.arctanh(b/(a-rho))-np.arctanh(b/a))/(b*D)
     K = S*(a-1)
 
-    return K, S, a, b
-
-  """
-  r_and_t_helper computes the reflectance and transmittance
-  of given reflectance spectrum (at inifinite thickness) at given thickness
-  for a foundation.
-  """
-  def r_and_t_helper(rho_infinity, x):
-    K, S, a,b = ImageUtils.reflectance_coeffs(rho_infinity)
+    # Find reflectance and transmittance at given depth.
+    x = x_percent*D
     R = np.sinh(b*S*x)/(a*np.sinh(b*S*x) + b*np.cosh(b*S*x))
     T = b/(a*np.sinh(b*S*x) + b*np.cosh(b*S*x))
+
     return R, T
 
   """
   plot_reflectance is a rest function to plot the reflectance of
-  an RGB color for different optical depths ranging between 0.1 to 2 mm.
+  an RGB color (in hex format) for different optical depths ranging between 0.1 to 2 mm.
   """
-  def plot_reflectance():
-    rho_infinity  = ImageUtils.rspectrum_lhtss((255, 255, 0))
-    x = [i for i in range(380, 731, 10)]
-    for d in [0.1, 0.4, 0.7, 1, 1.3, 1.6, 1.9, 2.2]:
-      R, _ = ImageUtils.r_and_t_helper(rho_infinity, d)
-      plt.plot(x, R)
+  def plot_reflectance(hexColors):
+    x = ImageUtils.wavelength_arr()
+    for hexColor in hexColors:
+      rho  = ImageUtils.sRGB_to_SD(ImageUtils.color(hexColor))
+      plt.plot(x, rho, label=hexColor, color=hexColor, linewidth=2)
 
-    plt.plot(x, rho_infinity)
+    plt.legend()
+    plt.show()
+
+
+  """
+  plot_skin_spectra will read a database of skin spectra and plot it.
+  """
+  def plot_skin_spectra():
+    with open("skin_spectra.csv") as f:
+      csv_reader = csv.reader(f, delimiter=",")
+      x = None
+      for i, row in enumerate(csv_reader):
+        g = np.array(row[2:]).astype(np.float)
+        if i == 0:
+          x = g
+        elif (i > 0*482 and i < 4*482) or (i >= 7*482 and i <= 9*482):
+          plt.plot(x, g, linewidth=2)
+    plt.show()
+
+
+  """
+  save_skin_spectra_uv will convert the reflectance spectrums of skin spectra
+  to uv chromaticity and save it.
+  """
+  def save_skin_spectra_uv():
+    skin_chrs = []
+    with open("skin_spectra.csv") as f:
+      csv_reader = csv.reader(f, delimiter=",")
+      x = ImageUtils.wavelength_arr()
+      for i, row in enumerate(csv_reader):
+        if i == 0:
+          continue
+        rho = np.array(row[4:-1]).astype(np.float)
+        if (i > 0*482 and i < 4*482) or (i >= 7*482 and i <= 9*482):
+          d = {}
+          for k, l in enumerate(x):
+            d[l] = rho[k]
+
+          sd = colour.SpectralDistribution(d)
+          xyz = colour.colorimetry.sd_to_XYZ_integration(sd, colour.CMFS['CIE 1931 2 Degree Standard Observer'].copy().align(colour.SpectralShape(380, 730, 10)), colour.ILLUMINANTS_SDS['D65'].copy().align(colour.SpectralShape(380, 730, 10)))/100.0
+          xy = colour.XYZ_to_xy(xyz)
+          uv = colour.xy_to_Luv_uv(xy)
+          skin_chrs.append(list(uv))
+
+    plt.scatter(*zip(*skin_chrs))
+    plt.show()
+
+    with open("skin_uv.json", "w") as f:
+      json.dump(skin_chrs, f)
+
+  """
+  plot_foundation_depth will plot given foundation at different thickness
+  levels. We assume that the given foundation SD is at inifinite optical depth
+  and is therefore opaque.
+  """
+  def plot_foundation_depth(skinColor, hexColor):
+    x = ImageUtils.wavelength_arr()
+    R_skin = ImageUtils.sRGB_to_SD(ImageUtils.color(skinColor))
+    R_foundation = ImageUtils.sRGB_to_SD(ImageUtils.color(hexColor))
+    for x_percent in [0.01, 0.05, 0.08, 0.1, 0.2, 0.3, 0.5, 1]:
+      rho_f, T_f = ImageUtils.R_foundation_depth(R_foundation, x_percent)
+      #rho_mix = np.power(np.power(R_skin,0.85) * np.power(rho_f,0.5), 1)
+      #rho_mix = 0.0*R_skin + rho_f
+      Rs = 0.1
+      rho_mix = (1-Rs)*(rho_f + ((T_f**2)*R_skin)/(1-(R_skin*rho_f))) + Rs
+      color = ImageUtils.RGB2HEX(ImageUtils.SD_to_RGB(rho_mix))
+      plt.plot(x, rho_mix, label=color+"-"+str(x_percent), color=color, linewidth=2)
+
+    plt.legend()
     plt.show()
 
   """
@@ -493,5 +857,43 @@ class ImageUtils:
       return False
     return True
 
+  """
+  show_image opens up the given image in BGR space.
+  """
+  def show_image(imagePath):
+    _, _, img, _ = ImageUtils.read(imagePath)
+    img = np.clip(img, None, 255).astype(np.uint8)
+    cv2.namedWindow("image",cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("image", 900,900)
+    cv2.imshow("image", img)
+    cv2.waitKey(0)
+
+  """
+  show_gray opens up the given image in gray space.
+  """
+  def show_gray(imagePath):
+    gray, _, _, hsv = ImageUtils.read(imagePath)
+    gray2 = np.clip(gray*1.5, None, 255).astype(np.uint8)
+    cv2.namedWindow("image",cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("image", 900,900)
+    cv2.imshow("image", gray2)
+    cv2.waitKey(0)
+
 if __name__ == "__main__":
-  print ("Mixed color: ", ImageUtils.RGB2HEX(ImageUtils.geometric_mean_mixing("#D0B9C1", "#DAC4BC", 0.8)))
+  ImageUtils.save_skin_spectra_uv()
+  #ImageUtils.plot_skin_spectra()
+  #ImageUtils.chromatic_adaptation("test/ancha.JPG", ImageUtils.color("#caf0fc"))
+  #ImageUtils.chromatic_adaptation("test/IMG_8803.JPG", ImageUtils.color("#fecaaf"))
+  #ImageUtils.chromatic_adaptation("test/IMG_8803.JPG", ImageUtils.color("#fef2d5"))
+  #ImageUtils.chromatic_adaptation("test/ancha_3.JPG", ImageUtils.color("#e5e2ce"))
+  #ImageUtils.chromatic_adaptation("test/IMG_5862.JPG", ImageUtils.color("#e9e4dc"))
+  #ImageUtils.show_gray("/Users/addarsh/Desktop/ancha.png")
+  #ImageUtils.show_image("test/IMG_5862.JPG")
+  #ImageUtils.plot_foundation_depth("#e19094","#daa48a")
+  #ImageUtils.plot_foundation_depth("#e19094","#eabea1")
+  #ImageUtils.plot_foundation_depth("#e19094","#d9b28b")
+  #ImageUtils.plot_foundation_depth("#E2B9A7","#e3bca4")
+  #ImageUtils.white_balance(ImageUtils.color("#F1DCC1"))
+  #ImageUtils.plot_reflectance(["#E4C9AD", "#C39B82", "#CDA18B", "#ECC5B5"])
+  #ImageUtils.plot_reflectance(["#946E59", "#E4CCB2", "#E9C8B3", "#FDF0E4", "#5F3E35"])
+  #print ("Mixed color: ", ImageUtils.RGB2HEX(ImageUtils.geometric_mean_mixing("#D0B9C1", "#DAC4BC", 0.8)))

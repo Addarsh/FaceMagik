@@ -22,7 +22,7 @@ import requests
 import shutil
 from PIL import Image
 
-if socket.gethostname() == "Addarshs-MacBook-Pro.local":
+if socket.gethostname().startswith("Addarshs"):
   volume_mount_dir = "/Users/addarsh/virtualenvs/aws_train/dltraining"
 else:
   volume_mount_dir = '/dltraining/'

@@ -285,7 +285,7 @@ def detect_dominant_colors(K=1):
   plt.savefig(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0] + "_pie_" + str(K) + ".jpg"))
 
 """
-mean_shift_clustering calculates the clusters in the image based on mean shift
+mean_shift_clustering calculates the clusters in the face image based on mean shift
 algorithm.
 """
 def mean_shift_clustering():
@@ -311,6 +311,33 @@ def mean_shift_clustering():
 
   plt.imshow(image)
   plt.show()
+
+"""
+foundation_color uses mean shift algorithm to calculate the average foundation
+color.
+"""
+def foundation_color():
+  # Read image
+  image = skimage.io.imread(args.image)
+
+  flat_image= np.reshape(image, (-1, 3))
+
+  bandwidth = estimate_bandwidth(flat_image, quantile=0.4, n_samples=500)
+  ms = MeanShift(bandwidth, bin_seeding=True)
+  ms.fit(flat_image)
+  labels = ms.labels_
+  cluster_centers = ms.cluster_centers_
+  print ("Number of clusters: ", len(cluster_centers))
+
+  bins = np.bincount(labels)
+  randomColors = np.random.choice(256, size=(bins.shape[0], 3))
+  flat_image = np.reshape(cluster_centers[labels], image.shape).astype(int)
+
+  print ("dominant color: ", ImageUtils.RGB2HEX(cluster_centers[np.argmax(bins)]))
+
+  plt.imshow(flat_image)
+  plt.show()
+
 
 """
 get_reflectance_matrix returns the reflectance matrix for given RGB numpy array.
@@ -358,6 +385,45 @@ def apply_foundation():
     all_images.append(image_copy)
 
   imageio.mimwrite(os.path.join(foundpath, "output.mp4"), np.array(all_images) , fps = 1.0)
+
+"""
+apply_foundation_depth applies foundation on given image face with given
+hex color using a mixing formula proposed in the following paper:
+https://www.cv-foundation.org/openaccess/content_cvpr_2015/papers/Li_Simulating_Makeup_Through_2015_CVPR_paper.pdf
+"""
+def apply_foundation_depth():
+  image = skimage.io.imread(args.image)
+  faceMask = get_face_mask()
+
+  dirpath = os.path.join(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0]), "annotations")
+  if os.path.exists(os.path.join(dirpath, "R_skin.hdf5")):
+    with h5py.File(os.path.join(dirpath, "R_skin.hdf5"), "r") as f:
+      R_skin = f["reflectance"][:]
+      R_foundation = get_reflectance_matrix(np.array([ImageUtils.HEX2RGB(args.color)]))
+  else:
+    R_matrix = get_reflectance_matrix(np.concatenate((image[faceMask], [ImageUtils.HEX2RGB(args.color)])))
+    R_skin = R_matrix[:-1]
+    R_foundation = R_matrix[-1:]
+    # Save to file.
+    with h5py.File(os.path.join(dirpath, "R_skin.hdf5"), "w") as f:
+      dset = f.create_dataset("reflectance", R_skin.shape, dtype='f', chunks=True, compression="gzip")
+      dset[...] = R_skin
+
+  # Create video and save it.
+  foundpath = os.path.join(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0]), args.color)
+  if not os.path.exists(foundpath):
+    os.makedirs(foundpath)
+
+  all_images = []
+  for alpha in np.linspace(0.01, 0.1, 20).tolist():
+    image_copy = image.copy()
+
+    R_found_updated, T_found_updated = ImageUtils.R_foundation_depth(R_foundation, alpha)
+    R_mixed = R_found_updated + (np.power(T_found_updated, 2)*R_skin)/(1-R_found_updated*R_skin)
+    image_copy[faceMask] = ImageUtils.add_gamma_correction_matrix(np.transpose(np.matmul(ImageUtils.read_T_matrix(), np.transpose(R_mixed))))
+    all_images.append(image_copy)
+
+  imageio.mimwrite(os.path.join(foundpath, "output_paper.mp4"), np.array(all_images) , fps = 1.0)
 
 
 """
@@ -489,7 +555,9 @@ if __name__ == '__main__':
   if args.image != "":
     #hsv()
     #detect_dominant_colors()
-    apply_foundation()
+    #apply_foundation()
+    apply_foundation_depth()
+    #foundation_color()
     #mean_shift_clustering()
     #detect_strictly_face()
     #get_face_arr()
