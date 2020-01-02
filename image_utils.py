@@ -10,16 +10,10 @@ import csv
 import json
 import random
 import time
-import boto3
 import bisect
-import ijson
 import colour
 import matplotlib.pyplot as plt
 
-from skimage import color
-from colormath.color_objects import LabColor, sRGBColor
-from colormath.color_diff import delta_e_cie2000
-from colormath.color_conversions import convert_color
 from scipy.sparse import diags
 from scipy.optimize import minimize
 
@@ -64,16 +58,6 @@ class ImageUtils:
   def adaptive_hist(gray):
     clahe = cv2.createCLAHE(clipLimit=0.0,tileGridSize=(8,8))
     return clahe.apply(gray)
-
-  """
-  lab_diff computes the difference between color values
-  c1 and c2 in LAB color space.
-  """
-  @staticmethod
-  def lab_diff(c1, c2):
-    color1 = LabColor(lab_l=c1[0], lab_a=c1[1], lab_b=c1[2])
-    color2 = LabColor(lab_l=c2[0], lab_a=c2[1], lab_b=c2[2])
-    return delta_e_cie2000(color1, color2)
 
   """
   plot_points plots given points on given gray image.
@@ -709,6 +693,14 @@ class ImageUtils:
     return R, T
 
   """
+  remove_specular_highlights removes specular highlights
+  from the image and returns the diffuse image.
+  """
+  def remove_specular_highlights(imagePath):
+    _, _, img, _ = ImageUtils.read(imagePath)
+
+
+  """
   plot_reflectance is a rest function to plot the reflectance of
   an RGB color (in hex format) for different optical depths ranging between 0.1 to 2 mm.
   """
@@ -880,8 +872,8 @@ class ImageUtils:
     cv2.waitKey(0)
 
 if __name__ == "__main__":
-  ImageUtils.save_skin_spectra_uv()
-  #ImageUtils.plot_skin_spectra()
+  #ImageUtils.save_skin_spectra_uv()
+  ImageUtils.plot_skin_spectra()
   #ImageUtils.chromatic_adaptation("test/ancha.JPG", ImageUtils.color("#caf0fc"))
   #ImageUtils.chromatic_adaptation("test/IMG_8803.JPG", ImageUtils.color("#fecaaf"))
   #ImageUtils.chromatic_adaptation("test/IMG_8803.JPG", ImageUtils.color("#fef2d5"))

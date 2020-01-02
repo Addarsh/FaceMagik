@@ -8,7 +8,7 @@ import imageio
 import time
 import random
 import h5py
-import skimage.draw
+import skimage
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans, MeanShift, estimate_bandwidth
 from train import FaceConfig, DATASET_DIR, CHECKPOINT_DIR, modellib, label_id_map
@@ -199,10 +199,7 @@ def detect_strictly_face():
   m, dpts, lpts = segregate_points_rgb(np.copy(image), image, facePts)
   m, ldpts, _ = segregate_points_rgb(m, image, lpts)
   m , _, dlpts = segregate_points_rgb(m, image, dpts)
-  #m, lddpts, _ = segregate_points_rgb(m, image, ldpts)
-  #m, _, dllpts = segregate_points_rgb(m, image, dlpts)
 
-  #print ("average color: ", ImageUtils.avg_color(image, lddpts+dllpts))
   print ("average color: ", ImageUtils.avg_color(image, ldpts+dlpts))
 
 
@@ -556,10 +553,10 @@ if __name__ == '__main__':
     #hsv()
     #detect_dominant_colors()
     #apply_foundation()
-    apply_foundation_depth()
+    #apply_foundation_depth()
     #foundation_color()
     #mean_shift_clustering()
-    #detect_strictly_face()
+    detect_strictly_face()
     #get_face_arr()
     #change_ref()
   else:
