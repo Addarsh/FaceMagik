@@ -211,11 +211,9 @@ get_face_mask is a helper function to retrieve face mask numpy array minus the e
 ear and mouth points. It checks to see if the annotation already exists and returns
 if it does. If not, it calculates the face mask and saves it.
 """
-def get_face_mask():
-  # Read image
-  image = skimage.io.imread(args.image)
-
-  dirpath = os.path.join(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0]), "annotations")
+def get_face_mask(imagePath):
+  image = skimage.io.imread(imagePath)
+  dirpath = os.path.join(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(imagePath)[1])[0]), "annotations")
 
   if os.path.exists(os.path.join(dirpath, "face_mask.hdf5")):
     with h5py.File(os.path.join(dirpath, "face_mask.hdf5"), 'r') as f:
@@ -223,7 +221,7 @@ def get_face_mask():
 
   model = construct_model(1)
 
-  print("Running on {}".format(args.image))
+  print("Running on {}".format(imagePath))
   # Detect objects
   preds = model.detect([image], verbose=1)[0]
 
@@ -289,7 +287,7 @@ def mean_shift_clustering():
   # Read image
   image = skimage.io.imread(args.image)
 
-  faceMask = get_face_mask()
+  faceMask = get_face_mask(args.image)
 
   flatfaceRGB = image[faceMask]
 
@@ -354,7 +352,7 @@ hex color and given blend ratio.
 """
 def apply_foundation():
   image = skimage.io.imread(args.image)
-  faceMask = get_face_mask()
+  faceMask = get_face_mask(args.image)
 
   dirpath = os.path.join(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0]), "annotations")
   if os.path.exists(os.path.join(dirpath, "R_skin.hdf5")):
@@ -390,7 +388,7 @@ https://www.cv-foundation.org/openaccess/content_cvpr_2015/papers/Li_Simulating_
 """
 def apply_foundation_depth():
   image = skimage.io.imread(args.image)
-  faceMask = get_face_mask()
+  faceMask = get_face_mask(args.image)
 
   dirpath = os.path.join(os.path.join(IMAGE_DIR, os.path.splitext(os.path.split(args.image)[1])[0]), "annotations")
   if os.path.exists(os.path.join(dirpath, "R_skin.hdf5")):
