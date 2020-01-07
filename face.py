@@ -52,20 +52,12 @@ class Face:
     self.windowSize = 900
 
   """
-  keypoints_forehead returns points sampled from face forehead that best
-  represent human skin.
+  show_mask will display given mask.
   """
-  def keypoints_forehead(self):
-    return []
-
-  """
-  show_face_mask will display the face mask for given image.
-  """
-  def show_face_mask(self):
-    faceMask = self.get_face_mask()
+  def show_mask(self, mask):
     clone = self.image.copy()
-    dims = clone[faceMask].shape
-    clone[faceMask] = np.array([0, 255, 0])
+    dims = clone[mask].shape
+    clone[mask] = np.array([0, 255, 0])
     self.show(clone)
 
   """
@@ -136,6 +128,148 @@ class Face:
     return faceMask
 
   """
+  get_face_keypoints returns keypoints of the face that are best representatives
+  of skin tone.
+  """
+  def get_face_keypoints(self):
+    keypoints = np.zeros(self.image.shape[:2], dtype=bool)
+    for m in [self.get_forehead_keypoints(), self.get_left_cheek_keypoints(),  self.get_right_cheek_keypoints(), self.get_nose_keypoints()]:
+      keypoints = np.bitwise_xor(keypoints, m)
+    return keypoints
+
+  """
+  get_forehead_keypoints returns keypoints of the forehead that are best representatives
+  of skin tone on the face.
+  """
+  def get_forehead_keypoints(self):
+    eyebrow_masks = self.get_attr_masks(EYEBROW)
+    face_mask = self.get_attr_masks(FACE)[0]
+    assert len(eyebrow_masks) == 2, "Want 2 masks for eyebrow!"
+    (left_eyebrow, right_eyebrow) = (eyebrow_masks[0], eyebrow_masks[1]) if self.bbox(eyebrow_masks[0])[1] <= self.bbox(eyebrow_masks[1])[1] else (eyebrow_masks[1], eyebrow_masks[0])
+    left_row_min, left_col_min, left_width, left_height = self.bbox(left_eyebrow)
+    right_row_min, right_col_min, right_width, right_height = self.bbox(right_eyebrow)
+
+    left_col = left_col_min + int(left_width/2)
+    right_col = right_col_min + int(right_width/2)
+    row_max = min(left_row_min, right_row_min)
+    row_min = max(np.nonzero(face_mask[:, left_col])[0][0], np.nonzero(face_mask[:, right_col])[0][0])
+
+    keypoints = np.zeros(self.image.shape[:2], dtype=bool)
+    keypoints[row_min:row_max, left_col:right_col] = 1
+    return keypoints
+
+  """
+  get_left_cheek_keypoints returns keypoints from left cheek that are best representatives of skin
+  tone on the face.
+  """
+  def get_left_cheek_keypoints(self):
+    eye_masks = self.get_attr_masks(EYE_OPEN)
+    face_mask = self.get_attr_masks(FACE)[0]
+    nose_mask = self.get_attr_masks(NOSE)
+    assert len(eye_masks) == 2, "Want 2 masks for eye open!"
+    assert len(nose_mask) == 1, "Want 1 mask for nose!"
+
+    nose_mask = nose_mask[0]
+    left_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] <= self.bbox(eye_masks[1])[1] else eye_masks[1]
+    nose_row_min, nose_col_min, nose_width, nose_height = self.bbox(nose_mask)
+    left_eye_row_min, left_eye_col_min, left_eye_width, left_eye_height = self.bbox(left_eye_mask)
+
+    row_min = left_eye_row_min+left_eye_height
+    row_max = nose_row_min+nose_height
+    col_min = max(np.nonzero(face_mask[row_min, :])[0][0], np.nonzero(face_mask[row_max, :])[0][0])
+    col_max = min(nose_col_min, left_eye_col_min+left_eye_width)
+    height = row_max - row_min + 1
+    row_min = row_min + int(height/4)
+    row_max = row_max - int(height/4)
+
+    keypoints = np.zeros(self.image.shape[:2], dtype=bool)
+    keypoints[row_min:row_max, col_min:col_max] = 1
+    return keypoints
+
+  """
+  get_right_cheek_keypoints returns keypoints from right cheek that are best representatives of skin
+  tone on the face.
+  """
+  def get_right_cheek_keypoints(self):
+    eye_masks = self.get_attr_masks(EYE_OPEN)
+    face_mask = self.get_attr_masks(FACE)[0]
+    nose_mask = self.get_attr_masks(NOSE)
+    assert len(eye_masks) == 2, "Want 2 masks for eye open!"
+    assert len(nose_mask) == 1, "Want 1 mask for nose!"
+
+    nose_mask = nose_mask[0]
+    right_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] >= self.bbox(eye_masks[1])[1] else eye_masks[1]
+    nose_row_min, nose_col_min, nose_width, nose_height = self.bbox(nose_mask)
+    right_eye_row_min, right_eye_col_min, right_eye_width, right_eye_height = self.bbox(right_eye_mask)
+
+    row_min = right_eye_row_min+right_eye_height
+    row_max = nose_row_min+nose_height
+    col_min = max(nose_col_min + nose_width, right_eye_col_min)
+    col_max = min(np.nonzero(face_mask[row_min, :])[0][-1], np.nonzero(face_mask[row_max, :])[0][-1])
+    height = row_max - row_min + 1
+    row_min = row_min + int(height/4)
+    row_max = row_max - int(height/4)
+
+    keypoints = np.zeros(self.image.shape[:2], dtype=bool)
+    keypoints[row_min:row_max, col_min:col_max] = 1
+    return keypoints
+
+  """
+  get_nose_keypoints returns keypoints from nose that are best representatives of skin
+  tone on the face.
+  """
+  def get_nose_keypoints(self):
+    nose_mask = self.get_attr_masks(NOSE)
+    nostril_masks = self.get_attr_masks(NOSTRIL)
+    assert len(nose_mask) == 1, "Want 1 mask for nose!"
+    row_max = -1
+    for mask in nostril_masks:
+      row, _, _, _ = self.bbox(mask)
+      if row_max == -1 or row < row_max:
+        row_max = row
+    if row_max == -1:
+      return nose_mask[0]
+    nose_mask = nose_mask[0]
+    nose_mask[row_max:, :] = 0
+    return nose_mask
+
+  """
+  bbox returns bounding box (x1, y1, w, h) (top left point, width and height) of given mask.
+  """
+  def bbox(self, mask):
+    rows = np.any(mask, axis=1)
+    cols = np.any(mask, axis=0)
+    rmin, rmax = np.where(rows)[0][[0, -1]]
+    cmin, cmax = np.where(cols)[0][[0, -1]]
+    return rmin, cmin, cmax-cmin+1, rmax-rmin+1
+
+  """
+  get_custom_mask will return a mask of points with given attributes.
+  """
+  def get_custom_mask(self, attrs):
+    allMasks = []
+    for attr in attrs:
+      allMasks += self.get_attr_masks(attr)
+    if len(allMasks) == 0:
+      raise Exception("No mask found for any attribute!")
+    mask = np.zeros(self.image.shape[:2], dtype=bool)
+    for m in allMasks:
+      mask = np.bitwise_xor(mask, m)
+    return mask
+
+  """
+  get_attr_masks returns a list of masks for given attribute. Attribute can be one of
+  EYE_OPEN, NOSE, UPPER_LIP etc. It will return an empty list for any attribute
+  that doesn't exist in the face.
+  """
+  def get_attr_masks(self, attr):
+    masks = []
+    for i, class_id in enumerate(self.preds[self.CLASS_IDS_KEY]):
+      if label_id_map[attr] == class_id:
+        masks.append(self.preds[self.MASKS_KEY][:, :, i])
+    return masks
+
+  """
   construct_model constructs a MaskRCNN model and returns it.
   """
   def construct_model(self, imagesPerGPU=1):
@@ -164,4 +298,4 @@ class Face:
 
 if __name__ == "__main__":
   f = Face(args.image)
-  f.show_face_mask()
+  f.show_mask(f.get_face_keypoints())
