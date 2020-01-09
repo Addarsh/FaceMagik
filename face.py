@@ -8,6 +8,8 @@ import numpy as np
 import cv2
 import h5py
 import argparse
+from scipy import ndimage
+from scipy.optimize import minimize
 from image_utils import ImageUtils
 from train import FaceConfig, DATASET_DIR, CHECKPOINT_DIR, modellib, label_id_map
 from train import (
@@ -105,6 +107,52 @@ class Face:
         dset = f.create_dataset(str(class_id)+ "-" + str(i), mask.shape, dtype=bool, chunks=True, compression="gzip")
         dset[...] = mask
     return preds
+
+  """
+  remove_specular_highlights removes specular highlights from given image using Shen et al. 2009.
+  https://www.researchgate.net/publication/24410295_Simple_and_efficient_method_for_specularity_removal_in_a_image
+  """
+  def remove_specular_highlights(self):
+    Vmin = np.amin(self.image, axis=-1)
+    mu = np.mean(Vmin)
+    sigma = np.std(Vmin)
+    eta = 0.6
+    Tv = mu + eta*sigma
+    tau = Vmin.copy()
+    tau = np.where(tau > Tv, Tv, tau)
+    beta = Vmin - tau
+
+    # Find dominant region to calculate k.
+    faceMask = self.get_face_mask()
+    bImg = np.bitwise_and(beta != 0, faceMask)
+    label_im, nb_labels = ndimage.label(bImg)
+    sizes = ndimage.sum(bImg, label_im, range(nb_labels + 1))
+    indices = np.transpose(np.argwhere(sizes > int(len(np.nonzero(faceMask)[0])/100.0)))
+    label_im_3d = np.repeat(label_im[:, :, np.newaxis], len(indices), axis=2)
+    allMasks = label_im_3d == indices
+    beta_3d = np.repeat(beta[:, :, np.newaxis], len(indices), axis=2)
+    domMask = allMasks[:, :, np.argmax(np.sum(np.where(allMasks, beta_3d, 0), axis=(0,1))/sizes[indices])]
+
+    contours, _ = cv2.findContours(cv2.threshold((200*domMask).astype(np.uint8), 127, 255, 0)[1], cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cimg = np.zeros(self.image.shape[:2])
+    cv2.drawContours(cimg, contours, 0, color=255, thickness=3)
+    surrMask = cimg == 255
+    domMask = np.bitwise_and(np.bitwise_xor(domMask,surrMask), domMask)
+
+    # Find k.
+    domVals = np.sum(np.where(np.repeat(domMask[:, :, np.newaxis], 3, axis=2), self.image, 0), axis=(0,1))/np.count_nonzero(domMask)
+    surrVals = np.sum(np.where(np.repeat(surrMask[:, :, np.newaxis], 3, axis=2), self.image, 0), axis=(0,1))/np.count_nonzero(surrMask)
+    domBetaVals = np.sum(np.where(np.repeat(domMask[:, :, np.newaxis], 3, axis=2), np.repeat(beta[:, :, np.newaxis], 3, axis=2), 0), axis=(0,1))/np.count_nonzero(domMask)
+    surrBetaVals = np.sum(np.where(np.repeat(surrMask[:, :, np.newaxis], 3, axis=2), np.repeat(beta[:, :, np.newaxis], 3, axis=2), 0), axis=(0,1))/np.count_nonzero(surrMask)
+
+    fun = lambda k:((domVals - surrVals) -k*(domBetaVals - surrBetaVals)) @ ((domVals - surrVals) -k*(domBetaVals - surrBetaVals))
+    res = minimize(fun, [0.6], method="SLSQP")
+    k = res.x
+    print ("k: ", k)
+
+    beta_3d_final = np.repeat(beta[:, :, np.newaxis], 3, axis=2)
+    diffuse = (self.image.copy() - k*beta_3d_final).astype(np.uint8)
+    return diffuse
 
   """
   get_face_mask returns face mask numpy array from stored dictionary of face predictions.
@@ -298,4 +346,5 @@ class Face:
 
 if __name__ == "__main__":
   f = Face(args.image)
-  f.show_mask(f.get_face_keypoints())
+  f.show(f.remove_specular_highlights())
+  #f.show_mask(f.remove_specular_highlights())
