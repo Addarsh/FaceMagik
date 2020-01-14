@@ -11,6 +11,7 @@ import argparse
 from scipy import ndimage
 from scipy.optimize import minimize
 from image_utils import ImageUtils
+from sklearn.cluster import KMeans
 from train import FaceConfig, DATASET_DIR, CHECKPOINT_DIR, modellib, label_id_map
 from train import (
   EYE_OPEN,
@@ -48,7 +49,9 @@ class Face:
     self.id_label_map = {v: k for k, v in label_id_map.items()}
 
     self.image = cv2.cvtColor(cv2.imread(imagePath), cv2.COLOR_BGR2RGB)
+    self.clf = KMeans(n_clusters=2)
     self.preds = self.detect_face()
+    self.faceMask = self.get_face_mask()
     self.beta = self.specularity()
 
     self.windowName = imagePath
@@ -59,7 +62,6 @@ class Face:
   """
   def show_mask(self, mask):
     clone = self.image.copy()
-    dims = clone[mask].shape
     clone[mask] = np.array([0, 255, 0])
     self.show(clone)
 
@@ -116,40 +118,35 @@ class Face:
     Vmin = np.amin(self.image, axis=-1)
     mu = np.mean(Vmin)
     sigma = np.std(Vmin)
-    eta = 0.6
+    eta = 0.5
     Tv = mu + eta*sigma
     tau = Vmin.copy()
     tau = np.where(tau > Tv, Tv, tau)
     return Vmin - tau
 
   """
-  get_dominant_specular_mask returns dominant specular mask(2D boolean numpy array) associated with given image
-  as well as the mask of the surrounding region.
-  The dominant mask is selected from specular regions found on the face using algorithm in Shen et al. 2009.
+  compute_specular_masks computes and stores all specular regions on the face  as the dominant
+  specular region (based on maximum mean specularity).
+  It is 3D array of shape (IMG_WIDTH, IMG_HEIGHT, num regions).
   """
-  def get_dominant_specular_mask(self):
-    faceMask = self.get_face_mask()
-
-    bImg = np.bitwise_and(self.beta != 0, faceMask)
+  def compute_specular_masks(self):
+    bImg = np.bitwise_and(self.beta != 0, self.faceMask)
 
     # Label all specular clusters.
     label_im, nb_labels = ndimage.label(bImg)
     sizes = ndimage.sum(bImg, label_im, range(nb_labels + 1))
-    indices = np.transpose(np.argwhere(sizes > int(len(np.nonzero(faceMask)[0])/100.0)))
+    indices = np.transpose(np.argwhere(sizes > int(len(np.nonzero(self.faceMask)[0])/1000.0)))
 
-    allMasks = np.repeat(label_im[:, :, np.newaxis], len(indices), axis=2) == indices
-
-    # Pick dominant mask based on highest mean specularity value (beta).
-    domMask = allMasks[:, :, np.argmax(np.sum(np.where(allMasks, np.repeat(self.beta[:, :, np.newaxis], len(indices), axis=2), 0), axis=(0,1))/sizes[indices])]
+    self.allMasks = np.repeat(label_im[:, :, np.newaxis], len(indices), axis=2) == indices
+    domMask = self.allMasks[:, :, np.argmax(np.sum(np.where(self.allMasks, np.repeat(self.beta[:, :, np.newaxis], len(indices), axis=2), 0), axis=(0,1))/sizes[indices])]
 
     # Find surrounding region of given dominant mask.
     contours, _ = cv2.findContours(cv2.threshold((200*domMask).astype(np.uint8), 127, 255, 0)[1], cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     cimg = np.zeros(self.image.shape[:2])
     cv2.drawContours(cimg, contours, 0, color=255, thickness=3)
-    surrMask = cimg == 255
 
-    domMask = np.bitwise_and(np.bitwise_xor(domMask,surrMask), domMask)
-    return domMask, surrMask
+    self.surrMask = cimg == 255
+    self.domMask = np.bitwise_and(np.bitwise_xor(domMask,self.surrMask), domMask)
 
   """
   evaluate_k calculates the value of constant k (Shen et al) using given dominant and specular masks.
@@ -168,14 +165,60 @@ class Face:
   """
   remove_specular_highlights removes specular highlights from given image using Shen et al. 2009.
   https://www.researchgate.net/publication/24410295_Simple_and_efficient_method_for_specularity_removal_in_a_image
+  It returns the diffuse image as a result.
   """
   def remove_specular_highlights(self):
-    domMask, surrMask = self.get_dominant_specular_mask()
-    
-    k = self.evaluate_k(domMask, surrMask)
+    self.compute_specular_masks()
+
+    k = self.evaluate_k(self.domMask, self.surrMask)
     print ("k: ", k)
 
     return (self.image.copy() - k*np.repeat(self.beta[:, :, np.newaxis], 3, axis=2)).astype(np.uint8)
+
+  """
+  biclustering_Kmeans returns the dominant and surrounding masks of given mask.
+  The mask clustering is done using Kmeans of the original mask.
+  """
+  def biclustering_Kmeans(self, mask):
+    labels = self.clf.fit_predict(self.image[mask])
+
+    flatMask = np.ndarray.flatten(mask)
+    indices = np.argwhere(flatMask)
+
+    # Compute masks of both clusters.
+    aMask, bMask = flatMask.copy(), flatMask.copy()
+    aMask[indices] = np.reshape(labels == 0, (len(labels == 0), 1))
+    bMask[indices] = np.reshape(labels == 1,  (len(labels == 1), 1))
+    aMask = np.reshape(aMask, mask.shape)
+    bMask = np.reshape(bMask, mask.shape)
+
+    domdomMask, domSurrMask = None, None
+    if np.sum(self.beta[aMask])/np.count_nonzero(aMask) >= np.sum(self.beta[bMask])/np.count_nonzero(bMask):
+      return aMask, bMask
+
+    return bMask, aMask
+
+  """
+  remove_specular_highlights_modified is the modified version of remove specular highlights.
+  This algorithm calculates the dffuse image using Shen et al but stores the specular
+  region after further processing. The stored specular region can be reused in diffuse calculations.
+  """
+  def remove_specular_highlights_modified(self):
+    self.compute_specular_masks()
+
+    domdomMask, domSurrMask = self.biclustering_Kmeans(self.domMask)
+
+    k = self.evaluate_k(domdomMask, domSurrMask)
+
+    self.diffuse = (self.image.copy() - k*np.repeat(self.beta[:, :, np.newaxis], 3, axis=2)).astype(np.uint8)
+
+    specularMask = np.zeros(self.image.shape[:2], dtype=bool)
+    for i in range(self.allMasks.shape[2]):
+      domdomMask, _ = self.biclustering_Kmeans(self.allMasks[:, :, i])
+      specularMask = np.bitwise_or(specularMask, domdomMask)
+
+    self.specularMask = specularMask
+    return specularMask
 
   """
   get_face_mask returns face mask numpy array from stored dictionary of face predictions.
@@ -369,5 +412,4 @@ class Face:
 
 if __name__ == "__main__":
   f = Face(args.image)
-  f.show(f.remove_specular_highlights())
-  #f.show_mask(f.remove_specular_highlights())
+  f.show_mask(f.remove_specular_highlights_modified())
