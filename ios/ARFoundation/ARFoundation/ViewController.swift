@@ -9,10 +9,16 @@
 import UIKit
 import SceneKit
 import ARKit
+import VideoToolbox
 
 class ViewController: UIViewController, ARSCNViewDelegate {
-
+    @IBOutlet weak var captureButton: UIButton!
+    
     @IBOutlet var sceneView: ARSCNView!
+    
+    private let concurrentPhotoQueue = DispatchQueue(label: "com.ARFoundation.photoqueue", attributes: .concurrent)
+    
+    private var lastCapturedImage: CVPixelBuffer?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -88,5 +94,42 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         }
         
         faceGeometry.update(from: faceAnchor.geometry)
+        
+        // Save last captured image.
+        concurrentPhotoQueue.async(flags: .barrier) {
+            [weak self] in
+            guard let self = self else {
+                return
+            }
+            self.lastCapturedImage = self.sceneView.session.currentFrame?.capturedImage
+        }
+    }
+    
+    @IBAction func onClick(_ sender: Any) {
+        //performSegue(withIdentifier: "ShowImage", sender: self)
+    }
+    
+    // prepare is run just before segue. It captures last stored image
+    // and send the data to the image view controller.
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        concurrentPhotoQueue.sync {
+            guard let lastImage = self.lastCapturedImage else {
+                return
+            }
+            let destVC: ImageViewController = segue.destination as! ImageViewController
+            destVC.capturedImage =  UIImage(pixelBuffer: lastImage)
+        }
+    }
+}
+
+// Extension of UIImage to convert CVPixelBuffer to UIImagge object.
+extension UIImage {
+    public convenience init?(pixelBuffer: CVPixelBuffer) {
+        var cgImage: CGImage?
+        VTCreateCGImageFromCVPixelBuffer(pixelBuffer, options: nil, imageOut: &cgImage)
+        if cgImage == nil {
+            return nil
+        }
+        self.init(cgImage: cgImage!)
     }
 }
