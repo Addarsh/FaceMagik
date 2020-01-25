@@ -20,7 +20,10 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     private let concurrentPhotoQueue = DispatchQueue(label: "com.ARFoundation.photoqueue", attributes: .concurrent)
     
     private var lastCapturedImage: CVPixelBuffer?
+    
     private var pngData: Data?
+    
+    private let uploadURL = "http://[2600:1700:f1b0:6400:4483:9bfe:6730:9534]:8000/skin/"
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -121,8 +124,8 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         }
         
         Alamofire.upload(multipartFormData: { multipartFormData in
-            multipartFormData.append(pngData, withName: "fileset", fileName: "addarsh.png", mimeType: "image/png")
-        }, to: "https:/httpbin.org/post") { result in
+            multipartFormData.append(pngData.base64EncodedData(), withName: "fileset", mimeType: "image/png")
+        }, to: uploadURL) { result in
             switch result {
             case .success(let upload, _, _):
                 upload.uploadProgress{progress in
@@ -130,7 +133,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
                 }
                 
                 upload.responseJSON { response in
-                    debugPrint(response)
+                    print ("Upload complete")
                 }
             case .failure(let encodingError):
                 print (encodingError)
