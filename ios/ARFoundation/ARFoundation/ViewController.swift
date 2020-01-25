@@ -107,6 +107,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     @IBAction func onClick(_ sender: Any) {
         //performSegue(withIdentifier: "ShowImage", sender: self)
+        print ("Clicked button")
     }
     
     // prepare is run just before segue. It captures last stored image
