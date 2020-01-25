@@ -10,6 +10,7 @@ import UIKit
 import SceneKit
 import ARKit
 import VideoToolbox
+import Alamofire
 
 class ViewController: UIViewController, ARSCNViewDelegate {
     @IBOutlet weak var captureButton: UIButton!
@@ -19,6 +20,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     private let concurrentPhotoQueue = DispatchQueue(label: "com.ARFoundation.photoqueue", attributes: .concurrent)
     
     private var lastCapturedImage: CVPixelBuffer?
+    private var pngData: Data?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -107,7 +109,33 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     @IBAction func onClick(_ sender: Any) {
         //performSegue(withIdentifier: "ShowImage", sender: self)
-        print ("Clicked button")
+        concurrentPhotoQueue.sync {
+            guard let lastImage = self.lastCapturedImage else {
+                return
+            }
+            self.pngData =  UIImage(pixelBuffer: lastImage)?.pngData()
+        }
+        
+        guard let pngData = self.pngData else {
+            return
+        }
+        
+        Alamofire.upload(multipartFormData: { multipartFormData in
+            multipartFormData.append(pngData, withName: "fileset", fileName: "addarsh.png", mimeType: "image/png")
+        }, to: "https:/httpbin.org/post") { result in
+            switch result {
+            case .success(let upload, _, _):
+                upload.uploadProgress{progress in
+                    print ("Upload progress \(progress.fractionCompleted)")
+                }
+                
+                upload.responseJSON { response in
+                    debugPrint(response)
+                }
+            case .failure(let encodingError):
+                print (encodingError)
+            }
+        }
     }
     
     // prepare is run just before segue. It captures last stored image
@@ -128,9 +156,9 @@ extension UIImage {
     public convenience init?(pixelBuffer: CVPixelBuffer) {
         var cgImage: CGImage?
         VTCreateCGImageFromCVPixelBuffer(pixelBuffer, options: nil, imageOut: &cgImage)
-        if cgImage == nil {
+        guard let cImage = cgImage else {
             return nil
         }
-        self.init(cgImage: cgImage!)
+        self.init(cgImage: cImage)
     }
 }
