@@ -1,4 +1,4 @@
-framework module Pods_ARFoundation {
+module Pods_ARFoundation {
   umbrella header "Pods-ARFoundation-umbrella.h"
 
   export *

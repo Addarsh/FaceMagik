@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 import h5py
 import argparse
+import json
 from scipy import ndimage
 from scipy.optimize import minimize
 from image_utils import ImageUtils
@@ -53,6 +54,20 @@ class Face:
     self.preds = self.detect_face()
     self.faceMask = self.get_face_mask()
     self.beta = self.specularity()
+    if imagePath.startswith("server/data"):
+      # Load lighting, normals and face vertices.
+      dirPath, _ = os.path.split(imagePath)
+      with open(os.path.join(dirPath, "face_vertices.json"), "r") as f:
+        self.faceVertices = json.load(f)
+      with open(os.path.join(dirPath, "normals.json"), "r") as f:
+        self.normals = json.load(f)
+      with open(os.path.join(dirPath, "lighting.json"), "r") as f:
+        self.lighting = json.load(f)
+      with open(os.path.join(dirPath, "triangle_indices.json"), "r") as f:
+        self.triangleIndices = json.load(f)
+
+      # Constants array from Ramamoorthi's paper.
+      self.c = np.array([0.429043, 0.511664, 0.743125, 0.886227, 0.247708])
 
     self.windowName = imagePath
     self.windowSize = 900
@@ -219,6 +234,81 @@ class Face:
 
     self.specularMask = specularMask
     return specularMask
+
+  """
+  compute_diffuse will compute the irradiance(E) and diffuse color using the
+  normals of the face and spherical harmonic coefficients.
+  """
+  def compute_diffuse(self):
+    if self.normals == None or self.lighting == None or self.faceVertices == None:
+      return
+    Mred = self.compute_M_matrix(self.lighting["red"])
+    Mgreen = self.compute_M_matrix(self.lighting["green"])
+    Mblue = self.compute_M_matrix(self.lighting["blue"])
+    normals = np.array(self.normals)
+
+    # Flip x values.
+    Xpos = 0
+    Ypos = 0
+    Zpos = 0
+    for n in normals:
+      if n[0] >= 0:
+        Xpos += 1
+      if n[1] >= 0:
+        Ypos += 1
+      if n[2] >= 0:
+        Zpos += 1
+    print ("Xpos: ", Xpos, " Xneg: ", normals.shape[0]- Xpos)
+    print ("Ypos: ", Ypos, " Yneg: ", normals.shape[0]- Ypos)
+    print ("Zpos: ", Zpos, " Zneg: ", normals.shape[0]- Zpos)
+
+    # Convert to n by 4 array.
+    normals = np.append(normals, np.ones((normals.shape[0], 1)), 1)
+    Ered = (normals @ Mred @ np.transpose(normals)).diagonal()
+    Egreen = (normals @ Mgreen @ np.transpose(normals)).diagonal()
+    Eblue = (normals @ Mblue @ np.transpose(normals)).diagonal()
+    E = np.column_stack((Ered, Egreen, Eblue))
+
+    # Calculate centroid vertices of each triangle in the mesh.
+    faceVertices = np.array(self.faceVertices)
+    tIndices = self.triangleIndices
+    tVertices = []
+    for i in range(0, len(tIndices), 3):
+      t1, t2 , t3 = tIndices[i], tIndices[i+1], tIndices[i+2]
+      tVertices.append([(faceVertices[t1, 0]+faceVertices[t2, 0]+faceVertices[t3, 0])/3.0, (faceVertices[t1,1]+ faceVertices[t2, 1]+faceVertices[t3, 1])/3.0])
+    tVertices = np.array(tVertices).astype(int)
+
+    # Show irrandiance mask.
+    clone = self.image.copy()
+    clone[:, :] = [0, 0, 0]
+    clone[tVertices[:, 0], tVertices[:, 1]] = np.uint8(np.clip(E*100, None, 255))
+    self.show(clone)
+
+    # Calculate intensity at each centroid vertex and show.
+    clone = self.image.copy()
+    intensity = ImageUtils.add_gamma_correction_matrix(ImageUtils.remove_gamma_correction_matrix(clone[tVertices[:, 0], tVertices[:, 1]].astype(np.float))/E)
+    clone[:, :] = [255, 255, 255]
+    for i in range(intensity.shape[0]):
+      cv2.circle(clone, (tVertices[i, 1], tVertices[i, 0]), 1, [int(intensity[i][0]), int(intensity[i][1]), int(intensity[i][2])], 20)
+
+    self.show(clone)
+
+  """
+  compute_M_matrix computes the M matrix specified in Ramamoorthi's paper.
+  The M matrix is multiplied with normalized normal vector at each vertex
+  to obtain the irradiance at the vertex. We need to flip spherical harmonic
+  values of x and z directions based on observation.
+  """
+  def compute_M_matrix(self, L):
+    c = self.c
+    L[2] = -L[2]
+    L[3] = -L[3]
+    L[4] = -L[4]
+    L[5] = -L[5]
+    return np.array([
+      [c[0]*L[8], c[0]*L[4], c[0]*L[7], c[1]*L[3]], [c[0]*L[4], -c[0]*L[8], c[0]*L[5], c[1]*L[1]],
+      [c[0]*L[7], c[0]*L[5], c[2]*L[6], c[1]*L[2]], [c[1]*L[3], c[1]*L[1], c[1]*L[2], c[3]*L[0]-c[4]*L[6]],
+    ])
 
   """
   get_face_mask returns face mask numpy array from stored dictionary of face predictions.
@@ -412,4 +502,5 @@ class Face:
 
 if __name__ == "__main__":
   f = Face(args.image)
-  f.show_mask(f.remove_specular_highlights_modified())
+  f.compute_diffuse()
+  #f.show_mask(f.remove_specular_highlights_modified())

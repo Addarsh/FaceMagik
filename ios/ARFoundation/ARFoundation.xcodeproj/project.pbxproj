@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5839328508FBFF3F1111CDC9 /* Pods_ARFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E298A398C0EF65F44112DA95 /* Pods_ARFoundation.framework */; };
+		943D5D4CC686F3675603E33B /* libPods-ARFoundation.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F79ED5F7F5636E56827A9F28 /* libPods-ARFoundation.a */; };
 		98D6993F23D635E50031F7F4 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98D6993E23D635E50031F7F4 /* AppDelegate.swift */; };
 		98D6994123D635E50031F7F4 /* art.scnassets in Resources */ = {isa = PBXBuildFile; fileRef = 98D6994023D635E50031F7F4 /* art.scnassets */; };
 		98D6994323D635E50031F7F4 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98D6994223D635E50031F7F4 /* ViewController.swift */; };
@@ -18,7 +18,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		5902E5240DDC864939E7CE85 /* Pods-ARFoundation.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ARFoundation.debug.xcconfig"; path = "Target Support Files/Pods-ARFoundation/Pods-ARFoundation.debug.xcconfig"; sourceTree = "<group>"; };
+		18292E058C78783832AF23E6 /* Pods-ARFoundation.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ARFoundation.release.xcconfig"; path = "Target Support Files/Pods-ARFoundation/Pods-ARFoundation.release.xcconfig"; sourceTree = "<group>"; };
+		687917ED88AFACC329E08776 /* Pods-ARFoundation.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ARFoundation.debug.xcconfig"; path = "Target Support Files/Pods-ARFoundation/Pods-ARFoundation.debug.xcconfig"; sourceTree = "<group>"; };
 		98D6993B23D635E50031F7F4 /* ARFoundation.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ARFoundation.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		98D6993E23D635E50031F7F4 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		98D6994023D635E50031F7F4 /* art.scnassets */ = {isa = PBXFileReference; lastKnownFileType = wrapper.scnassets; path = art.scnassets; sourceTree = "<group>"; };
@@ -28,8 +29,7 @@
 		98D6994A23D635E80031F7F4 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		98D6994C23D635E80031F7F4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		98D6995223DB55950031F7F4 /* ImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewController.swift; sourceTree = "<group>"; };
-		E298A398C0EF65F44112DA95 /* Pods_ARFoundation.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ARFoundation.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		F98F26F3EA67B8A0915BF6CD /* Pods-ARFoundation.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ARFoundation.release.xcconfig"; path = "Target Support Files/Pods-ARFoundation/Pods-ARFoundation.release.xcconfig"; sourceTree = "<group>"; };
+		F79ED5F7F5636E56827A9F28 /* libPods-ARFoundation.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-ARFoundation.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,21 +37,29 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5839328508FBFF3F1111CDC9 /* Pods_ARFoundation.framework in Frameworks */,
+				943D5D4CC686F3675603E33B /* libPods-ARFoundation.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		4127DA0BCFADF3E81B174C53 /* Pods */ = {
+		778FB1D560380E9BA0FD8FD0 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				5902E5240DDC864939E7CE85 /* Pods-ARFoundation.debug.xcconfig */,
-				F98F26F3EA67B8A0915BF6CD /* Pods-ARFoundation.release.xcconfig */,
+				687917ED88AFACC329E08776 /* Pods-ARFoundation.debug.xcconfig */,
+				18292E058C78783832AF23E6 /* Pods-ARFoundation.release.xcconfig */,
 			);
 			name = Pods;
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		7D1DBEEE1AFA6DEF0DC3E4B8 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F79ED5F7F5636E56827A9F28 /* libPods-ARFoundation.a */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		98D6993223D635E50031F7F4 = {
@@ -59,8 +67,8 @@
 			children = (
 				98D6993D23D635E50031F7F4 /* ARFoundation */,
 				98D6993C23D635E50031F7F4 /* Products */,
-				4127DA0BCFADF3E81B174C53 /* Pods */,
-				9AB2C8439020E64EC37467CD /* Frameworks */,
+				778FB1D560380E9BA0FD8FD0 /* Pods */,
+				7D1DBEEE1AFA6DEF0DC3E4B8 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -87,14 +95,6 @@
 			path = ARFoundation;
 			sourceTree = "<group>";
 		};
-		9AB2C8439020E64EC37467CD /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				E298A398C0EF65F44112DA95 /* Pods_ARFoundation.framework */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -102,11 +102,10 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 98D6994F23D635E80031F7F4 /* Build configuration list for PBXNativeTarget "ARFoundation" */;
 			buildPhases = (
-				7FA3707C7DC80A7F381490A2 /* [CP] Check Pods Manifest.lock */,
+				5DFC7FA563D4F70C35138367 /* [CP] Check Pods Manifest.lock */,
 				98D6993723D635E50031F7F4 /* Sources */,
 				98D6993823D635E50031F7F4 /* Frameworks */,
 				98D6993923D635E50031F7F4 /* Resources */,
-				644D084CECA744490A163743 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -165,24 +164,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		644D084CECA744490A163743 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-ARFoundation/Pods-ARFoundation-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-ARFoundation/Pods-ARFoundation-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-ARFoundation/Pods-ARFoundation-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		7FA3707C7DC80A7F381490A2 /* [CP] Check Pods Manifest.lock */ = {
+		5DFC7FA563D4F70C35138367 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -355,7 +337,7 @@
 		};
 		98D6995023D635E80031F7F4 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5902E5240DDC864939E7CE85 /* Pods-ARFoundation.debug.xcconfig */;
+			baseConfigurationReference = 687917ED88AFACC329E08776 /* Pods-ARFoundation.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
@@ -374,7 +356,7 @@
 		};
 		98D6995123D635E80031F7F4 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F98F26F3EA67B8A0915BF6CD /* Pods-ARFoundation.release.xcconfig */;
+			baseConfigurationReference = 18292E058C78783832AF23E6 /* Pods-ARFoundation.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;

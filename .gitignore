@@ -6,3 +6,7 @@ __pycache__/
 # Weird file extensions #
 ###################
 *.DS_Store
+
+# Server data #
+###################
+server/data/

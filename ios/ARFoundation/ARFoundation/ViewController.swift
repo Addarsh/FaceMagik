@@ -23,7 +23,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     private var pngData: Data?
     
-    private let uploadURL = "http://[2601:647:4200:af70:a94d:5325:6b1c:b020]:8000/skin/"
+    private let uploadURL = "http://[2601:647:4200:af70:e8fc:8e9b:508d:16f5]:8000/skin/"
     
     private var lastFaceAnchor: ARFaceAnchor?
     
@@ -36,6 +36,8 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     private var vertices: [[Int]]?
     
     private var normals: [[Float]]?
+    
+    private var triangleIndices: [Int16]?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -57,6 +59,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         // Create a session configuration
         let configuration = ARFaceTrackingConfiguration()
         configuration.isLightEstimationEnabled = true
+        configuration.worldAlignment = .gravity
 
         // Run the view's session
         sceneView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
@@ -135,6 +138,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             self.vertices = projectedVertices()
             self.normals = calcNormals()
             self.lightDict = lightEstimate()
+            
         }
         
         guard let pngData = self.pngData else {
@@ -147,6 +151,9 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             return
         }
         guard let normals = self.normals else {
+            return
+        }
+        guard let triangleIndices = self.triangleIndices else {
             return
         }
         
@@ -162,11 +169,16 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             return
         }
         
+        guard let jsonTriangleIdx =  try? JSONSerialization.data(withJSONObject: triangleIndices) else {
+            return
+        }
+        
         Alamofire.upload(multipartFormData: { multipartFormData in
             multipartFormData.append(pngData.base64EncodedData(), withName: "fileset", mimeType: "image/png")
             multipartFormData.append(jsonVertices, withName: "vertices")
             multipartFormData.append(jsonLight, withName: "lighting")
             multipartFormData.append(jsonNormals, withName: "normals")
+            multipartFormData.append(jsonTriangleIdx, withName: "triangleIndices")
         }, to: uploadURL) { result in
             switch result {
             case .success(let upload, _, _):
@@ -231,7 +243,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         let height = CVPixelBufferGetHeight(image)
         
         let textureCoordinates = vertices.map { vertex -> [Int] in
-            let world_vector3 = toWorldCords(vertex: vertex, faceAnchor: faceAnchor)
+            let world_vector3 = toWorldCords(vertex, faceAnchor)
             let pt = camera.projectPoint(world_vector3,
                 orientation: .portrait,
                 viewportSize: CGSize(
@@ -244,7 +256,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     // toWorldCords converts given face vertex from face
     // coordinate system to world coordinates.
-    func toWorldCords(vertex: vector_float3, faceAnchor: ARFaceAnchor) -> simd_float3 {
+    func toWorldCords(_ vertex: vector_float3, _ faceAnchor: ARFaceAnchor) -> simd_float3 {
         let vertex4 = vector_float4(vertex.x, vertex.y, vertex.z, 1)
         let world_vertex4 = simd_mul(faceAnchor.transform, vertex4)
         return simd_float3(x: world_vertex4.x, y: world_vertex4.y, z: world_vertex4.z)
@@ -256,50 +268,26 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         }
         
         //let vertices = faceAnchor.geometry.vertices
-        let triangleIndices = faceAnchor.geometry.triangleIndices
+        self.triangleIndices = faceAnchor.geometry.triangleIndices
+        guard let triangleIndices = self.triangleIndices else {
+            return nil
+        }
         let triangleCount = faceAnchor.geometry.triangleCount
         let vertices = faceAnchor.geometry.vertices
         
         var count = 0
-        var neighborMap = [Int:[Set<Int>]]()
-        
-        // Map vertex to neighgboring faces.
+        var normals: [[Float]] = []
         while count != triangleCount {
-            let face: Set<Int> = [Int(triangleIndices[count*3]), Int(triangleIndices[count*3 + 1]), Int(triangleIndices[count*3 + 2])]
-            face.forEach { index  in
-                if neighborMap[index] != nil {
-                    neighborMap[index]!.append(face)
-                } else {
-                    neighborMap[index] = [face]
-                }
-            }
+            let v0 = toWorldCords(vertices[Int(triangleIndices[count*3])], faceAnchor)
+            let v1 = toWorldCords(vertices[Int(triangleIndices[count*3 + 1])], faceAnchor)
+            let v2 = toWorldCords(vertices[Int(triangleIndices[count*3 + 2])], faceAnchor)
+            let n = simd_normalize(simd_cross(v1 - v2, v1 - v0))
+            normals.append([Float(n.x), Float(n.y), Float(n.z)])
             count += 1
-        }
-        
-        // Calculate normal for each vertex.
-        let normals = vertices.enumerated().map { (index, _) -> [Float] in
-            let faces = neighborMap[index]!
-            var nList: [simd_float3] = []
-            for face in faces {
-                var simdArr: [simd_float3] = []
-                for vIdx in face {
-                    let v = toWorldCords(vertex: vertices[vIdx], faceAnchor: faceAnchor)
-                    simdArr.append(simd_float3(v.x, v.y, v.z))
-                }
-                let vector1 = simdArr[1] - simdArr[2]
-                let vector2 = simdArr[1] - simdArr[0]
-                nList.append(simd_normalize(simd_cross(vector1, vector2)))
-            }
-            var avgNormal: simd_float3 = simd_float3(0, 0, 0)
-            for n in nList {
-                avgNormal += n
-            }
-            avgNormal = simd_normalize(avgNormal/Float(nList.count))
-            return [Float(avgNormal[0]), Float(avgNormal[1]), Float(avgNormal[2])]
         }
         return normals
     }
-    
+
     // prepare is run just before segue. It captures last stored image
     // and send the data to the image view controller.
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
