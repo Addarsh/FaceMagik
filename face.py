@@ -60,7 +60,7 @@ class Face:
       with open(os.path.join(dirPath, "face_vertices.json"), "r") as f:
         self.faceVertices = json.load(f)
       with open(os.path.join(dirPath, "normals.json"), "r") as f:
-        self.normals = json.load(f)
+        self.normals = np.array(json.load(f))
       with open(os.path.join(dirPath, "lighting.json"), "r") as f:
         self.lighting = json.load(f)
       with open(os.path.join(dirPath, "triangle_indices.json"), "r") as f:
@@ -240,29 +240,16 @@ class Face:
   normals of the face and spherical harmonic coefficients.
   """
   def compute_diffuse(self):
-    if self.normals == None or self.lighting == None or self.faceVertices == None:
+    if self.lighting == None or self.faceVertices == None:
       return
+    self.adjust_SH_coeffs()
+
     Mred = self.compute_M_matrix(self.lighting["red"])
     Mgreen = self.compute_M_matrix(self.lighting["green"])
     Mblue = self.compute_M_matrix(self.lighting["blue"])
-    normals = np.array(self.normals)
-
-    # Flip x values.
-    Xpos = 0
-    Ypos = 0
-    Zpos = 0
-    for n in normals:
-      if n[0] >= 0:
-        Xpos += 1
-      if n[1] >= 0:
-        Ypos += 1
-      if n[2] >= 0:
-        Zpos += 1
-    print ("Xpos: ", Xpos, " Xneg: ", normals.shape[0]- Xpos)
-    print ("Ypos: ", Ypos, " Yneg: ", normals.shape[0]- Ypos)
-    print ("Zpos: ", Zpos, " Zneg: ", normals.shape[0]- Zpos)
 
     # Convert to n by 4 array.
+    normals = self.normals.copy()
     normals = np.append(normals, np.ones((normals.shape[0], 1)), 1)
     Ered = (normals @ Mred @ np.transpose(normals)).diagonal()
     Egreen = (normals @ Mgreen @ np.transpose(normals)).diagonal()
@@ -294,6 +281,45 @@ class Face:
     self.show(clone)
 
   """
+  adjust_SH_coeffs adjusts the signs of SH coefficients provided by ARKit depending
+  on the sign x, y and z components of the face normals.
+  """
+  def adjust_SH_coeffs(self):
+    normals = self.normals
+
+    cntNormals = normals.shape[0]
+    self.cntXpos = np.count_nonzero(normals[:, 0] >= 0)
+    self.cntXneg = cntNormals - self.cntXpos
+    self.cntYpos = np.count_nonzero(normals[:, 1] >= 0)
+    self.cntYneg = cntNormals - self.cntYpos
+    self.cntZpos = np.count_nonzero(normals[:, 2] >= 0)
+    self.cntZneg = cntNormals - self.cntZpos
+    print ("X pos cnt: ", self.cntXpos, " X neg cnt: ", self.cntXneg)
+    print ("Y pos cnt: ", self.cntYpos, " Y neg cnt: ", self.cntYneg)
+    print ("Z pos cnt: ", self.cntZpos, " Z neg cnt: ", self.cntZneg)
+
+    self.adjust_SH_coeffs_helper(self.lighting["red"])
+    self.adjust_SH_coeffs_helper(self.lighting["green"])
+    self.adjust_SH_coeffs_helper(self.lighting["blue"])
+
+  """
+  adjust_SH_coeffs helper will adjust coefficients
+  for given channel (red, blue or green).
+  """
+  def adjust_SH_coeffs_helper(self, L):
+    # Always flip X (based on observation).
+    # Check flip conditions for y and z directions.
+    flipY = True if ((self.cntYpos >= self.cntYneg and L[1] < 0) or (self.cntYpos < self.cntYneg and L[1] >= 0)) else False
+    flipZ = True if ((self.cntZpos >= self.cntZneg and L[2] < 0) or (self.cntZpos < self.cntZneg and L[2] >= 0)) else False
+
+    L[1] = -L[1] if flipY else L[1]
+    L[2] = -L[2] if flipZ else L[2]
+    L[3] = -L[3]
+    L[4] = L[4] if flipY else -L[4]
+    L[5] = L[5] if flipY == flipZ else -L[5]
+    L[7] = L[7] if flipZ else -L[7]
+
+  """
   compute_M_matrix computes the M matrix specified in Ramamoorthi's paper.
   The M matrix is multiplied with normalized normal vector at each vertex
   to obtain the irradiance at the vertex. We need to flip spherical harmonic
@@ -301,10 +327,6 @@ class Face:
   """
   def compute_M_matrix(self, L):
     c = self.c
-    L[2] = -L[2]
-    L[3] = -L[3]
-    L[4] = -L[4]
-    L[5] = -L[5]
     return np.array([
       [c[0]*L[8], c[0]*L[4], c[0]*L[7], c[1]*L[3]], [c[0]*L[4], -c[0]*L[8], c[0]*L[5], c[1]*L[1]],
       [c[0]*L[7], c[0]*L[5], c[2]*L[6], c[1]*L[2]], [c[1]*L[3], c[1]*L[1], c[1]*L[2], c[3]*L[0]-c[4]*L[6]],
