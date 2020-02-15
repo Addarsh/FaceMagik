@@ -33,9 +33,11 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     private var lightDict: [String: [Float]]?
     
-    private var vertices: [[Int]]?
+    private var vertices2D: [[Int]]?
     
-    private var normals: [[Float]]?
+    private var surfNormals: [[Float]]?
+    
+    private var vertexNormals: [[Float]]?
     
     private var triangleIndices: [Int16]?
 
@@ -135,8 +137,8 @@ class ViewController: UIViewController, ARSCNViewDelegate {
                 return
             }
             self.pngData =  UIImage(pixelBuffer: lastImage)?.pngData()
-            self.vertices = projectedVertices()
-            self.normals = calcNormals()
+            self.vertices2D = projectedVertices()
+            (self.surfNormals, self.vertexNormals) = calcNormals()
             self.lightDict = lightEstimate()
             
         }
@@ -144,20 +146,23 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         guard let pngData = self.pngData else {
             return
         }
-        guard let vertices = self.vertices else {
+        guard let vertices2D = self.vertices2D else {
             return
         }
         guard let lightDict = self.lightDict else {
             return
         }
-        guard let normals = self.normals else {
+        guard let surfNormals = self.surfNormals else {
+            return
+        }
+        guard let vertexNormals = self.vertexNormals else {
             return
         }
         guard let triangleIndices = self.triangleIndices else {
             return
         }
         
-        guard let jsonVertices = try? JSONSerialization.data(withJSONObject: vertices) else {
+        guard let jsonVertices2D = try? JSONSerialization.data(withJSONObject: vertices2D) else {
             return
         }
         
@@ -165,7 +170,10 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             return
         }
         
-        guard let jsonNormals =  try? JSONSerialization.data(withJSONObject: normals) else {
+        guard let jsonSurfNormals =  try? JSONSerialization.data(withJSONObject: surfNormals) else {
+            return
+        }
+        guard let jsonVertexNormals =  try? JSONSerialization.data(withJSONObject: vertexNormals) else {
             return
         }
         
@@ -175,10 +183,11 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         
         Alamofire.upload(multipartFormData: { multipartFormData in
             multipartFormData.append(pngData.base64EncodedData(), withName: "fileset", mimeType: "image/png")
-            multipartFormData.append(jsonVertices, withName: "vertices")
+            multipartFormData.append(jsonVertices2D, withName: "vertices")
             multipartFormData.append(jsonLight, withName: "lighting")
-            multipartFormData.append(jsonNormals, withName: "normals")
+            multipartFormData.append(jsonSurfNormals, withName: "normals")
             multipartFormData.append(jsonTriangleIdx, withName: "triangleIndices")
+            multipartFormData.append(jsonVertexNormals, withName: "vertexNormals")
         }, to: uploadURL) { result in
             switch result {
             case .success(let upload, _, _):
@@ -262,30 +271,59 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         return simd_float3(x: world_vertex4.x, y: world_vertex4.y, z: world_vertex4.z)
     }
     
-    func calcNormals() -> [[Float]]? {
+    func calcNormals() -> ([[Float]]?, [[Float]]?) {
         guard let faceAnchor = self.lastFaceAnchor else {
-            return nil
+            return (nil, nil)
         }
         
         //let vertices = faceAnchor.geometry.vertices
         self.triangleIndices = faceAnchor.geometry.triangleIndices
         guard let triangleIndices = self.triangleIndices else {
-            return nil
+            return (nil, nil)
         }
         let triangleCount = faceAnchor.geometry.triangleCount
-        let vertices = faceAnchor.geometry.vertices
+        let vertices3D = faceAnchor.geometry.vertices
         
         var count = 0
-        var normals: [[Float]] = []
+        var surfNormals: [[Float]] = []
+        var vertexNormals = [simd_float3](repeating: simd_float3(0.0, 0.0, 0.0), count: vertices3D.count)
         while count != triangleCount {
-            let v0 = toWorldCords(vertices[Int(triangleIndices[count*3])], faceAnchor)
-            let v1 = toWorldCords(vertices[Int(triangleIndices[count*3 + 1])], faceAnchor)
-            let v2 = toWorldCords(vertices[Int(triangleIndices[count*3 + 2])], faceAnchor)
-            let n = simd_normalize(simd_cross(v1 - v2, v1 - v0))
-            normals.append([Float(n.x), Float(n.y), Float(n.z)])
+            let v0 = toWorldCords(vertices3D[Int(triangleIndices[count*3])], faceAnchor)
+            let v1 = toWorldCords(vertices3D[Int(triangleIndices[count*3 + 1])], faceAnchor)
+            let v2 = toWorldCords(vertices3D[Int(triangleIndices[count*3 + 2])], faceAnchor)
+            let cp = simd_cross(v1 - v2, v1 - v0)
+            
+            // Sum vertex normals with cross product.
+            vertexNormals[Int(triangleIndices[count*3])] += cp
+            vertexNormals[Int(triangleIndices[count*3 + 1])] += cp
+            vertexNormals[Int(triangleIndices[count*3 + 2])] += cp
+            
+            // Append new surface normal.
+            let sn = simd_normalize(cp)
+            surfNormals.append([Float(sn.x), Float(sn.y), Float(sn.z)])
             count += 1
         }
-        return normals
+        
+        let vNormals = vertexNormals.map { vn -> [Float] in
+            let sn = simd_normalize(vn)
+            return [Float(sn.x), Float(sn.y), Float(sn.z)]
+        }
+        
+        return (surfNormals, vNormals)
+    }
+    
+    // bbox calcualtes bounding box of the given triangle vertices.
+    func bbox(_ v0: [Int],_ v1: [Int],_ v2: [Int]) -> (Int, Int, Int, Int) {
+        let xmin = [v0[1], v1[1], v1[1]].min()!
+        let ymin = [v0[0], v1[0], v1[0]].min()!
+        let xmax = [v0[1], v1[1], v1[1]].max()!
+        let ymax = [v0[0], v1[0], v1[0]].max()!
+        return (xmin, ymin, xmax, ymax)
+    }
+    
+    // edgeFunc returns the cross product of 3 vertices(arranged clockwise).
+    func edgeFunc(_ v0: [Int], _ v1: [Int], _ v2: [Int]) -> Float {
+        return Float((v2[1] - v0[1]) * (v1[1] - v0[1]) - (v2[1] - v0[1]) * (v1[0] - v0[0]))
     }
 
     // prepare is run just before segue. It captures last stored image

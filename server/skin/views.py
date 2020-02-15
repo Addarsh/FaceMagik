@@ -25,6 +25,8 @@ def index(request):
       json.dump(json.loads(data["lighting"]), f)
     with open(os.path.join(DATA_DIR, "triangle_indices.json"), "w") as f:
       json.dump(json.loads(data["triangleIndices"]), f)
+    with open(os.path.join(DATA_DIR, "vertex_normals.json"), "w") as f:
+      json.dump(json.loads(data["vertexNormals"]), f)
 
 
     # Save image to disk.

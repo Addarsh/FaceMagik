@@ -58,13 +58,15 @@ class Face:
       # Load lighting, normals and face vertices.
       dirPath, _ = os.path.split(imagePath)
       with open(os.path.join(dirPath, "face_vertices.json"), "r") as f:
-        self.faceVertices = json.load(f)
+        self.faceVertices = np.array(json.load(f))
       with open(os.path.join(dirPath, "normals.json"), "r") as f:
         self.normals = np.array(json.load(f))
       with open(os.path.join(dirPath, "lighting.json"), "r") as f:
         self.lighting = json.load(f)
       with open(os.path.join(dirPath, "triangle_indices.json"), "r") as f:
-        self.triangleIndices = json.load(f)
+        self.triangleIndices = np.array(json.load(f))
+      with open(os.path.join(dirPath, "vertex_normals.json"), "r") as f:
+        self.vertexNormals = np.array(json.load(f))
 
       # Constants array from Ramamoorthi's paper.
       self.c = np.array([0.429043, 0.511664, 0.743125, 0.886227, 0.247708])
@@ -240,7 +242,7 @@ class Face:
   normals of the face and spherical harmonic coefficients.
   """
   def compute_diffuse(self):
-    if self.lighting == None or self.faceVertices == None:
+    if self.lighting == None:
       return
     self.adjust_SH_coeffs()
 
@@ -249,21 +251,16 @@ class Face:
     Mblue = self.compute_M_matrix(self.lighting["blue"])
 
     # Convert to n by 4 array.
-    normals = self.normals.copy()
-    normals = np.append(normals, np.ones((normals.shape[0], 1)), 1)
-    Ered = (normals @ Mred @ np.transpose(normals)).diagonal()
-    Egreen = (normals @ Mgreen @ np.transpose(normals)).diagonal()
-    Eblue = (normals @ Mblue @ np.transpose(normals)).diagonal()
-    E = np.column_stack((Ered, Egreen, Eblue))
+    normals = np.append(self.allVertNorms, np.ones((self.allVertNorms.shape[0], 1)), 1)
+    E = np.zeros((normals.shape[0], 3))
+    mred = normals @ Mred
+    mblue = normals @ Mblue
+    mgreen = normals @ Mgreen
 
-    # Calculate centroid vertices of each triangle in the mesh.
-    faceVertices = np.array(self.faceVertices)
-    tIndices = self.triangleIndices
-    tVertices = []
-    for i in range(0, len(tIndices), 3):
-      t1, t2 , t3 = tIndices[i], tIndices[i+1], tIndices[i+2]
-      tVertices.append([(faceVertices[t1, 0]+faceVertices[t2, 0]+faceVertices[t3, 0])/3.0, (faceVertices[t1,1]+ faceVertices[t2, 1]+faceVertices[t3, 1])/3.0])
-    tVertices = np.array(tVertices).astype(int)
+    for i in range(normals.shape[0]):
+      E[i, :] = [np.dot(mred[i], normals[i]), np.dot(mblue[i], normals[i]), np.dot(mgreen[i], normals[i])]
+
+    tVertices = self.allVerts.astype(int)
 
     # Show irrandiance mask.
     clone = self.image.copy()
@@ -271,12 +268,12 @@ class Face:
     clone[tVertices[:, 0], tVertices[:, 1]] = np.uint8(np.clip(E*100, None, 255))
     self.show(clone)
 
-    # Calculate intensity at each centroid vertex and show.
+    # Calculate intensity at each vertex point and show.
     clone = self.image.copy()
     intensity = ImageUtils.add_gamma_correction_matrix(ImageUtils.remove_gamma_correction_matrix(clone[tVertices[:, 0], tVertices[:, 1]].astype(np.float))/E)
     clone[:, :] = [255, 255, 255]
     for i in range(intensity.shape[0]):
-      cv2.circle(clone, (tVertices[i, 1], tVertices[i, 0]), 1, [int(intensity[i][0]), int(intensity[i][1]), int(intensity[i][2])], 20)
+      cv2.circle(clone, (tVertices[i, 1], tVertices[i, 0]), 1, [int(intensity[i][0]), int(intensity[i][1]), int(intensity[i][2])], 1)
 
     self.show(clone)
 
@@ -331,6 +328,53 @@ class Face:
       [c[0]*L[8], c[0]*L[4], c[0]*L[7], c[1]*L[3]], [c[0]*L[4], -c[0]*L[8], c[0]*L[5], c[1]*L[1]],
       [c[0]*L[7], c[0]*L[5], c[2]*L[6], c[1]*L[2]], [c[1]*L[3], c[1]*L[1], c[1]*L[2], c[3]*L[0]-c[4]*L[6]],
     ])
+
+  def compute_vertex_normals(self):
+    faceVertices = self.faceVertices
+    triangleIndices = np.reshape(self.triangleIndices, (-1, 3))
+    triangle2DArr = faceVertices[triangleIndices]
+    vertexNormals = self.vertexNormals[triangleIndices]
+    allAreas = self.compute_areas(triangle2DArr)
+
+    minxarr = np.min(triangle2DArr[:, :, 0], axis=1)
+    maxxarr = np.max(triangle2DArr[:, :, 0], axis=1)
+    minyarr = np.min(triangle2DArr[:, :, 1], axis=1)
+    maxyarr = np.max(triangle2DArr[:, :, 1], axis=1)
+
+    self.allVerts = np.zeros((0,2))
+    self.allVertNorms = np.zeros((0,3))
+    for i in range(triangle2DArr.shape[0]):
+      bbox = np.mgrid[minxarr[i]:maxxarr[i], minyarr[i]:maxyarr[i]].reshape(2, -1).T
+      v0, v1, v2 = triangle2DArr[i][0], triangle2DArr[i][1], triangle2DArr[i][2]
+
+      bLen = bbox.shape[0]
+      areas0 = self.compute_areas(np.stack((np.repeat(v1[np.newaxis, :], bLen, axis=0), np.repeat(v2[np.newaxis, :], bLen, axis=0), bbox), axis=1))
+      areas1 = self.compute_areas(np.stack((np.repeat(v2[np.newaxis, :], bLen, axis=0), np.repeat(v0[np.newaxis, :], bLen, axis=0), bbox), axis=1))
+      areas2 = self.compute_areas(np.stack((np.repeat(v0[np.newaxis, :], bLen, axis=0), np.repeat(v1[np.newaxis, :], bLen, axis=0), bbox), axis=1))
+
+      areas = np.stack((areas0, areas1, areas2), axis=1)
+      masks = np.stack((areas0 >= 0.1, areas1 >= 0.1, areas2 >= 0.1), axis=1)
+
+      idxArr = np.where(masks.all(axis=1))[0]
+      w = areas[idxArr]/allAreas[i]
+
+      # n by 3 where n is len(idxArr)
+      vNorms = w @ vertexNormals[i]
+      verts = bbox[idxArr]
+      if verts.shape[0] == 0:
+        continue
+
+      self.allVerts = np.concatenate((self.allVerts, verts), axis=0)
+      self.allVertNorms = np.concatenate((self.allVertNorms, vNorms), axis=0)
+
+  """
+  compute_areas will compute deteminants of given array of triangle(each triangle is represented by 3 vertices).
+  The input shape of triangles is (n, 3, 2) and the points are in counter clockwise order.
+  The out is an array of areas of dimension (n, 1).
+  """
+  def compute_areas(self, a):
+    # Get vector array from triangle vertex array.
+    return np.linalg.det(np.stack((a[:, 1] - a[:, 0], a[:, 2] - a[:, 0]), axis=1))
 
   """
   get_face_mask returns face mask numpy array from stored dictionary of face predictions.
@@ -524,5 +568,6 @@ class Face:
 
 if __name__ == "__main__":
   f = Face(args.image)
+  f.compute_vertex_normals()
   f.compute_diffuse()
   #f.show_mask(f.remove_specular_highlights_modified())
