@@ -32,6 +32,13 @@
                                     <action selector="onClick:" destination="BV1-FR-VrT" eventType="touchUpInside" id="Jkz-fU-gbU"/>
                                 </connections>
                             </button>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="Default" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ukg-Sf-RH7">
+                                <rect key="frame" x="156" y="626" width="102" height="80"/>
+                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="27"/>
+                                <color key="textColor" systemColor="systemOrangeColor" red="1" green="0.58431372550000005" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <color key="backgroundColor" systemColor="systemBackgroundColor" cocoaTouchSystemColor="whiteColor"/>
                         <constraints>
@@ -44,13 +51,14 @@
                     </view>
                     <connections>
                         <outlet property="captureButton" destination="iBh-nj-OEq" id="fag-Qe-IKY"/>
+                        <outlet property="lightIntensity" destination="ukg-Sf-RH7" id="VZA-WD-YEI"/>
                         <outlet property="sceneView" destination="BrB-h1-WRS" id="5nT-qQ-ynl"/>
                         <segue destination="sPQ-nI-AUb" kind="presentation" identifier="ShowImage" id="Kyi-50-3Qm"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="SZV-WD-TEh" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="132" y="138"/>
+            <point key="canvasLocation" x="131.8840579710145" y="137.94642857142856"/>
         </scene>
         <!--Image View Controller-->
         <scene sceneID="zgA-PQ-bkT">

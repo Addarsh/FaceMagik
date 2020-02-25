@@ -14,6 +14,7 @@ import Alamofire
 
 class ViewController: UIViewController, ARSCNViewDelegate {
     @IBOutlet weak var captureButton: UIButton!
+    @IBOutlet weak var lightIntensity: UILabel!
     
     @IBOutlet var sceneView: ARSCNView!
     
@@ -126,6 +127,13 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             self.lastCamera = self.sceneView.session.currentFrame?.camera
             self.lastCapturedImage = self.sceneView.session.currentFrame?.capturedImage
             self.lastLightEstimate = self.sceneView.session.currentFrame?.lightEstimate as? ARDirectionalLightEstimate
+            guard let lightEstimate = self.lastLightEstimate else {
+                return
+            }
+            DispatchQueue.main.async {
+                self.lightIntensity.text = String(describing: Int(lightEstimate.ambientIntensity))
+                self.lightIntensity.setNeedsDisplay()
+            }
         }
     }
     
