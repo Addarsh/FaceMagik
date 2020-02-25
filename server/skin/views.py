@@ -17,8 +17,6 @@ def index(request):
     data, files = MultiPartParser(request.META, io.BytesIO(request.body),
                         request.upload_handlers, "utf-8").parse()
 
-    with open(os.path.join(DATA_DIR, "normals.json"), "w") as f:
-      json.dump(json.loads(data["normals"]), f)
     with open(os.path.join(DATA_DIR, "face_vertices.json"), "w") as f:
       json.dump(json.loads(data["vertices"]), f)
     with open(os.path.join(DATA_DIR, "lighting.json"), "w") as f:

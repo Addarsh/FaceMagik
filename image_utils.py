@@ -553,6 +553,11 @@ class ImageUtils:
     cv2.imshow("image", img)
     cv2.waitKey(0)
 
+  """
+  CCT_to_sRGB returns sRGB value of correlated color temperature(Kelvin).
+  """
+  def CCT_to_sRGB(cct):
+    return np.clip(ImageUtils.XYZ_to_sRGB_matrix(colour.xy_to_XYZ(colour.CCT_to_xy(cct))), 0, 255)
 
   """
   sRGB_to_SD converts given sRGB numpy array
@@ -613,6 +618,14 @@ class ImageUtils:
   """
   def wavelength_arr():
     return [i for i in range(380, 731, 10)]
+
+  """
+  compute_luminance computes luminance of given sRGB color.
+  """
+  def compute_luminance(color):
+    rgb = ImageUtils.remove_gamma_correction(np.array(color).astype(np.float))
+    c =  0.2126*rgb[0] + 0.7152*rgb[1] + 0.0722*rgb[2]
+    return 1.055*math.pow(c, 1/2.4) - 0.055 if c > 0.0031308 else 12.92*c
 
   """
   remove_gamma_correction removes gamma correction from sRGB to given Linear RGB value.
@@ -873,9 +886,12 @@ class ImageUtils:
 
 if __name__ == "__main__":
   #ImageUtils.save_skin_spectra_uv()
-  ImageUtils.plot_skin_spectra()
+  #ImageUtils.plot_skin_spectra()
+  #print (ImageUtils.add_gamma_correction(np.array([0.5, 0.5, 0.5])))
+  print (ImageUtils.add_gamma_correction(ImageUtils.remove_gamma_correction(ImageUtils.CCT_to_sRGB(5677).astype(np.float))*0.5*1.038))
+  #print (ImageUtils.compute_luminance(ImageUtils.color("#BCBCBC")))
   #ImageUtils.chromatic_adaptation("test/ancha.JPG", ImageUtils.color("#caf0fc"))
-  #ImageUtils.chromatic_adaptation("test/IMG_8803.JPG", ImageUtils.color("#fecaaf"))
+  #ImageUtils.chromatic_adaptation("server/data/window 3d/face.png", ImageUtils.color("#ffcfb2"))
   #ImageUtils.chromatic_adaptation("test/IMG_8803.JPG", ImageUtils.color("#fef2d5"))
   #ImageUtils.chromatic_adaptation("test/ancha_3.JPG", ImageUtils.color("#e5e2ce"))
   #ImageUtils.chromatic_adaptation("test/IMG_5862.JPG", ImageUtils.color("#e9e4dc"))

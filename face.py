@@ -59,14 +59,13 @@ class Face:
       dirPath, _ = os.path.split(imagePath)
       with open(os.path.join(dirPath, "face_vertices.json"), "r") as f:
         self.faceVertices = np.array(json.load(f))
-      with open(os.path.join(dirPath, "normals.json"), "r") as f:
-        self.normals = np.array(json.load(f))
       with open(os.path.join(dirPath, "lighting.json"), "r") as f:
         self.lighting = json.load(f)
       with open(os.path.join(dirPath, "triangle_indices.json"), "r") as f:
         self.triangleIndices = np.array(json.load(f))
       with open(os.path.join(dirPath, "vertex_normals.json"), "r") as f:
         self.vertexNormals = np.array(json.load(f))
+        self.compute_vertex_normals()
 
       # Constants array from Ramamoorthi's paper.
       self.c = np.array([0.429043, 0.511664, 0.743125, 0.886227, 0.247708])
@@ -87,6 +86,15 @@ class Face:
   """
   def show_orig_image(self):
     return self.show(self.image)
+
+  """
+  show_irrad_mask shows given irradiance mask.
+  """
+  def show_irrad_mask(self, vertices, E):
+    clone = self.image.copy()
+    clone[:, :] = [0, 0, 0]
+    clone[vertices[:, 0], vertices[:, 1]] = np.clip(E*100, None, 255).astype(np.uint8)
+    self.show(clone)
 
   """
   show is an internal helper function to display given RGB image.
@@ -155,6 +163,11 @@ class Face:
     indices = np.transpose(np.argwhere(sizes > int(len(np.nonzero(self.faceMask)[0])/1000.0)))
 
     self.allMasks = np.repeat(label_im[:, :, np.newaxis], len(indices), axis=2) == indices
+    if self.allMasks.shape[2] == 0:
+      # No masks found.
+      print ("NO Specular Masks found")
+      return
+
     domMask = self.allMasks[:, :, np.argmax(np.sum(np.where(self.allMasks, np.repeat(self.beta[:, :, np.newaxis], len(indices), axis=2), 0), axis=(0,1))/sizes[indices])]
 
     # Find surrounding region of given dominant mask.
@@ -218,7 +231,7 @@ class Face:
   """
   remove_specular_highlights_modified is the modified version of remove specular highlights.
   This algorithm calculates the dffuse image using Shen et al but stores the specular
-  region after further processing. The stored specular region can be reused in diffuse calculations.
+  region for further processing. The stored specular region can be reused in diffuse calculations.
   """
   def remove_specular_highlights_modified(self):
     self.compute_specular_masks()
@@ -244,6 +257,8 @@ class Face:
   def compute_diffuse(self):
     if self.lighting == None:
       return
+
+    tVertices = self.allVerts.astype(int)
     self.adjust_SH_coeffs()
 
     Mred = self.compute_M_matrix(self.lighting["red"])
@@ -252,29 +267,18 @@ class Face:
 
     # Convert to n by 4 array.
     normals = np.append(self.allVertNorms, np.ones((self.allVertNorms.shape[0], 1)), 1)
-    E = np.zeros((normals.shape[0], 3))
-    mred = normals @ Mred
-    mblue = normals @ Mblue
-    mgreen = normals @ Mgreen
-
-    for i in range(normals.shape[0]):
-      E[i, :] = [np.dot(mred[i], normals[i]), np.dot(mblue[i], normals[i]), np.dot(mgreen[i], normals[i])]
-
-    tVertices = self.allVerts.astype(int)
-
-    # Show irrandiance mask.
-    clone = self.image.copy()
-    clone[:, :] = [0, 0, 0]
-    clone[tVertices[:, 0], tVertices[:, 1]] = np.uint8(np.clip(E*100, None, 255))
-    self.show(clone)
+    Ered = np.einsum('ij,ij->i', normals @ Mred, normals)
+    Egreen = np.einsum('ij,ij->i', normals @ Mgreen, normals)
+    Eblue = np.einsum('ij,ij->i', normals @ Mblue, normals)
+    E = np.column_stack((Ered, Egreen, Eblue))
+    self.show_irrad_mask(tVertices, E)
 
     # Calculate intensity at each vertex point and show.
     clone = self.image.copy()
-    intensity = ImageUtils.add_gamma_correction_matrix(ImageUtils.remove_gamma_correction_matrix(clone[tVertices[:, 0], tVertices[:, 1]].astype(np.float))/E)
+    intensity = ImageUtils.add_gamma_correction_matrix(ImageUtils.remove_gamma_correction_matrix(clone[tVertices[:, 0], tVertices[:, 1]])*((np.pi)/E))
     clone[:, :] = [255, 255, 255]
     for i in range(intensity.shape[0]):
       cv2.circle(clone, (tVertices[i, 1], tVertices[i, 0]), 1, [int(intensity[i][0]), int(intensity[i][1]), int(intensity[i][2])], 1)
-
     self.show(clone)
 
   """
@@ -282,7 +286,7 @@ class Face:
   on the sign x, y and z components of the face normals.
   """
   def adjust_SH_coeffs(self):
-    normals = self.normals
+    normals = self.allVertNorms
 
     cntNormals = normals.shape[0]
     self.cntXpos = np.count_nonzero(normals[:, 0] >= 0)
@@ -353,7 +357,8 @@ class Face:
       areas2 = self.compute_areas(np.stack((np.repeat(v0[np.newaxis, :], bLen, axis=0), np.repeat(v1[np.newaxis, :], bLen, axis=0), bbox), axis=1))
 
       areas = np.stack((areas0, areas1, areas2), axis=1)
-      masks = np.stack((areas0 >= 0.1, areas1 >= 0.1, areas2 >= 0.1), axis=1)
+      tol = 0.001
+      masks = np.stack((areas0 >= tol, areas1 >= tol, areas2 >= tol), axis=1)
 
       idxArr = np.where(masks.all(axis=1))[0]
       w = areas[idxArr]/allAreas[i]
@@ -568,6 +573,6 @@ class Face:
 
 if __name__ == "__main__":
   f = Face(args.image)
-  f.compute_vertex_normals()
   f.compute_diffuse()
   #f.show_mask(f.remove_specular_highlights_modified())
+  #f.show(f.remove_specular_highlights())

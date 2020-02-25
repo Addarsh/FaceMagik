@@ -34,8 +34,8 @@ def click_and_crop(event, x, y, flags, param):
     #mean_color = np.sqrt(np.column_stack((np.mean(a[:, :, 0]**2), np.mean(a[:, :, 1]**2), np.mean(a[:, :, 2]**2)))).astype(int)
     srgb = mean_color[0][0][::-1]
     print ("Mean color: ", srgb)
-    #plot_SD(srgb)
-    compare_skin_spectra(np.reshape(srgbArr, (-1, 3)))
+    plot_SD(srgb)
+    #compare_skin_spectra(np.reshape(srgbArr, (-1, 3)))
 
 		# draw a rectangle around the region of interest
     cv2.rectangle(image, refPts[0], refPts[1], (0, 255, 0), 2)

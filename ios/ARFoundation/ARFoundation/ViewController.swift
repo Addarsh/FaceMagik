@@ -23,7 +23,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     private var pngData: Data?
     
-    private let uploadURL = "http://[2601:647:4200:af70:e8fc:8e9b:508d:16f5]:8000/skin/"
+    private let uploadURL = "http://[2601:647:4200:af70:cc7a:4e0b:ddee:286f]:8000/skin/"
     
     private var lastFaceAnchor: ARFaceAnchor?
     
@@ -34,8 +34,6 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     private var lightDict: [String: [Float]]?
     
     private var vertices2D: [[Int]]?
-    
-    private var surfNormals: [[Float]]?
     
     private var vertexNormals: [[Float]]?
     
@@ -138,7 +136,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             }
             self.pngData =  UIImage(pixelBuffer: lastImage)?.pngData()
             self.vertices2D = projectedVertices()
-            (self.surfNormals, self.vertexNormals) = calcNormals()
+            self.vertexNormals = calcNormals()
             self.lightDict = lightEstimate()
             
         }
@@ -150,9 +148,6 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             return
         }
         guard let lightDict = self.lightDict else {
-            return
-        }
-        guard let surfNormals = self.surfNormals else {
             return
         }
         guard let vertexNormals = self.vertexNormals else {
@@ -170,9 +165,6 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             return
         }
         
-        guard let jsonSurfNormals =  try? JSONSerialization.data(withJSONObject: surfNormals) else {
-            return
-        }
         guard let jsonVertexNormals =  try? JSONSerialization.data(withJSONObject: vertexNormals) else {
             return
         }
@@ -185,7 +177,6 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             multipartFormData.append(pngData.base64EncodedData(), withName: "fileset", mimeType: "image/png")
             multipartFormData.append(jsonVertices2D, withName: "vertices")
             multipartFormData.append(jsonLight, withName: "lighting")
-            multipartFormData.append(jsonSurfNormals, withName: "normals")
             multipartFormData.append(jsonTriangleIdx, withName: "triangleIndices")
             multipartFormData.append(jsonVertexNormals, withName: "vertexNormals")
         }, to: uploadURL) { result in
@@ -211,6 +202,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         let spHarmonics = lightEstimate.sphericalHarmonicsCoefficients
         var lightDict: [String:[Float]] = [:]
         lightDict["colorTemperature"] = [Float(lightEstimate.ambientColorTemperature)]
+        lightDict["lumenIntensity"] = [Float(lightEstimate.ambientIntensity)]
         
         let floatSz = 4 // 4 bytes.
         let blockSz = 36 // 36 bytes for each channel.
@@ -271,21 +263,20 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         return simd_float3(x: world_vertex4.x, y: world_vertex4.y, z: world_vertex4.z)
     }
     
-    func calcNormals() -> ([[Float]]?, [[Float]]?) {
+    func calcNormals() -> [[Float]]? {
         guard let faceAnchor = self.lastFaceAnchor else {
-            return (nil, nil)
+            return nil
         }
         
         //let vertices = faceAnchor.geometry.vertices
         self.triangleIndices = faceAnchor.geometry.triangleIndices
         guard let triangleIndices = self.triangleIndices else {
-            return (nil, nil)
+            return nil
         }
         let triangleCount = faceAnchor.geometry.triangleCount
         let vertices3D = faceAnchor.geometry.vertices
         
         var count = 0
-        var surfNormals: [[Float]] = []
         var vertexNormals = [simd_float3](repeating: simd_float3(0.0, 0.0, 0.0), count: vertices3D.count)
         while count != triangleCount {
             let v0 = toWorldCords(vertices3D[Int(triangleIndices[count*3])], faceAnchor)
@@ -298,9 +289,6 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             vertexNormals[Int(triangleIndices[count*3 + 1])] += cp
             vertexNormals[Int(triangleIndices[count*3 + 2])] += cp
             
-            // Append new surface normal.
-            let sn = simd_normalize(cp)
-            surfNormals.append([Float(sn.x), Float(sn.y), Float(sn.z)])
             count += 1
         }
         
@@ -309,7 +297,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             return [Float(sn.x), Float(sn.y), Float(sn.z)]
         }
         
-        return (surfNormals, vNormals)
+        return vNormals
     }
     
     // bbox calcualtes bounding box of the given triangle vertices.
