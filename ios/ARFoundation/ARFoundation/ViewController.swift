@@ -24,7 +24,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     private var pngData: Data?
     
-    private let uploadURL = "http://[2601:647:4200:af70:cc7a:4e0b:ddee:286f]:8000/skin/"
+    private let uploadURL = "http://[2601:647:4200:af70:4875:1218:a60f:6c6]:8000/skin/"
     
     private var lastFaceAnchor: ARFaceAnchor?
     
@@ -39,6 +39,9 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     private var vertexNormals: [[Float]]?
     
     private var triangleIndices: [Int16]?
+    
+    private var harmonicPrint: [Float] = [0, 0, 0]
+    private var harmonicPrintCount: Int = 0
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -130,6 +133,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             guard let lightEstimate = self.lastLightEstimate else {
                 return
             }
+            //self.printHarmonics(lightEstimate: lightEstimate)
             DispatchQueue.main.async {
                 self.lightIntensity.text = String(describing: Int(lightEstimate.ambientIntensity))
                 self.lightIntensity.setNeedsDisplay()
@@ -137,6 +141,28 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         }
     }
     
+    func printHarmonics(lightEstimate: ARDirectionalLightEstimate) {
+        let spHarmonics = lightEstimate.sphericalHarmonicsCoefficients
+        let floatSz = 4 // 4 bytes.
+        let blockSz = 36 // 36 bytes for each channel.
+
+        var redArr: [Float] = []
+        for offset in stride(from: 0, to: blockSz, by: floatSz) {
+            redArr.append(spHarmonics.withUnsafeBytes{ $0.load(fromByteOffset: offset, as: Float.self)})
+        }
+
+        self.harmonicPrint[0] += redArr[1]
+        self.harmonicPrint[1] += redArr[2]
+        self.harmonicPrint[2] += redArr[3]
+        self.harmonicPrintCount += 1
+        let COUNT_MAX = 20
+        if self.harmonicPrintCount == COUNT_MAX {
+            print ("Red coeffs: \(self.harmonicPrint[0]/Float(COUNT_MAX)), \(self.harmonicPrint[1]/Float(COUNT_MAX)), \(self.harmonicPrint[2]/Float(COUNT_MAX))")
+            self.harmonicPrintCount = 0
+            self.harmonicPrint = [0, 0, 0]
+        }
+    }
+
     @IBAction func onClick(_ sender: Any) {
         concurrentPhotoQueue.sync {
             guard let lastImage = self.lastCapturedImage else {
@@ -287,9 +313,9 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         var count = 0
         var vertexNormals = [simd_float3](repeating: simd_float3(0.0, 0.0, 0.0), count: vertices3D.count)
         while count != triangleCount {
-            let v0 = toWorldCords(vertices3D[Int(triangleIndices[count*3])], faceAnchor)
-            let v1 = toWorldCords(vertices3D[Int(triangleIndices[count*3 + 1])], faceAnchor)
-            let v2 = toWorldCords(vertices3D[Int(triangleIndices[count*3 + 2])], faceAnchor)
+            let v0 = vertices3D[Int(triangleIndices[count*3])]
+            let v1 = vertices3D[Int(triangleIndices[count*3 + 1])]
+            let v2 = vertices3D[Int(triangleIndices[count*3 + 2])]
             let cp = simd_cross(v1 - v2, v1 - v0)
             
             // Sum vertex normals with cross product.
@@ -306,20 +332,6 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         }
         
         return vNormals
-    }
-    
-    // bbox calcualtes bounding box of the given triangle vertices.
-    func bbox(_ v0: [Int],_ v1: [Int],_ v2: [Int]) -> (Int, Int, Int, Int) {
-        let xmin = [v0[1], v1[1], v1[1]].min()!
-        let ymin = [v0[0], v1[0], v1[0]].min()!
-        let xmax = [v0[1], v1[1], v1[1]].max()!
-        let ymax = [v0[0], v1[0], v1[0]].max()!
-        return (xmin, ymin, xmax, ymax)
-    }
-    
-    // edgeFunc returns the cross product of 3 vertices(arranged clockwise).
-    func edgeFunc(_ v0: [Int], _ v1: [Int], _ v2: [Int]) -> Float {
-        return Float((v2[1] - v0[1]) * (v1[1] - v0[1]) - (v2[1] - v0[1]) * (v1[0] - v0[0]))
     }
 
     // prepare is run just before segue. It captures last stored image
