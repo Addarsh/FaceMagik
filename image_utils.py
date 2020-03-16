@@ -560,6 +560,25 @@ class ImageUtils:
     return np.clip(ImageUtils.XYZ_to_sRGB_matrix(colour.xy_to_XYZ(colour.CCT_to_xy(cct))), 0, 255)
 
   """
+  Temp_to_sRGB returns sRGB value of correlated color temperature(K)
+  using Tanner Hallend's algorithm(https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html)
+  Algorithm works for temperatures between 100K and 40000K.
+  """
+  def Temp_to_sRGB(cct):
+    cct = float(cct)/100
+    red, green, blue = 0.0, 0.0, 0.0
+    if cct <= 66:
+      red = 255
+      green = 99.4708025861 * math.log(cct) - 161.1195681661
+      blue = 0 if cct <= 19 else 138.5177312231 * math.log(cct - 10) - 305.0447927307
+    else:
+      red = 329.698727446 * math.pow(cct - 60, -0.1332047592)
+      green = 288.1221695283 * (math.pow(cct - 60, -0.0755148492))
+      blue = 255
+
+    return np.clip([red, green, blue], 0, 255).astype(np.uint8)
+
+  """
   sRGB_to_SD converts given sRGB numpy array
   to a spectral distribution using color science library.
   """
@@ -888,11 +907,14 @@ if __name__ == "__main__":
   #ImageUtils.save_skin_spectra_uv()
   #ImageUtils.plot_skin_spectra()
   #print (ImageUtils.add_gamma_correction(np.array([0.5, 0.5, 0.5])))
-  print (ImageUtils.add_gamma_correction(ImageUtils.remove_gamma_correction(ImageUtils.CCT_to_sRGB(5677).astype(np.float))*0.5*1.038))
+  #print (ImageUtils.add_gamma_correction(ImageUtils.remove_gamma_correction(ImageUtils.CCT_to_sRGB(5837).astype(np.float))*0.5*1.029))
+  #print ("CCT_to_sRGB: ", ImageUtils.CCT_to_sRGB(5752))
+  #print ("Temp_to_sRGB: ", ImageUtils.Temp_to_sRGB(5366.38))
+  #print (ImageUtils.CCT_to_sRGB(5366))
   #print (ImageUtils.compute_luminance(ImageUtils.color("#BCBCBC")))
   #ImageUtils.chromatic_adaptation("test/ancha.JPG", ImageUtils.color("#caf0fc"))
-  #ImageUtils.chromatic_adaptation("server/data/window 3d/face.png", ImageUtils.color("#ffcfb2"))
-  #ImageUtils.chromatic_adaptation("test/IMG_8803.JPG", ImageUtils.color("#fef2d5"))
+  #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
+  ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
   #ImageUtils.chromatic_adaptation("test/ancha_3.JPG", ImageUtils.color("#e5e2ce"))
   #ImageUtils.chromatic_adaptation("test/IMG_5862.JPG", ImageUtils.color("#e9e4dc"))
   #ImageUtils.show_gray("/Users/addarsh/Desktop/ancha.png")
