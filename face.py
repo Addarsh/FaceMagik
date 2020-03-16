@@ -34,11 +34,6 @@ from train import (
   EAR,
 )
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description='Image path')
-parser.add_argument('--image', required=False,metavar="path or URL to image")
-args = parser.parse_args()
-
 class Face:
   def __init__(self, imagePath):
     self.outputDir = "output"
@@ -143,7 +138,7 @@ class Face:
     Vmin = np.amin(self.image, axis=-1)
     mu = np.mean(Vmin)
     sigma = np.std(Vmin)
-    eta = 0.5
+    eta = 0.1
     Tv = mu + eta*sigma
     tau = Vmin.copy()
     tau = np.where(tau > Tv, Tv, tau)
@@ -244,8 +239,8 @@ class Face:
 
     specularMask = np.zeros(self.image.shape[:2], dtype=bool)
     for i in range(self.allMasks.shape[2]):
-      domdomMask, _ = self.biclustering_Kmeans(self.allMasks[:, :, i])
-      specularMask = np.bitwise_or(specularMask, domdomMask)
+      #domdomMask, _ = self.biclustering_Kmeans(self.allMasks[:, :, i])
+      specularMask = np.bitwise_or(specularMask, self.allMasks[:, :, i])
 
     self.specularMask = specularMask
     return specularMask
@@ -275,11 +270,43 @@ class Face:
 
     # Calculate intensity at each vertex point and show.
     clone = self.image.copy()
-    intensity = ImageUtils.add_gamma_correction_matrix(ImageUtils.remove_gamma_correction_matrix(clone[tVertices[:, 0], tVertices[:, 1]])*((np.pi)/E))
+    intensity = ImageUtils.add_gamma_correction_matrix(ImageUtils.remove_gamma_correction_matrix(clone[tVertices[:, 0], tVertices[:, 1]])*((1.0)/E))
     clone[:, :] = [255, 255, 255]
     for i in range(intensity.shape[0]):
       cv2.circle(clone, (tVertices[i, 1], tVertices[i, 0]), 1, [int(intensity[i][0]), int(intensity[i][1]), int(intensity[i][2])], 1)
     self.show(clone)
+
+  """
+  compute_diffuse_new will compute the irradiance(E) and diffuse color using the
+  normals of the face and spherical harmonic coefficients using an alternate
+  formula to calculate the irradiance.
+  """
+  def compute_diffuse_new(self):
+    if self.lighting == None:
+      return
+
+    tVertices = self.allVerts.astype(int)
+    self.adjust_SH_coeffs()
+
+    # Compute harmonic functions.
+    normals = self.allVertNorms
+    normMatrix = np.column_stack((np.ones((normals.shape[0],1)), normals[:, 1], normals[:, 2], normals[:, 0], normals[:, 1]*normals[:, 0], normals[:, 1]*normals[:, 2], (3*normals[:, 2]*normals[:, 2])-1, normals[:, 2]*normals[:, 0], (normals[:, 0]*normals[:, 0]) - (normals[:, 1]*normals[:, 1])))
+
+    Ered = normMatrix @ self.lighting["red"]
+    Egreen = normMatrix @ self.lighting["green"]
+    Eblue = normMatrix @ self.lighting["blue"]
+    E = np.column_stack((Ered, Egreen, Eblue))
+    self.show_irrad_mask(tVertices, E)
+
+    # Calculate intensity at each vertex point and show.
+    print ("E, verts: ", E.shape[0], tVertices.shape[0])
+    clone = self.image.copy()
+    intensity = ImageUtils.add_gamma_correction_matrix(ImageUtils.remove_gamma_correction_matrix(clone[tVertices[:, 0], tVertices[:, 1]])*((1.0)/E))
+    clone[:, :] = [255, 255, 255]
+    for i in range(intensity.shape[0]):
+      cv2.circle(clone, (tVertices[i, 1], tVertices[i, 0]), 1, [int(intensity[i][0]), int(intensity[i][1]), int(intensity[i][2])], 1)
+    self.show(clone)
+
 
   """
   adjust_SH_coeffs adjusts the signs of SH coefficients provided by ARKit depending
@@ -299,26 +326,65 @@ class Face:
     print ("Y pos cnt: ", self.cntYpos, " Y neg cnt: ", self.cntYneg)
     print ("Z pos cnt: ", self.cntZpos, " Z neg cnt: ", self.cntZneg)
 
+    self.reverseXZ = False
+    if abs(self.cntYpos - self.cntYneg) > abs(self.cntZpos - self.cntZneg):
+      self.reverseXZ = True
+      print ("reversed X and Z")
+
+    self.show_positive_normals()
+
     self.adjust_SH_coeffs_helper(self.lighting["red"])
     self.adjust_SH_coeffs_helper(self.lighting["green"])
     self.adjust_SH_coeffs_helper(self.lighting["blue"])
 
   """
+  show_positive_normals displays positive normals mask in X, Y and Z directions.
+  """
+  def show_positive_normals(self):
+    normals = self.allVertNorms
+    verts = self.allVerts.astype(int)
+
+    # X direction.
+    clone = self.image.copy()
+    vmask = verts[normals[:, 0] >= 0]
+    clone[vmask[:, 0], vmask[:, 1]] = [255, 0, 0]
+    self.show(clone)
+
+    # Y direction.
+    clone = self.image.copy()
+    vmask = verts[normals[:, 1] >= 0]
+    clone[vmask[:, 0], vmask[:, 1]] = [0, 255, 0]
+    self.show(clone)
+
+    # Z direction.
+    clone = self.image.copy()
+    vmask = verts[normals[:, 2] >= 0]
+    clone[vmask[:, 0], vmask[:, 1]] = [0, 0, 255]
+    self.show(clone)
+
+  """
   adjust_SH_coeffs helper will adjust coefficients
-  for given channel (red, blue or green).
+  for given channel (red, blue or green) based on whether
+  X,Y and Z are flipped or not.
   """
   def adjust_SH_coeffs_helper(self, L):
-    # Always flip X (based on observation).
-    # Check flip conditions for y and z directions.
-    flipY = True if ((self.cntYpos >= self.cntYneg and L[1] < 0) or (self.cntYpos < self.cntYneg and L[1] >= 0)) else False
-    flipZ = True if ((self.cntZpos >= self.cntZneg and L[2] < 0) or (self.cntZpos < self.cntZneg and L[2] >= 0)) else False
+    if self.reverseXZ:
+      flipZ = True
+      flipY = True
+      flipX = True if ((self.cntXpos >= self.cntXneg and L[3] < 0) or (self.cntXpos < self.cntXneg and L[3] >= 0)) else False
+    else:
+      flipZ = True if ((self.cntZpos >= self.cntZneg and L[2] < 0) or (self.cntZpos < self.cntZneg and L[2] >= 0)) else False
+      flipZ = True
+      flipY = True
+      flipX = True
 
+    print ("flipX: ", flipX, " flipY: ", flipY, " flipZ: ", flipZ)
     L[1] = -L[1] if flipY else L[1]
     L[2] = -L[2] if flipZ else L[2]
-    L[3] = -L[3]
-    L[4] = L[4] if flipY else -L[4]
+    L[3] = -L[3] if flipX else L[3]
+    L[4] = L[4] if flipY == flipX else -L[4]
     L[5] = L[5] if flipY == flipZ else -L[5]
-    L[7] = L[7] if flipZ else -L[7]
+    L[7] = L[7] if flipX == flipZ else -L[7]
 
   """
   compute_M_matrix computes the M matrix specified in Ramamoorthi's paper.
@@ -572,7 +638,17 @@ class Face:
     return model
 
 if __name__ == "__main__":
+  # Parse command line arguments
+  parser = argparse.ArgumentParser(description='Image path')
+  parser.add_argument('--image', required=False,metavar="path or URL to image")
+  args = parser.parse_args()
+
   f = Face(args.image)
-  f.compute_diffuse()
-  #f.show_mask(f.remove_specular_highlights_modified())
+  try:
+    mask = f.remove_specular_highlights_modified()
+    f.show_mask(mask)
+  except Exception as e:
+    print ("No specular mask found")
+  #f.compute_diffuse()
+  f.compute_diffuse_new()
   #f.show(f.remove_specular_highlights())
