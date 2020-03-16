@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from image_utils import ImageUtils
 from colour.plotting import *
+from face import Face
 
 windowName = "image"
 cv2.namedWindow(windowName,cv2.WINDOW_NORMAL)
@@ -13,6 +14,8 @@ cv2.resizeWindow(windowName, 600,600)
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Color check.')
 parser.add_argument('--image', required=False,metavar="path or URL to image")
+parser.add_argument('--k', required=False,metavar="channel to show")
+parser.add_argument('--color', required=False,metavar="channel to show")
 args = parser.parse_args()
 
 line1 = None
@@ -39,11 +42,18 @@ def click_and_crop(event, x, y, flags, param):
 
 		# draw a rectangle around the region of interest
     cv2.rectangle(image, refPts[0], refPts[1], (0, 255, 0), 2)
-image = cv2.imread(args.image)
-clone = image.copy()
 
-cv2.imshow(windowName, image)
-cv2.setMouseCallback(windowName, click_and_crop)
+def show_channel(image, k=-1):
+  if k == 0:
+    image[:, :, 1] = 0
+    image[:, :, 2] = 0
+  elif k == 1:
+    image[:, :, 0] = 0
+    image[:, :, 2] = 0
+  elif k == 2:
+    image[:, :, 0] = 0
+    image[:, :, 1] = 0
+  return image
 
 """
 plot_SD plots spectral distribution of given srgb color.
@@ -77,11 +87,43 @@ def compare_skin_spectra(srgbList):
   plt.draw()
   plt.show(block=False)
 
+def plot_histogram(img, mask):
+  median = np.median(img[mask])
+  print ("Mean: ", np.mean(img[mask]), " median: ", median," Std: ", np.std(img[mask]))
+  hist = cv2.calcHist([img],[0], mask.astype(np.uint8)*255,[256],[0,256])
+  plt.plot(hist)
+  plt.xlim([0,256])
+  #plt.ylim([0, 10000])
+  plt.show(block=False)
+  return median
 
+image = cv2.imread(args.image)
+f = Face(args.image)
+
+clone = image.copy()
+image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+if args.k != None:
+  k = int(args.k)
+  image = show_channel(image, k)
+  median = plot_histogram(image[:, :, k], f.faceMask)
+if args.color == "True":
+  image = clone
+  image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+  if median != None:
+    fmask = image[f.faceMask]
+    fmask[:, k] = np.uint8(median)
+    image[f.faceMask] = fmask
+    image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
+    clone = image
+elif args.color == "False":
+  image = cv2.cvtColor(clone, cv2.COLOR_BGR2GRAY)
+
+cv2.setMouseCallback(windowName, click_and_crop)
 
 while True:
 	# display the image and wait for a keypress
-  cv2.imshow("image", image)
+  cv2.imshow(windowName, image)
   key = cv2.waitKey(1) & 0xFF
 
 	# if the 'r' key is pressed, reset the cropping region
