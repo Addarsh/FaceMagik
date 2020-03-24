@@ -1,5 +1,6 @@
 import argparse
 import cv2
+import time
 import json
 import numpy as np
 import matplotlib.pyplot as plt
@@ -97,18 +98,26 @@ def plot_histogram(img, mask):
   plt.show(block=False)
   return median
 
+# set_brightness will set brightness
+# value to b for every facemask, pixel in the given image.
+def set_brightness(img, mask, b, k):
+  img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+  fmask = img[mask]
+  fmask[:, k] = np.uint8(b)
+  img[mask] = fmask
+  return cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+
 image = cv2.imread(args.image)
 f = Face(args.image)
 
 clone = image.copy()
-image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
 if args.k != None:
   k = int(args.k)
+  image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
   image = show_channel(image, k)
   median = plot_histogram(image[:, :, k], f.faceMask)
 if args.color == "True":
-  image = clone
   image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
   if median != None:
     fmask = image[f.faceMask]
