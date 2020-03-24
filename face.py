@@ -69,11 +69,21 @@ class Face:
     self.windowSize = 900
 
   """
+  show_masks will display multiple masks in the image.
+  """
+  def show_masks(self, masks, colorList):
+    assert len(masks) == len(colorList), "Num masks != num colors"
+    clone = self.image.copy()
+    for i, mask in enumerate(masks):
+      clone[mask] = np.array(colorList[i])
+    self.show(clone)
+
+  """
   show_mask will display given mask.
   """
-  def show_mask(self, mask):
+  def show_mask(self, mask, color=[0, 255, 0]):
     clone = self.image.copy()
-    clone[mask] = np.array([0, 255, 0])
+    clone[mask] = np.array(color)
     self.show(clone)
 
   """
@@ -217,8 +227,31 @@ class Face:
     aMask = np.reshape(aMask, mask.shape)
     bMask = np.reshape(bMask, mask.shape)
 
-    domdomMask, domSurrMask = None, None
     if np.sum(self.beta[aMask])/np.count_nonzero(aMask) >= np.sum(self.beta[bMask])/np.count_nonzero(bMask):
+      return aMask, bMask
+
+    return bMask, aMask
+
+  """
+  biclustering_Kmeans returns the dominant and surrounding masks (in that order) of given mask.
+  It differs from original implementation in that it calculates dominant based on greater average
+  brightness of pixels.
+  """
+  def biclustering_Kmeans_mod(self, image, mask):
+    labels = self.clf.fit_predict(image[mask])
+
+    flatMask = np.ndarray.flatten(mask)
+    indices = np.argwhere(flatMask)
+
+    # Compute masks of both clusters.
+    aMask, bMask = flatMask.copy(), flatMask.copy()
+    aMask[indices] = np.reshape(labels == 0, (len(labels == 0), 1))
+    bMask[indices] = np.reshape(labels == 1,  (len(labels == 1), 1))
+    aMask = np.reshape(aMask, mask.shape)
+    bMask = np.reshape(bMask, mask.shape)
+
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    if np.sum(hsv[aMask][:, 2])/np.count_nonzero(aMask) >= np.sum(hsv[bMask][:, 2])/np.count_nonzero(bMask):
       return aMask, bMask
 
     return bMask, aMask
@@ -466,6 +499,12 @@ class Face:
           faceFound = True
     if not faceFound:
       raise Exception("Face not found in image")
+
+    # Reduce facemask to remove beard.
+    nosemask = self.get_attr_masks(NOSE)[0]
+    row, _, _, h = self.bbox(nosemask)
+    faceMask[(row+h):, :] = False
+
     return faceMask
 
   """
@@ -575,6 +614,85 @@ class Face:
     return nose_mask
 
   """
+  get_chakra_keypoints returns keypoints between
+  the two eyebrows.
+  """
+  def get_chakra_keypoints(self):
+    eyebrow_masks = self.get_attr_masks(EYEBROW)
+    eye_masks = self.get_attr_masks(EYE_OPEN)
+    assert len(eyebrow_masks) == 2, "Want 2 masks for eyebrows!"
+    assert len(eye_masks) == 2, "Want 2 masks for eyes!"
+
+    left_eyebrow_mask = eyebrow_masks[0] if self.bbox(eyebrow_masks[0])[1] < self.bbox(eyebrow_masks[1])[1] else eyebrow_masks[1]
+    right_eyebrow_mask = eyebrow_masks[1] if self.bbox(eyebrow_masks[0])[1] < self.bbox(eyebrow_masks[1])[1] else eyebrow_masks[0]
+
+    left_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] < self.bbox(eye_masks[1])[1] else eye_masks[1]
+    right_eye_mask = eye_masks[1] if self.bbox(eye_masks[0])[1] < self.bbox(eye_masks[1])[1] else eye_masks[0]
+
+    lebrmin,lebcmin, lebw, _ = self.bbox(left_eyebrow_mask)
+    rebrmin, rebcmin, rebw, _ = self.bbox(right_eyebrow_mask)
+
+    lermin, _, _, leh = self.bbox(left_eye_mask)
+    rermin, _, _, reh = self.bbox(right_eye_mask)
+
+    rmin = int(max(lebrmin, rebrmin))
+    rmax = int(min(lermin + leh, rermin + reh))
+    ebWidth = rebcmin - lebcmin - lebw
+    cmin = int(lebcmin + lebw + ebWidth/4)
+    cmax = int(rebcmin - ebWidth/4)
+
+    mask = np.zeros(left_eye_mask.shape, dtype=bool)
+    mask[rmin:rmax+1, cmin:cmax+1] = True
+    return mask
+
+  """
+  chakra_median_brightness sets median of the face using
+  the chakra color median brightness.
+  """
+  def chakra_median_brightness(self):
+    ckMask = f.get_chakra_keypoints()
+    domMask, surrMask = f.biclustering_Kmeans_mod(self.image, ckMask)
+
+    print ("Chakra median: ", ImageUtils.RGB2HEX(np.median(f.image[surrMask],axis=0).astype(np.uint8)))
+    print ("highlight median: ", ImageUtils.RGB2HEX(np.median(f.image[domMask],axis=0).astype(np.uint8)))
+    self.show_masks([domMask, surrMask], [[0, 255, 0], [255, 0, 0]])
+
+    domfaceMask, surrfaceMask, clone = self.chakra_median_brightness_helper(np.median(self.image[surrMask], axis=0))
+    domdomMask, _ = f.biclustering_Kmeans_mod(self.image, domfaceMask)
+    f.show_mask(domdomMask)
+
+    # Find Delta CIE2000 diff of the means.
+    d1 = np.mean(ImageUtils.sRGBtoHSV(self.image[domdomMask])[:, 2]).astype(np.float)
+    d2 = np.mean(ImageUtils.sRGBtoHSV(self.image[surrMask])[:, 2]).astype(np.float)
+    d3 = np.mean(ImageUtils.sRGBtoHSV(self.image[surrfaceMask])[:, 2]).astype(np.float)
+    print ("delta: ", d1, d2, d3, 0 if d1 <= d2 else d1-d2, d1-d3)
+
+  def chakra_median_brightness_helper(self, sRGBcolor):
+    # Modify image brightness to brightness of given color.
+    clone = self.image.copy()
+    clone = cv2.cvtColor(clone, cv2.COLOR_RGB2HSV)
+    fmask = clone[f.faceMask]
+    fmask[:, 2] = ImageUtils.sRGBtoHSV(sRGBcolor)[0, 2]
+    clone[f.faceMask] = fmask
+    clone = cv2.cvtColor(clone, cv2.COLOR_HSV2RGB)
+    self.show(clone)
+
+    # Separate desirable and undesirable points from uniform brightness image.
+    domfaceMask, surrfaceMask = f.biclustering_Kmeans_mod(clone, f.faceMask)
+    domMeanArr  = np.median(clone[domfaceMask], axis=0)
+    surrMeanArr = np.median(clone[surrfaceMask], axis=0)
+
+    # Find out highlights and desirable points.
+    if np.linalg.norm(domMeanArr-sRGBcolor) <= np.linalg.norm(surrMeanArr-sRGBcolor):
+      tempMask = surrfaceMask
+      surrfaceMask = domfaceMask
+      domfaceMask = tempMask
+
+    self.show_mask(domfaceMask)
+
+    return domfaceMask, surrfaceMask, clone
+
+  """
   bbox returns bounding box (x1, y1, w, h) (top left point, width and height) of given mask.
   """
   def bbox(self, mask):
@@ -644,11 +762,7 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   f = Face(args.image)
-  try:
-    mask = f.remove_specular_highlights_modified()
-    f.show_mask(mask)
-  except Exception as e:
-    print ("No specular mask found")
+  f.chakra_median_brightness()
   #f.compute_diffuse()
-  f.compute_diffuse_new()
+  #f.compute_diffuse_new()
   #f.show(f.remove_specular_highlights())

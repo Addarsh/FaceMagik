@@ -12,10 +12,13 @@ import random
 import time
 import bisect
 import colour
+import colormath
 import matplotlib.pyplot as plt
 
 from scipy.sparse import diags
 from scipy.optimize import minimize
+from colormath.color_conversions import convert_color
+from colormath.color_diff import delta_e_cie2000
 
 class ImageUtils:
   windowName = ""
@@ -863,11 +866,97 @@ class ImageUtils:
     return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
 
   """
+  sRGBtoHSV converts given sRGB array (n by 3) into (n, 3) HSV array.
+  """
+  def sRGBtoHSV(colorArr):
+    return np.reshape(cv2.cvtColor(np.reshape(colorArr,
+      (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_RGB2HSV), (-1, 3))
+
+  """
   flatten_rgb flattens the given RGB tuple into its corresponding index number
   from 1 to 256*256*256.
   """
   def flatten_rgb(rgb):
     return rgb[0]*256*256 + rgb[1]*256 + rgb[2] + 1
+
+  """
+  Calculates the Delta E (CIE2000) of two sRGB colors (range 0-255).
+  """
+  def delta_cie2000(srgb_a, srgb_b):
+    lab_a = convert_color(
+      colormath.color_objects.sRGBColor(srgb_a[0], srgb_a[1], srgb_a[2], True),
+      colormath.color_objects.LabColor)
+    lab_b = convert_color(
+      colormath.color_objects.sRGBColor(srgb_b[0], srgb_b[1], srgb_b[2], True),
+      colormath.color_objects.LabColor)
+    return delta_e_cie2000(lab_a, lab_b)
+
+  """
+  Calculates the Delta E (CIE2000) distance matrix for given matrix of colors.
+  The matrix is shape (n, 3) where n is the number of colors and type np.float.
+  """
+  def delta_e_cie2000_matrix(X, Kl=1, Kc=1, Kh=1):
+    nSamples = X.shape[0]
+    L1mat = np.repeat(np.reshape(X[:, 0], (1, nSamples)), nSamples, axis=0)
+    L2mat = np.repeat(np.reshape(X[:, 0], (nSamples, 1)), nSamples, axis=1)
+    avg_Lp = (L1mat + L2mat)/2.0
+
+    C1mat = np.repeat(np.reshape(np.sqrt(np.sum(X[:, 1:]**2, axis=1)), (1, nSamples)), nSamples, axis=0)
+    C2mat = np.repeat(np.reshape(np.sqrt(np.sum(X[:, 1:]**2, axis=1)), (nSamples, 1)), nSamples, axis=1)
+
+    avg_C1_C2 = (C1mat + C2mat)/2.0
+
+    G = 0.5 *(1- np.sqrt(avg_C1_C2**7.0/ ((avg_C1_C2**7.0) + 25.0**7.0)))
+
+    a1p = (1.0 + G) * np.repeat(np.reshape(X[:, 1], (1, nSamples)), nSamples, axis=0)
+    a2p = (1.0 + G) * np.repeat(np.reshape(X[:, 1], (nSamples, 1)), nSamples, axis=1)
+
+    C1p = np.sqrt(a1p**2 + np.repeat(np.reshape(X[:, 2]**2, (1, nSamples)), nSamples, axis=0))
+    C2p = np.sqrt(a2p**2 + np.repeat(np.reshape(X[:, 2]**2, (nSamples, 1)), nSamples, axis=1))
+
+    avg_C1p_C2p = (C1p + C2p) / 2.0
+
+    h1p = np.degrees(np.arctan2(np.repeat(np.reshape(X[:, 2], (1, nSamples)), nSamples, axis=0), a1p))
+    h1p += (h1p < 0) * 360
+    h2p = np.degrees(np.arctan2(np.repeat(np.reshape(X[:, 2], (nSamples, 1)), nSamples, axis=1), a2p))
+    h2p += (h2p < 0) * 360
+    avg_Hp = (((np.fabs(h1p - h2p) > 180) * 360) + h1p + h2p) / 2.0
+
+    T = (
+        1
+        - 0.17 * np.cos(np.radians(avg_Hp - 30))
+        + 0.24 * np.cos(np.radians(2 * avg_Hp))
+        + 0.32 * np.cos(np.radians(3 * avg_Hp + 6))
+        - 0.2 * np.cos(np.radians(4 * avg_Hp - 63))
+    )
+
+    diff_h2p_h1p = h2p - h1p
+    delta_hp = diff_h2p_h1p + (np.fabs(diff_h2p_h1p) > 180) * 360
+    delta_hp -= (h2p > h1p) * 720
+
+    delta_Lp = np.repeat(np.reshape(X[:, 0], (nSamples, 1)), nSamples, axis=1) - np.repeat(np.reshape(X[:, 0], (1, nSamples)), nSamples, axis=0)
+    delta_Cp = C2p - C1p
+    delta_Hp = 2 * np.sqrt(C2p * C1p) * np.sin(np.radians(delta_hp) / 2.0)
+
+    S_L = 1 + (
+        (0.015 * ((avg_Lp - 50)**2))
+        / np.sqrt(20 + ((avg_Lp - 50)**2.0))
+    )
+    S_C = 1 + 0.045 * avg_C1p_C2p
+    S_H = 1 + 0.015 * avg_C1p_C2p * T
+
+    delta_ro = 30 * np.exp(-(((avg_Hp - 275) / 25)**2.0))
+    R_C = np.sqrt(
+        ((avg_C1p_C2p)**7.0)
+        / ((avg_C1p_C2p)**7.0 + 25.0**7.0))
+    R_T = -2 * R_C * np.sin(2 * np.radians(delta_ro))
+
+    return np.sqrt(
+        (delta_Lp / (S_L * Kl))**2
+        + (delta_Cp / (S_C * Kc))**2
+        + (delta_Hp / (S_H * Kh))**2
+        + R_T * (delta_Cp / (S_C * Kc)) * (delta_Hp / (S_H * Kh))
+    )
 
   """
   show plots the image and blocks until user presses a key.
@@ -914,7 +1003,11 @@ if __name__ == "__main__":
   #print (ImageUtils.compute_luminance(ImageUtils.color("#BCBCBC")))
   #ImageUtils.chromatic_adaptation("test/ancha.JPG", ImageUtils.color("#caf0fc"))
   #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
-  ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
+  #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
+  print ("delta 1: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFEBDA")))
+  #print ("delta 2: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFF1E5")))
+  #print ("deltas matrix: ", ImageUtils.delta_e_cie2000_matrix(np.array([[52.2883, 11.285, 18.2971],
+  #[94.2010, 4.0615, 10.6879], [95.9256, 2.728, 7.4665]])))
   #ImageUtils.chromatic_adaptation("test/ancha_3.JPG", ImageUtils.color("#e5e2ce"))
   #ImageUtils.chromatic_adaptation("test/IMG_5862.JPG", ImageUtils.color("#e9e4dc"))
   #ImageUtils.show_gray("/Users/addarsh/Desktop/ancha.png")

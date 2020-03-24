@@ -7,7 +7,7 @@ verify_ssl = true
 
 [packages]
 numpy = "==1.17.2"
-opencv-python = "*"
+opencv-python = "==4.1.2.30"
 pillow = "==7.0.0"
 colour-science = "*"
 matplotlib = "*"
@@ -21,6 +21,7 @@ imantics = "*"
 lmfit = "*"
 requests = "*"
 django = "*"
+colormath = "*"
 
 [requires]
 python_version = "3.7"
