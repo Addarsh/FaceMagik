@@ -35,8 +35,8 @@ from train import (
 )
 
 class Face:
-  def __init__(self, imagePath):
-    self.outputDir = "output"
+  def __init__(self, imagePath="", image=None, outputDir="output"):
+    self.outputDir = outputDir
     self.imagePath = imagePath
     self.faceMaskDirPath =  os.path.join(os.path.join(self.outputDir, os.path.splitext(os.path.split(imagePath)[1])[0]), "annotations")
     self.hdf5File = "face_mask.hdf5"
@@ -44,7 +44,11 @@ class Face:
     self.MASKS_KEY = "masks"
     self.id_label_map = {v: k for k, v in label_id_map.items()}
 
-    self.image = cv2.cvtColor(cv2.imread(imagePath), cv2.COLOR_BGR2RGB)
+    if image is None:
+      self.image = cv2.cvtColor(cv2.imread(imagePath), cv2.COLOR_BGR2RGB)
+    else:
+      self.image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
     self.clf = KMeans(n_clusters=2)
     self.preds = self.detect_face()
     self.faceMask = self.get_face_mask()
@@ -76,7 +80,7 @@ class Face:
     clone = self.image.copy()
     for i, mask in enumerate(masks):
       clone[mask] = np.array(colorList[i])
-    self.show(clone)
+    return self.show(clone)
 
   """
   show_mask will display given mask.
@@ -84,7 +88,7 @@ class Face:
   def show_mask(self, mask, color=[0, 255, 0]):
     clone = self.image.copy()
     clone[mask] = np.array(color)
-    self.show(clone)
+    return self.show(clone)
 
   """
   show_orig_image shows the original RGB image without modifications.
@@ -99,7 +103,7 @@ class Face:
     clone = self.image.copy()
     clone[:, :] = [0, 0, 0]
     clone[vertices[:, 0], vertices[:, 1]] = np.clip(E*100, None, 255).astype(np.uint8)
-    self.show(clone)
+    return self.show(clone)
 
   """
   show is an internal helper function to display given RGB image.
@@ -108,7 +112,7 @@ class Face:
     cv2.namedWindow(self.windowName, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(self.windowName, self.windowSize, self.windowSize)
     cv2.imshow(self.windowName, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-    cv2.waitKey(0)
+    return cv2.waitKey(0) & 0xFF
 
   """
   detect_face will detect face in the given image and segment out eyes,
@@ -650,16 +654,16 @@ class Face:
   the chakra color median brightness.
   """
   def chakra_median_brightness(self):
-    ckMask = f.get_chakra_keypoints()
-    domMask, surrMask = f.biclustering_Kmeans_mod(self.image, ckMask)
+    ckMask = self.get_chakra_keypoints()
+    domMask, surrMask = self.biclustering_Kmeans_mod(self.image, ckMask)
 
-    print ("Chakra median: ", ImageUtils.RGB2HEX(np.median(f.image[surrMask],axis=0).astype(np.uint8)))
-    print ("highlight median: ", ImageUtils.RGB2HEX(np.median(f.image[domMask],axis=0).astype(np.uint8)))
-    self.show_masks([domMask, surrMask], [[0, 255, 0], [255, 0, 0]])
+    print ("Chakra median: ", ImageUtils.RGB2HEX(np.median(self.image[surrMask],axis=0).astype(np.uint8)))
+    print ("highlight median: ", ImageUtils.RGB2HEX(np.median(self.image[domMask],axis=0).astype(np.uint8)))
+    #self.show_masks([domMask, surrMask], [[0, 255, 0], [255, 0, 0]])
 
     domfaceMask, surrfaceMask, clone = self.chakra_median_brightness_helper(np.median(self.image[surrMask], axis=0))
-    domdomMask, _ = f.biclustering_Kmeans_mod(self.image, domfaceMask)
-    f.show_mask(domdomMask)
+    domdomMask, _ = self.biclustering_Kmeans_mod(self.image, domfaceMask)
+    key = self.show_mask(domdomMask)
 
     # Find Delta CIE2000 diff of the means.
     d1 = np.mean(ImageUtils.sRGBtoHSV(self.image[domdomMask])[:, 2]).astype(np.float)
@@ -667,18 +671,20 @@ class Face:
     d3 = np.mean(ImageUtils.sRGBtoHSV(self.image[surrfaceMask])[:, 2]).astype(np.float)
     print ("delta: ", d1, d2, d3, 0 if d1 <= d2 else d1-d2, d1-d3)
 
+    return key
+
   def chakra_median_brightness_helper(self, sRGBcolor):
     # Modify image brightness to brightness of given color.
     clone = self.image.copy()
     clone = cv2.cvtColor(clone, cv2.COLOR_RGB2HSV)
-    fmask = clone[f.faceMask]
+    fmask = clone[self.faceMask]
     fmask[:, 2] = ImageUtils.sRGBtoHSV(sRGBcolor)[0, 2]
-    clone[f.faceMask] = fmask
+    clone[self.faceMask] = fmask
     clone = cv2.cvtColor(clone, cv2.COLOR_HSV2RGB)
     self.show(clone)
 
     # Separate desirable and undesirable points from uniform brightness image.
-    domfaceMask, surrfaceMask = f.biclustering_Kmeans_mod(clone, f.faceMask)
+    domfaceMask, surrfaceMask = self.biclustering_Kmeans_mod(clone, self.faceMask)
     domMeanArr  = np.median(clone[domfaceMask], axis=0)
     surrMeanArr = np.median(clone[surrfaceMask], axis=0)
 
@@ -687,8 +693,6 @@ class Face:
       tempMask = surrfaceMask
       surrfaceMask = domfaceMask
       domfaceMask = tempMask
-
-    self.show_mask(domfaceMask)
 
     return domfaceMask, surrfaceMask, clone
 
