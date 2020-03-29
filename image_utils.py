@@ -873,11 +873,39 @@ class ImageUtils:
       (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_RGB2HSV), (-1, 3))
 
   """
+  HSVtosRGB converts given HSV array (n by 3) into (n by 3) sRGB array.
+  """
+  def HSVtosRGB(colorArr):
+    return np.reshape(cv2.cvtColor(np.reshape(colorArr,
+      (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_HSV2RGB), (-1, 3))
+
+  """
+  sRGBtoLab converts given sRGB array (n by 3) into (n, 3) Lab array.
+  """
+  def sRGBtoLab(colorArr):
+    return np.reshape(cv2.cvtColor(np.reshape(colorArr,
+      (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_RGB2LAB), (-1, 3))
+
+  """
+  LabtosRGB converts given Lab array (n by 3) into (n, 3) sRGB array.
+  """
+  def LabtosRGB(colorArr):
+    return np.reshape(cv2.cvtColor(np.reshape(colorArr,
+      (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_LAB2RGB), (-1, 3))
+
+  """
   flatten_rgb flattens the given RGB tuple into its corresponding index number
   from 1 to 256*256*256.
   """
   def flatten_rgb(rgb):
     return rgb[0]*256*256 + rgb[1]*256 + rgb[2] + 1
+
+  """
+  delta_e_mask returns delta_e_cie2000 between given masks for given
+  sRGB image.
+  """
+  def delta_e_mask(image, mask1, mask2):
+    return ImageUtils.delta_cie2000(np.mean(image[mask1], axis=0), np.mean(image[mask2], axis=0))
 
   """
   Calculates the Delta E (CIE2000) of two sRGB colors (range 0-255).

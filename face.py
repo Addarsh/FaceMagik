@@ -254,8 +254,7 @@ class Face:
     aMask = np.reshape(aMask, mask.shape)
     bMask = np.reshape(bMask, mask.shape)
 
-    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    if np.sum(hsv[aMask][:, 2])/np.count_nonzero(aMask) >= np.sum(hsv[bMask][:, 2])/np.count_nonzero(bMask):
+    if np.mean(np.min(self.image[aMask], axis=1)) >= np.mean(np.min(self.image[bMask], axis=1)):
       return aMask, bMask
 
     return bMask, aMask
@@ -650,51 +649,99 @@ class Face:
     return mask
 
   """
-  chakra_median_brightness sets median of the face using
-  the chakra color median brightness.
+  detect_skin_tone detects skin tone for given face.
   """
-  def chakra_median_brightness(self):
-    ckMask = self.get_chakra_keypoints()
-    domMask, surrMask = self.biclustering_Kmeans_mod(self.image, ckMask)
+  def detect_skin_tone(self):
+    # Divide pixels into light and dark pixels.
+    brighterMask, darkerMask = self.biclustering_Kmeans_mod(self.image, self.faceMask)
 
-    print ("Chakra median: ", ImageUtils.RGB2HEX(np.median(self.image[surrMask],axis=0).astype(np.uint8)))
-    print ("highlight median: ", ImageUtils.RGB2HEX(np.median(self.image[domMask],axis=0).astype(np.uint8)))
-    #self.show_masks([domMask, surrMask], [[0, 255, 0], [255, 0, 0]])
+    # Find brightest pixels in the image.
+    specMask, brighterMask = self.biclustering_Kmeans_mod(self.image, self.biclustering_Kmeans_mod(self.image, brighterMask)[0])
 
-    domfaceMask, surrfaceMask, clone = self.chakra_median_brightness_helper(np.median(self.image[surrMask], axis=0))
-    domdomMask, _ = self.biclustering_Kmeans_mod(self.image, domfaceMask)
-    key = self.show_mask(domdomMask)
+    # Find darkest pixels in image.
+    _, darkestMask = self.biclustering_Kmeans_mod(self.image, darkerMask)
 
-    # Find Delta CIE2000 diff of the means.
-    d1 = np.mean(ImageUtils.sRGBtoHSV(self.image[domdomMask])[:, 2]).astype(np.float)
-    d2 = np.mean(ImageUtils.sRGBtoHSV(self.image[surrMask])[:, 2]).astype(np.float)
-    d3 = np.mean(ImageUtils.sRGBtoHSV(self.image[surrfaceMask])[:, 2]).astype(np.float)
-    print ("delta: ", d1, d2, d3, 0 if d1 <= d2 else d1-d2, d1-d3)
+    # Calculate contrast of face pixels.
+    self.contrast = np.mean(np.min(self.image[brighterMask], axis=1)) - np.mean(np.min(self.image[darkestMask], axis=1))
+    print ("Contrast: ", self.contrast)
+    self.show_masks([specMask, darkestMask], [[0, 255, 0], [255, 0, 0]])
+    if self.contrast >= 105:
+      print ("Image Contrast too high for given image! Try another image")
+      return
+    if self.contrast <= 50:
+      print ("Image Contrast too low for given image! Try another image")
+      return
 
-    return key
+    # Find good pixels to probe.
+    goodMask = np.bitwise_xor(darkestMask, self.faceMask)
+    if np.count_nonzero(brighterMask)/np.count_nonzero(self.faceMask) < 0.4 or self.contrast > 85:
+      print ("Image has specularities: ", np.count_nonzero(specMask)/np.count_nonzero(self.faceMask))
+      goodMask = np.bitwise_xor(np.bitwise_xor(goodMask, specMask), brighterMask)
+    else:
+      print ("Too many bright points, skin on lighter side: ", np.count_nonzero(specMask)/np.count_nonzero(self.faceMask))
 
-  def chakra_median_brightness_helper(self, sRGBcolor):
+    avgBrightness = ImageUtils.sRGBtoHSV(np.mean(self.image[goodMask], axis=0))[0,2]
+    print ("avg brightness: ", avgBrightness)
+    self.show_masks([goodMask], [[0, 255, 0]])
+
+    # Find clusters of similar delta_e.
+    allMasks = self.divide_mask(goodMask)
+    print ("Num masks: ", len(allMasks))
+
+    skinToneHSV = np.array([[0, 0, 255]])
+    minDist = 255
+    for i in range(len(allMasks)):
+      meanI = np.mean(self.image[allMasks[i]].astype(np.uint8), axis=0)
+      hsvI = ImageUtils.sRGBtoHSV(meanI)
+      if abs(float(hsvI[0, 2]) - float(avgBrightness)) <= minDist:
+        minDist = abs(float(hsvI[0, 2]) - float(skinToneHSV[0,2]))
+        skinToneHSV = hsvI
+      for j in range(len(allMasks)):
+        if j != i:
+          meanJ = np.mean(self.image[allMasks[j]].astype(np.uint8), axis=0)
+          print ("color diff " + str(i)+ "(" + ImageUtils.RGB2HEX(meanI) + ")-" + str(j) + "(" + ImageUtils.RGB2HEX(meanJ) + "):", ImageUtils.delta_cie2000(meanI, meanJ), hsvI, np.count_nonzero(self.image[allMasks[i]])/np.count_nonzero(self.image[self.faceMask]))
+      if i == len(allMasks) -1:
+        self.show_masks([allMasks[i]], [[0, 255, 0]])
+        break
+      self.show_masks([allMasks[i], allMasks[i+1]], [[0, 255, 0], [255, 0, 0]])
+      print ("\n")
+
+    # Set skin tone to average brightness.
+    skinToneHSV[0, 2] = avgBrightness
+    print ("Skin Tone: ", ImageUtils.RGB2HEX(ImageUtils.HSVtosRGB(skinToneHSV)[0]))
+
+  """
+  divide_mask will divide given mask into clusters based on delta_e_cie2000 differences.
+  """
+  def divide_mask(self, mask):
+    DELTA = 5
+
+    domMask, surrMask = self.biclustering_Kmeans_mod(self.image, mask)
+    if ImageUtils.delta_e_mask(self.image, domMask, surrMask) <= DELTA:
+      return [mask]
+
+    domSubMasks = self.divide_mask(domMask)
+    surrSubMasks = self.divide_mask(surrMask)
+
+    return domSubMasks + surrSubMasks
+
+  """
+  adjust_brightness will set the brightness of color to brightness v.
+  """
+  def adjust_brightness(self, color, v):
+    hsv = ImageUtils.sRGBtoHSV(color)
+    hsv[0,2] = v
+    return ImageUtils.HSVtosRGB(hsv)
+
+  def apply_brightness(self, mask, sRGB):
     # Modify image brightness to brightness of given color.
     clone = self.image.copy()
     clone = cv2.cvtColor(clone, cv2.COLOR_RGB2HSV)
-    fmask = clone[self.faceMask]
-    fmask[:, 2] = ImageUtils.sRGBtoHSV(sRGBcolor)[0, 2]
-    clone[self.faceMask] = fmask
+    fmask = clone[mask]
+    fmask[:, 2] = ImageUtils.sRGBtoHSV(sRGB)[0, 2]
+    clone[mask] = fmask
     clone = cv2.cvtColor(clone, cv2.COLOR_HSV2RGB)
-    self.show(clone)
-
-    # Separate desirable and undesirable points from uniform brightness image.
-    domfaceMask, surrfaceMask = self.biclustering_Kmeans_mod(clone, self.faceMask)
-    domMeanArr  = np.median(clone[domfaceMask], axis=0)
-    surrMeanArr = np.median(clone[surrfaceMask], axis=0)
-
-    # Find out highlights and desirable points.
-    if np.linalg.norm(domMeanArr-sRGBcolor) <= np.linalg.norm(surrMeanArr-sRGBcolor):
-      tempMask = surrfaceMask
-      surrfaceMask = domfaceMask
-      domfaceMask = tempMask
-
-    return domfaceMask, surrfaceMask, clone
+    return clone
 
   """
   bbox returns bounding box (x1, y1, w, h) (top left point, width and height) of given mask.
@@ -766,7 +813,7 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   f = Face(args.image)
-  f.chakra_median_brightness()
+  f.detect_skin_tone()
   #f.compute_diffuse()
   #f.compute_diffuse_new()
   #f.show(f.remove_specular_highlights())
