@@ -241,7 +241,8 @@ class Face:
   It differs from original implementation in that it calculates dominant based on greater average
   brightness of pixels.
   """
-  def biclustering_Kmeans_mod(self, image, mask):
+  def biclustering_Kmeans_mod(self, image, mask,
+    func=lambda img, m1, m2: (m1, m2) if np.mean(np.min(img[m1], axis=1)) >= np.mean(np.min(img[m2], axis=1)) else (m2, m1)):
     labels = self.clf.fit_predict(image[mask])
 
     flatMask = np.ndarray.flatten(mask)
@@ -254,10 +255,7 @@ class Face:
     aMask = np.reshape(aMask, mask.shape)
     bMask = np.reshape(bMask, mask.shape)
 
-    if np.mean(np.min(self.image[aMask], axis=1)) >= np.mean(np.min(self.image[bMask], axis=1)):
-      return aMask, bMask
-
-    return bMask, aMask
+    return func(image, aMask, bMask)
 
   """
   remove_specular_highlights_modified is the modified version of remove specular highlights.
@@ -652,63 +650,37 @@ class Face:
   detect_skin_tone detects skin tone for given face.
   """
   def detect_skin_tone(self):
-    # Divide pixels into light and dark pixels.
-    brighterMask, darkerMask = self.biclustering_Kmeans_mod(self.image, self.faceMask)
+    hsvImage = cv2.cvtColor(self.image, cv2.COLOR_RGB2HSV)
 
-    # Find brightest pixels in the image.
-    specMask, brighterMask = self.biclustering_Kmeans_mod(self.image, self.biclustering_Kmeans_mod(self.image, brighterMask)[0])
+    # Prepare saturation image.
+    satImage = hsvImage.copy()
+    satImage[:, :, 0] = 0
+    flatMask = satImage[satImage[:, :, 1] == 0]
+    flatMask[:, 1] = 1
+    satImage[satImage[:, :, 1] == 0] = flatMask
+    satImage[:, :, 1] = satImage[:, :, 2]/(satImage[:, :, 1])
+    satImage[:, :, 2] = 0
+    s1Mask, s2Mask = self.biclustering_Kmeans_mod(satImage, self.faceMask,
+      func=lambda img, m1, m2: (m1, m2) if np.mean(img[m1][:, 1]) >= np.mean(img[m2][:, 1]) else (m2, m1))
 
-    # Find darkest pixels in image.
-    _, darkestMask = self.biclustering_Kmeans_mod(self.image, darkerMask)
+    print ("high brightness/sat mask: ", np.count_nonzero(s1Mask)/np.count_nonzero(self.faceMask))
+    self.show_masks([s1Mask], [[255, 0, 0]])
 
-    # Calculate contrast of face pixels.
-    self.contrast = np.mean(np.min(self.image[brighterMask], axis=1)) - np.mean(np.min(self.image[darkestMask], axis=1))
-    print ("Contrast: ", self.contrast)
-    self.show_masks([specMask, darkestMask], [[0, 255, 0], [255, 0, 0]])
-    if self.contrast >= 105:
-      print ("Image Contrast too high for given image! Try another image")
-      return
-    if self.contrast <= 50:
-      print ("Image Contrast too low for given image! Try another image")
-      return
+    print ("low brightness/sat mask: ", np.count_nonzero(s2Mask)/np.count_nonzero(self.faceMask))
+    self.show_masks([s2Mask], [[255, 0, 0]])
 
-    # Find good pixels to probe.
-    goodMask = np.bitwise_xor(darkestMask, self.faceMask)
-    if np.count_nonzero(brighterMask)/np.count_nonzero(self.faceMask) < 0.4 or self.contrast > 85:
-      print ("Image has specularities: ", np.count_nonzero(specMask)/np.count_nonzero(self.faceMask))
-      goodMask = np.bitwise_xor(np.bitwise_xor(goodMask, specMask), brighterMask)
-    else:
-      print ("Too many bright points, skin on lighter side: ", np.count_nonzero(specMask)/np.count_nonzero(self.faceMask))
+    print ("Mask contrast: ", abs(float(ImageUtils.sRGBtoHSV(np.mean(self.image[s1Mask], axis=0))[0,2]) - float(ImageUtils.sRGBtoHSV(np.mean(self.image[s2Mask], axis=0))[0,2])))
 
-    avgBrightness = ImageUtils.sRGBtoHSV(np.mean(self.image[goodMask], axis=0))[0,2]
-    print ("avg brightness: ", avgBrightness)
-    self.show_masks([goodMask], [[0, 255, 0]])
+    biggerMask = s1Mask if np.count_nonzero(s1Mask) >= np.count_nonzero(s2Mask) else s2Mask
+    smallerMask = s2Mask if np.count_nonzero(s1Mask) >= np.count_nonzero(s2Mask) else s1Mask
 
-    # Find clusters of similar delta_e.
-    allMasks = self.divide_mask(goodMask)
-    print ("Num masks: ", len(allMasks))
+    # Choose bigger mask.
+    r1Mask, r2Mask = self.biclustering_Kmeans_mod(satImage, biggerMask,
+      func=lambda img, m1, m2: (m1, m2) if np.mean(img[m1][:, 1]) >= np.mean(img[m2][:, 1]) else (m2, m1))
+    print ("R masks: ", ImageUtils.RGB2HEX(np.mean(self.image[r1Mask], axis=0)), ImageUtils.RGB2HEX(np.mean(self.image[r2Mask], axis=0)), ImageUtils.sRGBtoHSV(np.mean(self.image[r1Mask], axis=0))[0,2] - ImageUtils.sRGBtoHSV(np.mean(self.image[r2Mask], axis=0))[0,2])
 
-    skinToneHSV = np.array([[0, 0, 255]])
-    minDist = 255
-    for i in range(len(allMasks)):
-      meanI = np.mean(self.image[allMasks[i]].astype(np.uint8), axis=0)
-      hsvI = ImageUtils.sRGBtoHSV(meanI)
-      if abs(float(hsvI[0, 2]) - float(avgBrightness)) <= minDist:
-        minDist = abs(float(hsvI[0, 2]) - float(skinToneHSV[0,2]))
-        skinToneHSV = hsvI
-      for j in range(len(allMasks)):
-        if j != i:
-          meanJ = np.mean(self.image[allMasks[j]].astype(np.uint8), axis=0)
-          print ("color diff " + str(i)+ "(" + ImageUtils.RGB2HEX(meanI) + ")-" + str(j) + "(" + ImageUtils.RGB2HEX(meanJ) + "):", ImageUtils.delta_cie2000(meanI, meanJ), hsvI, np.count_nonzero(self.image[allMasks[i]])/np.count_nonzero(self.image[self.faceMask]))
-      if i == len(allMasks) -1:
-        self.show_masks([allMasks[i]], [[0, 255, 0]])
-        break
-      self.show_masks([allMasks[i], allMasks[i+1]], [[0, 255, 0], [255, 0, 0]])
-      print ("\n")
-
-    # Set skin tone to average brightness.
-    skinToneHSV[0, 2] = avgBrightness
-    print ("Skin Tone: ", ImageUtils.RGB2HEX(ImageUtils.HSVtosRGB(skinToneHSV)[0]))
+    print ("First level of mask division: ", np.count_nonzero(r1Mask)/np.count_nonzero(biggerMask), np.count_nonzero(r2Mask)/np.count_nonzero(biggerMask))
+    self.show_masks([r1Mask, r2Mask], [[0, 255, 0], [255, 0, 0]])
 
   """
   divide_mask will divide given mask into clusters based on delta_e_cie2000 differences.
