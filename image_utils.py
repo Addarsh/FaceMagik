@@ -16,6 +16,7 @@ import colormath
 import matplotlib.pyplot as plt
 
 from scipy.sparse import diags
+from scipy.stats import norm
 from scipy.optimize import minimize
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
@@ -76,6 +77,14 @@ class ImageUtils:
   @staticmethod
   def plot_rect(img, p1, p2):
     cv2.rectangle(img, p1, p2, 0, 2)
+
+  """
+  Plots a histogram of the given image for given mask.
+  """
+  def plot_histogram(img, mask, block=True):
+    plt.hist(img[mask][:, 0], bins=256, density=True)
+    plt.xlim([0,256])
+    plt.show(block=block)
 
   """
   color return the RGB tuple of given hex color. Hex color format is #FF0033.
