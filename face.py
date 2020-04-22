@@ -49,6 +49,10 @@ class Face:
     else:
       self.image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
+    self.satImage = self.to_satImage()
+    self.brightImage = self.to_brightImage()
+    self.ratioImage = self.to_ratioImage()
+
     self.clf = KMeans(n_clusters=2)
     self.preds = self.detect_face()
     self.faceMask = self.get_face_mask()
@@ -676,19 +680,19 @@ class Face:
       mask = np.bitwise_xor(np.bitwise_and(mask, hMask), mask)
 
     # Cluster on saturation.
-    satImage = self.to_satImage()
+    ratioImage = self.to_ratioImage()
 
     #g = lambda img, m1, m2: (m1, m2) if np.mean(img[m1][:, 0]) >= np.mean(img[m2][:, 0]) else (m2, m1)
     g = lambda img, m1, m2: (m1, m2) if np.mean(img[m1][:, 1]) >= np.mean(img[m2][:, 1]) else (m2, m1)
 
     #l1Mask, l2Mask = self.biclustering_Kmeans_mod(self.image, mask, g)
-    l1Mask, l2Mask = self.divide_by_ratio(satImage, mask, g)
+    l1Mask, l2Mask = self.divide_by_ratio(ratioImage, mask, g)
     bMask = mask
     while ImageUtils.delta_e_mask(self.image, l1Mask, l2Mask) > 20:
       self.show_masks([l1Mask, l2Mask], [[0, 255, 0], [255, 0, 0]])
       bMask = l1Mask
       #l1Mask, l2Mask = self.biclustering_Kmeans_mod(self.image, bMask, g)
-      l1Mask, l2Mask = self.divide_by_ratio(satImage, bMask, g)
+      l1Mask, l2Mask = self.divide_by_ratio(ratioImage, bMask, g)
 
     neckTone = np.median(self.image[l1Mask], axis=0)
     print ("final mask tone: ", ImageUtils.RGB2HEX(neckTone))
@@ -697,74 +701,181 @@ class Face:
     return mask
 
   """
-  to_satImage converts sRGB image to HSV like saturation image
-  with H = 0, S = Brightness/saturation (float), V = 0.
+  get_forehead_points returns points on the forehead.
   """
-  def to_satImage(self):
-    satImage = cv2.cvtColor(self.image, cv2.COLOR_RGB2HSV).astype(np.float)
-    satImage[:, :, 0] = 0
-    flatMask = satImage[satImage[:, :, 1] == 0]
-    flatMask[:, 1] = 0.1
-    satImage[satImage[:, :, 1] == 0] = flatMask
-    satImage[:, :, 1] = satImage[:, :, 2]/(satImage[:, :, 1])
-    satImage[:, :, 2] = 0
-    return satImage
+  def get_forehead_points(self):
+    faceMasks = self.get_attr_masks(FACE)
+    assert len(faceMasks) == 1, "Want 1 mask for face!"
+    faceMask = faceMasks[0]
+    eyebrowMasks = self.get_attr_masks(EYEBROW)
+    assert len(eyebrowMasks) > 0, "Want atleast 1 mask for eyebrows"
+
+    mask = faceMask
+    for ebMask in eyebrowMasks:
+      rmin, _, _, _ = self.bbox(ebMask)
+      mask[rmin:,:] = False
+    return mask
 
   """
-  detect_skin_tone detects skin tone for given face.
+  good_face_points returns a mask containing points that are usually good to
+  sample for skin tone. It excludes points near the eyes and lips.
   """
-  def detect_skin_tone(self):
+  def good_face_points(self):
+    faceMasks = self.get_attr_masks(FACE)
+    eyeMasks = self.get_attr_masks(EYE_OPEN)
+    ulipMasks = self.get_attr_masks(UPPER_LIP)
+    llipMasks = self.get_attr_masks(LOWER_LIP)
+    assert len(faceMasks) == 1, "Want 1 mask for face!"
+    assert len(ulipMasks) == 1, "Want 1 mask for upper lip!"
+    assert len(llipMasks) == 1, "Want 1 mask for lower lip!"
+    assert len(eyeMasks) == 2, "Want 2 masks for eye!"
+
+    mask = faceMasks[0]
+
+    rmin1, _, _, h1 = self.bbox(eyeMasks[0])
+    rmin2, _, _, h2 = self.bbox(eyeMasks[0])
+    tol = 1.0
+    rmin = min(rmin1, rmin2) - tol*max(h1, h2)
+    rmax = max(rmin1 + h1, rmin2 + h2) + tol*max(h1, h2)
+    mask[int(rmin):int(rmax)+1, :] = False
+
+    tol = 0.5
+    tol_w = 0.1
+    rmin, cmin, w, h = self.bbox(ulipMasks[0])
+    mask[int(rmin-tol*h):int(rmin+ h + tol*h), int(cmin -tol_w*w):int(cmin+w+tol_w*w)] = False
+
+    rmin, cmin, w, h = self.bbox(llipMasks[0])
+    mask[int(rmin-tol*h):int(rmin+ h + tol*h), int(cmin -tol_w*w):int(cmin+w+tol_w*w)] = False
+
+    return mask
+
+  """
+  to_ratioImage converts sRGB image to HSV like saturation image
+  with H = 0, S = Brightness/saturation (float), V = 0.
+  """
+  def to_ratioImage(self):
+    ratioImage = cv2.cvtColor(self.image, cv2.COLOR_RGB2HSV).astype(np.float)
+    ratioImage[:, :, 0] = 0
+    flatMask = ratioImage[ratioImage[:, :, 1] == 0]
+    flatMask[:, 1] = 0.1
+    ratioImage[ratioImage[:, :, 1] == 0] = flatMask
+    ratioImage[:, :, 1] = ratioImage[:, :, 2]/(ratioImage[:, :, 1])
+    ratioImage[:, :, 2] = 0
+    return ratioImage
+
+  """
+  to_brightImage converts sRGB image to HSV image with
+  H = 0, S = 0 and only brightness values.
+  """
+  def to_brightImage(self):
+    hsvImage = cv2.cvtColor(self.image, cv2.COLOR_RGB2HSV)
+    hsvImage[:, :, 0] = 0
+    hsvImage[:, :, 1] = 0
+    return hsvImage
+
+  """
+  to_brightImage converts sRGB image to HSV image with
+  H = 0, V = 0 and only saturation values.
+  """
+  def to_satImage(self):
+    hsvImage = cv2.cvtColor(self.image, cv2.COLOR_RGB2HSV)
+    hsvImage[:, :, 0] = 0
+    hsvImage[:, :, 2] = 0
+    return hsvImage
+
+  """
+  check_if_good_image returns true if image is good to analyze for skin
+  tone else returns false.
+  """
+  def check_if_good_image(self):
     ImageUtils.plot_histogram(self.image, self.faceMask, False)
     hist = cv2.calcHist([self.image],[0], self.faceMask.astype(np.uint8)*255,[256],[0,256])
 
-    print ("Median: ", np.median(self.image[self.faceMask][:, 0]))
+    print ("Median Red: ", np.median(self.image[self.faceMask][:, 0]))
     if np.median(self.image[self.faceMask][:, 0]) <= 140:
-      print ("Image too dark")
+      print ("Image too dark: ", np.median(self.image[self.faceMask][:, 0]) )
       self.show(self.image)
-      return
+      return False
 
     if hist[-1]/max(hist) >= 0.2:
       # Red pixel == 255, too bright.
       print ("Image too bright: ", hist[-1]/max(hist))
       self.show(self.image)
+      return False
+
+    return True
+
+  """
+  detect_skin_tone detects skin tone for given face.
+  """
+  def detect_skin_tone(self):
+    # self.check_if_good_image()
+    higherSatMask, lowerSatMask = self.divide_by_saturation(self.faceMask)
+    if np.mean(self.ratioImage[higherSatMask], axis=0)[1] <= 1.54:
+      print ("Skin is darker")
+      higherSatMask = np.bitwise_and(higherSatMask, self.good_face_points())
+      self.show_mask(higherSatMask)
+      skinTone = np.median(self.image[higherSatMask], axis=0)
+      print ("Skin tone: ", ImageUtils.RGB2HEX(skinTone))
+      self.show_masks([self.faceMask], [skinTone])
+      self.show_orig_image()
       return
 
-    # Prepare saturation image.
-    satImage = self.to_satImage()
-    biggerMask, smallerMask = self.divide_by_ratio(satImage, self.faceMask)
-    self.show_masks([biggerMask, smallerMask], [[0, 255, 0], [255, 0, 0]])
+    print ("Skin is lighter")
+    largerSatMask = higherSatMask if np.count_nonzero(higherSatMask) > np.count_nonzero(lowerSatMask) else lowerSatMask
+    higherBriMask, _ = self.divide_by_brightness(self.faceMask)
+    higherSatFinalMask, lowerSatFinalMask = self.divide_by_saturation(np.bitwise_and(higherBriMask, largerSatMask))
 
-    l1Mask, l2Mask = self.divide_by_ratio(satImage, biggerMask)
-    self.show_masks([l1Mask, l2Mask], [[0, 255, 0], [255, 0, 0]])
-    #while ImageUtils.delta_e_mask(self.image, l1Mask, l2Mask) > 3:
-    while abs(np.median(satImage[l1Mask], axis=0)[1] - np.median(satImage[l2Mask], axis=0)[1]) > 0.3:
-      bMask = l1Mask
-      l1Mask, l2Mask = self.divide_by_ratio(satImage, bMask)
-      self.show_masks([l1Mask, l2Mask], [[0, 255, 0], [255, 0, 0]])
-
-    skinTone = np.median(self.image[bMask], axis=0)
-    print ("Skin tone: ", ImageUtils.RGB2HEX(skinTone))
+    finalMask = lowerSatFinalMask if np.count_nonzero(higherSatMask) == np.count_nonzero(largerSatMask) else higherSatFinalMask
+    finalMask = np.bitwise_and(finalMask, self.good_face_points())
+    self.show_mask(finalMask)
+    skinTone = np.median(self.image[finalMask], axis=0)
+    print ("Final Skin tone: ", ImageUtils.RGB2HEX(skinTone))
     self.show_masks([self.faceMask], [skinTone])
+    self.show_orig_image()
+
+  """
+  divide_by_saturation divides given mask using saturation image
+  into higher and lower saturation sub masks.
+  It returns the mask with higher brightness first.
+  """
+  def divide_by_saturation(self, mask):
+    higherSatMask, lowerSatMask = self.biclustering_Kmeans_mod(self.satImage, mask, func=lambda img, m1, m2: (m1, m2) if np.mean(img[m1][:, 1]) >= np.mean(img[m2][:, 1]) else (m2, m1))
+    self.masks_info(higherSatMask, lowerSatMask, mask)
+    return higherSatMask, lowerSatMask
+
+  """
+  divide_by_brightness divides given mask using brightness image
+  into higher and lower brightness sub masks.
+  It returns the mask with higher saturation first.
+  """
+  def divide_by_brightness(self, mask):
+    higherBriMask, lowerBriMask = self.biclustering_Kmeans_mod(self.brightImage, mask, func=lambda img, m1, m2: (m1, m2) if np.mean(img[m1][:, 2]) >= np.mean(img[m2][:, 2]) else (m2, m1))
+    self.masks_info(higherBriMask, lowerBriMask, mask)
+    return higherBriMask, lowerBriMask
 
   """
   divide_by_ratio will divide given mask using brightness by brightness/saturation ratio.
+  It returns the mask with higher brightness/saturation ratio first.
   """
-  def divide_by_ratio(self, img, mask,
-    f=lambda img, m1, m2: (m1, m2) if np.mean(img[m1][:, 1]) >= np.mean(img[m2][:, 1]) else (m2, m1)):
+  def divide_by_ratio(self, mask):
+    higherRatioMask, lowerRatioMask = self.biclustering_Kmeans_mod(self.ratioImage, mask, func=lambda img, m1, m2: (m1, m2) if np.mean(img[m1][:, 1]) >= np.mean(img[m2][:, 1]) else (m2, m1))
+    self.masks_info(higherRatioMask, lowerRatioMask, mask)
+    return higherRatioMask, lowerRatioMask
 
-    r1Mask, r2Mask = self.biclustering_Kmeans_mod(img, mask, func=f)
-
-    biggerMask = r1Mask if np.count_nonzero(r1Mask) >= np.count_nonzero(r2Mask) else r2Mask
-    smallerMask = r2Mask if np.count_nonzero(r1Mask) >= np.count_nonzero(r2Mask) else r1Mask
-    print ("Divided masks colors: ", ImageUtils.RGB2HEX(np.median(self.image[biggerMask], axis=0)), ImageUtils.RGB2HEX(np.median(self.image[smallerMask], axis=0)))
-    print ("\tmask ratio division: ", np.count_nonzero(biggerMask)/np.count_nonzero(mask), np.count_nonzero(smallerMask)/np.count_nonzero(mask))
-    print ("\tim diff: ", ImageUtils.delta_e_mask(self.image, biggerMask, smallerMask))
-    print ("\tSat ratio diff: ", np.median(img[biggerMask], axis=0)[1], np.median(img[smallerMask], axis=0)[1], np.median(img[smallerMask], axis=0)[1] - np.median(img[biggerMask], axis=0)[1])
-    hsvImage = cv2.cvtColor(self.image, cv2.COLOR_RGB2HSV)
-    print ("\tSat values: ", np.median(hsvImage[biggerMask], axis=0)[1]*100.0/255.0, np.median(hsvImage[smallerMask], axis=0)[1]*100.0/255.0)
-    print ("\tCombined tone: ", ImageUtils.RGB2HEX(np.median(self.image[mask], axis=0)))
-
-    return biggerMask, smallerMask
+  """
+  masks_info will print various measurements about the input masks like brightness,
+  saturation, delta_e_cie2000 diff etc. which can then be analyzed later.
+  The function also displays the masks.
+  """
+  def masks_info(self, leftMask, rightMask, mask):
+    print ("\tMask division: ", np.count_nonzero(leftMask)/np.count_nonzero(mask), np.count_nonzero(rightMask)/np.count_nonzero(mask))
+    print ("\tSat values: ", np.median(self.satImage[leftMask], axis=0)[1]*100.0/255.0, np.median(self.satImage[rightMask], axis=0)[1]*100.0/255.0)
+    print ("\tBrightness values: ", np.median(self.brightImage[leftMask], axis=0)[2]*100.0/255.0, np.median(self.brightImage[rightMask], axis=0)[2]*100.0/255.0)
+    print ("\tRatio values: ", np.median(self.ratioImage[leftMask], axis=0)[1], np.median(self.ratioImage[rightMask], axis=0)[1])
+    print ("\tColor diff: ", ImageUtils.delta_e_mask(self.image, leftMask, rightMask))
+    print ("")
+    self.show_masks([leftMask, rightMask], [[0, 255, 0], [255, 0, 0]])
 
   """
   divide_mask will divide given mask into clusters based on delta_e_cie2000 differences.
