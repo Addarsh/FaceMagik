@@ -20,6 +20,7 @@ from scipy.stats import norm
 from scipy.optimize import minimize
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
+from colormath import color_diff_matrix
 
 class ImageUtils:
   windowName = ""
@@ -915,6 +916,21 @@ class ImageUtils:
   """
   def delta_e_mask(image, mask1, mask2):
     return ImageUtils.delta_cie2000(np.mean(image[mask1], axis=0), np.mean(image[mask2], axis=0))
+
+  """
+  delta_e_mask_matrix returns delta_e_cie2000 between a given color and a mask for
+  given sRGB image. The returned errors is the average error of all the deltas.
+  """
+  def delta_e_mask_matrix(image, sRGB, mask):
+    lab = convert_color(
+      colormath.color_objects.sRGBColor(sRGB[0], sRGB[1], sRGB[2], True),
+      colormath.color_objects.LabColor)
+    labMask = ImageUtils.sRGBtoLab(image[mask]).astype(np.float)
+    labMask[:, 0] = labMask[:, 0]*(100.0/255.0)
+    labMask[:, 1] = labMask[:, 1] - 128
+    labMask[:, 2] = labMask[:, 2] - 128
+    res = color_diff_matrix.delta_e_cie2000([lab.lab_l, lab.lab_a, lab.lab_b], labMask)
+    return np.mean(res)
 
   """
   Calculates the Delta E (CIE2000) of two sRGB colors (range 0-255).
