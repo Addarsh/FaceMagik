@@ -824,13 +824,22 @@ class Face:
     return self.divide_all_sat(b) + self.divide_all_sat(a)
 
   """
+  divide_all_brightness divides given mask into brightness masks repeatedly.
+  """
+  def divide_all_brightness(self, mask):
+    a, b = self.divide_by_brightness(mask, False)
+    if (np.mean(self.brightImage[a], axis=0)[2] - np.mean(self.brightImage[b], axis=0)[2])*100.0/255.0 < 2 \
+      or np.count_nonzero(mask)/np.count_nonzero(self.faceMask) < 0.05:
+      return [mask]
+    return self.divide_all_brightness(a) + self.divide_all_brightness(b)
+
+  """
   find_best_masks returns the two best masks among the given given masks
   within given indices.
   """
   def find_best_masks(self, allMasks, indices):
     start, end = indices
     totalDiffList = []
-    goodFacePoints = self.good_face_points()
     for i in range(start, end):
       totalDiff = 0
       for j in range(start, end):
@@ -844,14 +853,13 @@ class Face:
 
     sortedDiffList = sorted(totalDiffList, key=lambda diff: diff[0])
     print ("Index of best mask: ", sortedDiffList[0][1])
-    self.show_mask(allMasks[sortedDiffList[0][1]])
     return [sortedDiffList[0][1], sortedDiffList[1][1]]
 
   """
-  detect_skin_tone detects skin tone.
+  best_masks finds the best two masks by visual color difference and returns
+  them in that order.
   """
-  def detect_skin_tone(self):
-    allMasks = self.divide_all_sat(self.faceMask)
+  def best_masks(self, allMasks):
     idxList = self.find_best_masks(allMasks, (0, len(allMasks)))
     bestIndices = []
     start, end = idxList[0]-1, idxList[0]+2
@@ -869,7 +877,28 @@ class Face:
       else:
         print ("Shift by one lighter")
         start, end = start-1, end-1
+
     self.show_masks([allMasks[bestIndices[0]], allMasks[bestIndices[1]]])
+    return bestIndices
+
+  """
+  detect_skin_tone detects skin tone.
+  """
+  def detect_skin_tone(self):
+    allSatMasks = self.divide_all_sat(self.faceMask)
+    bestIndices = self.best_masks(allSatMasks)
+    goodMask = np.bitwise_or(allSatMasks[bestIndices[0]], allSatMasks[bestIndices[1]])
+
+    allBrightMasks = self.divide_all_brightness(goodMask)
+    bestIndices = self.find_best_masks(allBrightMasks, (0, len(allBrightMasks)))
+    print ("Brightness best indices: ", bestIndices)
+
+    goodMask = np.bitwise_or(allBrightMasks[bestIndices[0]], allBrightMasks[bestIndices[1]])
+    self.show_mask(goodMask)
+
+    skinTone = np.median(self.image[goodMask], axis=0)
+    print ("Skin tone: ", ImageUtils.RGB2HEX(skinTone))
+    self.show_masks([self.background_mask()],[skinTone])
 
   """
   divide_by_saturation divides given mask using saturation image
