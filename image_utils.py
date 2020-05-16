@@ -919,18 +919,20 @@ class ImageUtils:
 
   """
   delta_e_mask_matrix returns delta_e_cie2000 between a given color and a mask for
-  given sRGB image. The returned errors is the average error of all the deltas.
+  given sRGB image. Returns an array of delta values of each point in the mask.
   """
   def delta_e_mask_matrix(image, sRGB, mask):
-    lab = convert_color(
-      colormath.color_objects.sRGBColor(sRGB[0], sRGB[1], sRGB[2], True),
-      colormath.color_objects.LabColor)
-    labMask = ImageUtils.sRGBtoLab(image[mask]).astype(np.float)
-    labMask[:, 0] = labMask[:, 0]*(100.0/255.0)
-    labMask[:, 1] = labMask[:, 1] - 128
-    labMask[:, 2] = labMask[:, 2] - 128
-    res = color_diff_matrix.delta_e_cie2000([lab.lab_l, lab.lab_a, lab.lab_b], labMask)
-    return np.mean(res)
+    rgbColors = image[mask]
+    rgbColors = np.vstack([rgbColors, sRGB])
+    labColors = ImageUtils.sRGBtoLab(rgbColors).astype(np.float)
+    labColors[:, 0] = labColors[:, 0]*(100.0/255.0)
+    labColors[:, 1] = labColors[:, 1] - 128
+    labColors[:, 2] = labColors[:, 2] - 128
+
+    lab = labColors[-1]
+    labColors = labColors[:-1]
+
+    return color_diff_matrix.delta_e_cie2000(lab, labColors)
 
   """
   Calculates the Delta E (CIE2000) of two sRGB colors (range 0-255).
@@ -1057,7 +1059,14 @@ if __name__ == "__main__":
   #ImageUtils.chromatic_adaptation("test/ancha.JPG", ImageUtils.color("#caf0fc"))
   #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
   #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
-  print ("delta 1: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFEBDA")))
+  _, _, img, _ = ImageUtils.read("/Users/addarsh/Desktop/anastasia-me/IMG_9677.png")
+  img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+  img[:, :] = ImageUtils.HEX2RGB("#CD9C81")
+  mask = np.zeros(img.shape[:2], dtype=bool)
+  mask[:, :] = True
+  res = ImageUtils.delta_e_mask_matrix(img, ImageUtils.HEX2RGB("#CD9881"), mask)
+  print ("mean: ", np.mean(res))
+  #print ("delta 1: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFEBDA")))
   #print ("delta 2: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFF1E5")))
   #print ("deltas matrix: ", ImageUtils.delta_e_cie2000_matrix(np.array([[52.2883, 11.285, 18.2971],
   #[94.2010, 4.0615, 10.6879], [95.9256, 2.728, 7.4665]])))
