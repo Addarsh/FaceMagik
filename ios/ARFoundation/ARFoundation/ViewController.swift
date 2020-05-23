@@ -15,7 +15,9 @@ import Alamofire
 class ViewController: UIViewController, ARSCNViewDelegate {
     @IBOutlet weak var captureButton: UIButton!
     @IBOutlet weak var lightIntensity: UILabel!
-    
+    @IBOutlet weak var ambientIntensity: UILabel!
+    @IBOutlet weak var xDirection: UILabel!
+    @IBOutlet weak var progressView: UIProgressView!
     @IBOutlet var sceneView: ARSCNView!
     
     private let concurrentPhotoQueue = DispatchQueue(label: "com.ARFoundation.photoqueue", attributes: .concurrent)
@@ -24,7 +26,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     private var pngData: Data?
     
-    private let uploadURL = "http://[2601:647:4200:af70:4875:1218:a60f:6c6]:8000/skin/"
+    private let uploadURL = "http://[2600:1700:f1b0:6400:e82b:b259:83c6:94cd]:8000/skin/"
     
     private var lastFaceAnchor: ARFaceAnchor?
     
@@ -39,6 +41,21 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     private var vertexNormals: [[Float]]?
     
     private var triangleIndices: [Int16]?
+    
+    // Moving average variables.
+    private let mAvgInterval: Int = 20
+    
+    private var dir: [[Float]] = [[], [], []]
+    private var mavgDir: [Float] = [0.0, 0.0, 0.0]
+    private var dirCount: Int = 0
+    
+    private var primary: [Float] = []
+    private var mavgPrimary: Float = 0.0
+    private var primaryCount: Int = 0
+    
+    private var ambient: [Float] = []
+    private var mavgAmbient: Float = 0.0
+    private var ambientCount: Int = 0
     
     private var harmonicPrint: [Float] = [0, 0, 0]
     private var harmonicPrintCount: Int = 0
@@ -130,15 +147,66 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             self.lastCamera = self.sceneView.session.currentFrame?.camera
             self.lastCapturedImage = self.sceneView.session.currentFrame?.capturedImage
             self.lastLightEstimate = self.sceneView.session.currentFrame?.lightEstimate as? ARDirectionalLightEstimate
-            guard let lightEstimate = self.lastLightEstimate else {
+            if self.lastLightEstimate == nil {
                 return
             }
-            //self.printHarmonics(lightEstimate: lightEstimate)
+            
+            self.movingAverageXintensity()
+            self.movingAveragePrimary()
+            self.movingAverageAmbient()
+            
+            
+            //self.printHarmonics(lightEstimate: lighstEstimate)
             DispatchQueue.main.async {
-                self.lightIntensity.text = String(describing: Int(lightEstimate.ambientIntensity))
+                self.lightIntensity.text = String(describing: Int(self.mavgPrimary))
+                self.ambientIntensity.text = String(describing: Int(self.mavgAmbient))
+                self.xDirection.text = String(describing: self.mavgDir[0])
                 self.lightIntensity.setNeedsDisplay()
+                self.ambientIntensity.setNeedsDisplay()
+                self.xDirection.setNeedsDisplay()
             }
         }
+    }
+    
+    // Calculate moving average direction for primaryIntensity
+    // in X direction in face coordinates.
+    func movingAverageXintensity() {
+        let dirval = self.toFaceCords(self.lastLightEstimate!.primaryLightDirection, self.lastFaceAnchor!)
+        if self.dirCount < self.mAvgInterval {
+            self.dir[0].append(dirval[0])
+            self.dir[1].append(dirval[1])
+            self.dir[2].append(dirval[2])
+        } else {
+            self.dir[0][self.dirCount % self.mAvgInterval] = dirval[0]
+            self.dir[1][self.dirCount % self.mAvgInterval] = dirval[1]
+            self.dir[2][self.dirCount % self.mAvgInterval] = dirval[2]
+        }
+        self.dirCount += 1
+        self.mavgDir = [self.dir[0].average(), self.dir[1].average(), self.dir[2].average()]
+    }
+    
+    // Calculate moving average intensity for primaryIntensity.
+    func movingAveragePrimary() {
+        let pval = Float(self.lastLightEstimate!.primaryLightIntensity)/1000.0
+        if self.primaryCount < self.mAvgInterval {
+            self.primary.append(pval)
+        } else {
+            self.primary[self.primaryCount % self.mAvgInterval] = pval
+        }
+        self.primaryCount += 1
+        self.mavgPrimary = self.primary.average() * 1000.0
+    }
+    
+    // Calculate moving average intensity for ambientintensity.
+    func movingAverageAmbient() {
+        let aval = Float(self.lastLightEstimate!.ambientIntensity)/1000.0
+        if self.ambientCount < self.mAvgInterval {
+            self.ambient.append(aval)
+        } else {
+            self.ambient[self.ambientCount % self.mAvgInterval] = aval
+        }
+        self.ambientCount += 1
+        self.mavgAmbient = self.ambient.average() * 1000.0
     }
     
     func printHarmonics(lightEstimate: ARDirectionalLightEstimate) {
@@ -164,69 +232,87 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     }
 
     @IBAction func onClick(_ sender: Any) {
+        var lightDict: [String:[Float]]?
+        var vertexNormals: [[Float]]?
+        var vertices2D: [[Int]]?
+        var pngData: Data?
         concurrentPhotoQueue.sync {
-            guard let lastImage = self.lastCapturedImage else {
+            if self.lastCapturedImage == nil {
                 return
             }
-            self.pngData =  UIImage(pixelBuffer: lastImage)?.pngData()
-            self.vertices2D = projectedVertices()
-            self.vertexNormals = calcNormals()
-            self.lightDict = lightEstimate()
+            //self.pngData =  UIImage(pixelBuffer: lastImage)?.pngData()
+            pngData = pixelBufferToUIImage().pngData()
+            if pngData == nil {
+                return
+            }
             
+            vertices2D = projectedVertices()
+            if vertices2D == nil {
+                return
+            }
+            
+            vertexNormals = calcNormals()
+            if vertexNormals == nil {
+                return
+            }
+            
+            lightDict = lightEstimate()
+            if lightDict == nil {
+                return
+            }
         }
         
-        guard let pngData = self.pngData else {
-            return
-        }
-        guard let vertices2D = self.vertices2D else {
-            return
-        }
-        guard let lightDict = self.lightDict else {
-            return
-        }
-        guard let vertexNormals = self.vertexNormals else {
-            return
-        }
-        guard let triangleIndices = self.triangleIndices else {
-            return
-        }
-        
-        guard let jsonVertices2D = try? JSONSerialization.data(withJSONObject: vertices2D) else {
+        guard let jsonVertices2D = try? JSONSerialization.data(withJSONObject: vertices2D!) else {
             return
         }
         
-        guard let jsonLight = try? JSONSerialization.data(withJSONObject: lightDict) else {
+        guard let jsonLight = try? JSONSerialization.data(withJSONObject: lightDict!) else {
             return
         }
         
-        guard let jsonVertexNormals =  try? JSONSerialization.data(withJSONObject: vertexNormals) else {
+        guard let jsonVertexNormals =  try? JSONSerialization.data(withJSONObject: vertexNormals!) else {
             return
         }
         
-        guard let jsonTriangleIdx =  try? JSONSerialization.data(withJSONObject: triangleIndices) else {
+        guard let jsonTriangleIdx =  try? JSONSerialization.data(withJSONObject: self.triangleIndices!) else {
             return
         }
         
-        Alamofire.upload(multipartFormData: { multipartFormData in
-            multipartFormData.append(pngData.base64EncodedData(), withName: "fileset", mimeType: "image/png")
+        uploadData({ multipartFormData in
+            multipartFormData.append(pngData!.base64EncodedData(), withName: "fileset", mimeType: "image/png")
             multipartFormData.append(jsonVertices2D, withName: "vertices")
             multipartFormData.append(jsonLight, withName: "lighting")
             multipartFormData.append(jsonTriangleIdx, withName: "triangleIndices")
             multipartFormData.append(jsonVertexNormals, withName: "vertexNormals")
-        }, to: uploadURL) { result in
+        }, uploadURL)
+    }
+    
+    // uploadData uploads given multipart form data to given URL.
+    func uploadData(_ data: @escaping (Alamofire.MultipartFormData)->Void,  _ url: String) {
+        Alamofire.upload(multipartFormData: data, to: url) { result in
             switch result {
             case .success(let upload, _, _):
                 upload.uploadProgress{progress in
-                    print ("Upload progress \(progress.fractionCompleted)")
+                    //print ("Upload progress \(progress.fractionCompleted)")
+                    self.progressView.setProgress(Float(progress.fractionCompleted), animated: true)
                 }
                 
                 upload.responseJSON { response in
-                    print ("Upload complete")
+                    //print ("Upload complete")
+                    self.progressView.setProgress(0.0, animated: true)
                 }
             case .failure(let encodingError):
                 print (encodingError)
             }
         }
+    }
+    
+    func pixelBufferToUIImage() -> UIImage {
+        let ciImage = CIImage(cvPixelBuffer: self.lastCapturedImage!)
+        let context = CIContext(options: nil)
+        let cgImage = context.createCGImage(ciImage, from: ciImage.extent)
+        let uiImage = UIImage(cgImage: cgImage!)
+        return uiImage
     }
     
     func lightEstimate() -> [String:[Float]]? {
@@ -236,7 +322,9 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         let spHarmonics = lightEstimate.sphericalHarmonicsCoefficients
         var lightDict: [String:[Float]] = [:]
         lightDict["colorTemperature"] = [Float(lightEstimate.ambientColorTemperature)]
-        lightDict["lumenIntensity"] = [Float(lightEstimate.ambientIntensity)]
+        lightDict["lumenIntensity"] = [self.mavgAmbient]
+        lightDict["primaryIntensity"] = [self.mavgPrimary]
+        lightDict["primaryDirection"] = self.mavgDir
         
         let floatSz = 4 // 4 bytes.
         let blockSz = 36 // 36 bytes for each channel.
@@ -295,6 +383,14 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         let vertex4 = vector_float4(vertex.x, vertex.y, vertex.z, 1)
         let world_vertex4 = simd_mul(faceAnchor.transform, vertex4)
         return simd_float3(x: world_vertex4.x, y: world_vertex4.y, z: world_vertex4.z)
+    }
+    
+    // toFaceCords converts given vector from world coordinates
+    // to face coordinates.
+    func toFaceCords(_ vertex: vector_float3, _ faceAnchor: ARFaceAnchor) -> [Float] {
+        let vertex4 = vector_float4(vertex.x, vertex.y, vertex.z, 1)
+        let face_vertex4 = simd_mul(faceAnchor.transform.inverse, vertex4)
+        return [face_vertex4.x, face_vertex4.y, face_vertex4.z]
     }
     
     func calcNormals() -> [[Float]]? {
@@ -357,4 +453,14 @@ extension UIImage {
         }
         self.init(cgImage: cImage)
     }
+}
+
+extension Sequence where Element: AdditiveArithmetic {
+    /// Returns the total sum of all elements in the sequence
+    func sum() -> Element { reduce(.zero, +) }
+}
+
+extension Collection where Element: BinaryFloatingPoint {
+    /// Returns the average of all elements in the array
+    func average() -> Element { isEmpty ? .zero : Element(sum()) / Element(count) }
 }
