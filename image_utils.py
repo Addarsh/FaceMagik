@@ -1014,6 +1014,15 @@ class ImageUtils:
     )
 
   """
+  show_rgb is a function to display given RGB image.
+  """
+  def show_rgb(image, imgSize=900):
+    cv2.namedWindow(ImageUtils.windowName, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(ImageUtils.windowName, imgSize, imgSize)
+    cv2.imshow(ImageUtils.windowName, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    return cv2.waitKey(0) & 0xFF
+
+  """
   show plots the image and blocks until user presses a key.
   If user presses 'q', returns False to indicate user wants to quit
   else returns True.
@@ -1059,13 +1068,8 @@ if __name__ == "__main__":
   #ImageUtils.chromatic_adaptation("test/ancha.JPG", ImageUtils.color("#caf0fc"))
   #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
   #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
-  _, _, img, _ = ImageUtils.read("/Users/addarsh/Desktop/anastasia-me/IMG_9677.png")
-  img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-  img[:, :] = ImageUtils.HEX2RGB("#CD9C81")
-  mask = np.zeros(img.shape[:2], dtype=bool)
-  mask[:, :] = True
-  res = ImageUtils.delta_e_mask_matrix(img, ImageUtils.HEX2RGB("#CD9881"), mask)
-  print ("mean: ", np.mean(res))
+  #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
+  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#D8B29D"), ImageUtils.HEX2RGB("#CDBCB1")))
   #print ("delta 1: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFEBDA")))
   #print ("delta 2: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFF1E5")))
   #print ("deltas matrix: ", ImageUtils.delta_e_cie2000_matrix(np.array([[52.2883, 11.285, 18.2971],
