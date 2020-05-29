@@ -21,12 +21,13 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     @IBOutlet var sceneView: ARSCNView!
     
     private let concurrentPhotoQueue = DispatchQueue(label: "com.ARFoundation.photoqueue", attributes: .concurrent)
+    private let backgroundQueue = DispatchQueue(label: "com.ARFoundation.backgroundqueue", qos: .background)
     
     private var lastCapturedImage: CVPixelBuffer?
     
     private var pngData: Data?
     
-    private let uploadURL = "http://[2600:1700:f1b0:6400:e82b:b259:83c6:94cd]:8000/skin/"
+    private let uploadPrefix = "http://[2600:1700:f1b0:6400:b9f9:9d6b:de51:77a2]:8000/"
     
     private var lastFaceAnchor: ARFaceAnchor?
     
@@ -59,6 +60,9 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     
     private var harmonicPrint: [Float] = [0, 0, 0]
     private var harmonicPrintCount: Int = 0
+    
+    // Last HTTP request result.
+    private var lastHttpResult: NSDictionary?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -231,7 +235,34 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         }
     }
 
+    // onClick is the callback executed when Capture photo
+    // button is clicked in the UI.
     @IBAction func onClick(_ sender: Any) {
+        //uploadMesh("skin/video/", "")
+        self.uploadVideo()
+    }
+    
+    // uploadVideo uploads a video of images
+    // to backend.
+    func uploadVideo() {
+        DispatchQueue.global(qos: .background).async {
+            let count = 10
+            var dir: String = ""
+            for _ in 0..<count {
+                self.uploadMesh("skin/video/", dir)
+                guard let res = self.lastHttpResult else {
+                    continue
+                }
+                dir = String(describing: res.value(forKey: "dirName")!)
+                sleep(3) // delay in seconds.
+            }
+        }
+    }
+    
+    // uploadFaceImage takes the last captured frame and associated
+    // mesh information and uploads it to the backend. It is a synchrnous
+    // function.
+    func uploadMesh(_ endpoint: String, _ name: String) {
         var lightDict: [String:[Float]]?
         var vertexNormals: [[Float]]?
         var vertices2D: [[Int]]?
@@ -278,35 +309,56 @@ class ViewController: UIViewController, ARSCNViewDelegate {
             return
         }
         
+        guard let dirName =  try? JSONSerialization.data(withJSONObject: [name]) else {
+            return
+        }
+        
         uploadData({ multipartFormData in
             multipartFormData.append(pngData!.base64EncodedData(), withName: "fileset", mimeType: "image/png")
             multipartFormData.append(jsonVertices2D, withName: "vertices")
             multipartFormData.append(jsonLight, withName: "lighting")
             multipartFormData.append(jsonTriangleIdx, withName: "triangleIndices")
             multipartFormData.append(jsonVertexNormals, withName: "vertexNormals")
-        }, uploadURL)
+            multipartFormData.append(dirName, withName: "dirName")
+        }, self.uploadPrefix + endpoint)
     }
     
     // uploadData uploads given multipart form data to given URL.
     func uploadData(_ data: @escaping (Alamofire.MultipartFormData)->Void,  _ url: String) {
+        let semaphore = DispatchSemaphore(value: 0)
+        DispatchQueue.main.async {
+            self.progressView.setProgress(0.1, animated: true)
+        }
         Alamofire.upload(multipartFormData: data, to: url) { result in
             switch result {
             case .success(let upload, _, _):
-                upload.uploadProgress{progress in
+                upload.uploadProgress{ progress in
                     //print ("Upload progress \(progress.fractionCompleted)")
-                    self.progressView.setProgress(Float(progress.fractionCompleted), animated: true)
+                    DispatchQueue.main.async {
+                        self.progressView.setProgress(Float(progress.fractionCompleted), animated: true)
+                    }
                 }
                 
                 upload.responseJSON { response in
                     //print ("Upload complete")
-                    self.progressView.setProgress(0.0, animated: true)
+                    if let jsonDict = response.result.value as? NSDictionary {
+                        self.lastHttpResult = jsonDict
+                    }
+                    DispatchQueue.main.async {
+                        self.progressView.setProgress(0.0, animated: true)
+                    }
+                    semaphore.signal()
                 }
             case .failure(let encodingError):
                 print (encodingError)
+                self.lastHttpResult = nil
+                semaphore.signal()
             }
         }
+        semaphore.wait()
     }
     
+    // pixelBufferToUIImage converts pixel buffer to UIImage.
     func pixelBufferToUIImage() -> UIImage {
         let ciImage = CIImage(cvPixelBuffer: self.lastCapturedImage!)
         let context = CIContext(options: nil)
