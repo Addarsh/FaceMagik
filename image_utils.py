@@ -737,13 +737,6 @@ class ImageUtils:
 
     return R, T
 
-  """
-  remove_specular_highlights removes specular highlights
-  from the image and returns the diffuse image.
-  """
-  def remove_specular_highlights(imagePath):
-    _, _, img, _ = ImageUtils.read(imagePath)
-
 
   """
   plot_reflectance is a rest function to plot the reflectance of
@@ -921,8 +914,7 @@ class ImageUtils:
   delta_e_mask_matrix returns delta_e_cie2000 between a given color and a mask for
   given sRGB image. Returns an array of delta values of each point in the mask.
   """
-  def delta_e_mask_matrix(image, sRGB, mask):
-    rgbColors = image[mask]
+  def delta_e_mask_matrix(sRGB, rgbColors):
     rgbColors = np.vstack([rgbColors, sRGB])
     labColors = ImageUtils.sRGBtoLab(rgbColors).astype(np.float)
     labColors[:, 0] = labColors[:, 0]*(100.0/255.0)
@@ -1069,7 +1061,7 @@ if __name__ == "__main__":
   #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
   #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
-  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#D8B29D"), ImageUtils.HEX2RGB("#CDBCB1")))
+  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#d3987e"), ImageUtils.HEX2RGB("#c38c6d")))
   #print ("delta 1: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFEBDA")))
   #print ("delta 2: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFF1E5")))
   #print ("deltas matrix: ", ImageUtils.delta_e_cie2000_matrix(np.array([[52.2883, 11.285, 18.2971],

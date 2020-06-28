@@ -3,8 +3,11 @@ import cv2
 import argparse
 import json
 import random
+import math
 import numpy as np
 from image_utils import ImageUtils
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatch
 
 from PIL import Image
 from face import Face
@@ -44,120 +47,188 @@ def faces(videoPath):
   return faceList
 
 """
-remove_non_face_points removes mesh points from the mask
-that are not part of the facemask mask.
-"""
-def remove_non_face_points(mask, faceMask, meshVertices):
-  meshMask = np.zeros(faceMask.shape, dtype=bool)
-  meshMask[meshVertices] = True
-
-  badMask = np.bitwise_xor(np.bitwise_and(meshMask, faceMask), meshMask)
-  badMeshVertices = np.transpose(np.nonzero(badMask))
-  rows = np.where((meshVertices==badMeshVertices[:,None]).all(-1))[1]
-  mask[rows, :] = False
-
-"""
 analyze will process images within given video directory.
 """
 def analyze(videoPath):
   faceList = faces(videoPath)
-  meshColors = mesh_colors(videoPath, faceList).astype(np.uint8)
+  k = 6
 
-  # Only select mesh points that don't vary by much over pictures.
-  mask = np.zeros(meshColors.shape[:2], dtype=bool)
-  for r in range(meshColors.shape[0]):
-    colors = meshColors[r, :, :]
-    columns = colors.shape[0]
-    for i in range(columns):
-      for j in range(i+1, columns):
-        delta = ImageUtils.delta_cie2000(colors[i], colors[j])
-        if delta <= 3:
-          mask[r, i] = True
-          mask[r, j] = True
+  # Set up figure to plot.
+  fig = plt.figure()
+  ax = fig.add_axes([0, 0, 1, 1])
+  ax.set_xlim(0, len(faceList))
+  ax.set_ylim(0, k)
+  ax.axis('off')
+  plt.ion()
 
-  # Remove points in mask that are not in faceMask.
-  remove_non_face_points(mask, faceList[0].faceMask, faceList[0].faceVertices)
+  count = 0
+  for f in faceList:
+    f.windowName = "image"
+    colors = f.ym_colors()
 
-  # Set bad mask to white.
-  meshColors[mask==False] = [255, 255, 255]
-  ImageUtils.show_rgb(np.repeat(meshColors, 100, axis=1))
+    n = colors.shape[0]
 
-  # Prepare for Kmeoids clustering.
-  goodColors = meshColors[mask]
-  dMatrix = np.zeros((goodColors.shape[0],goodColors.shape[0]))
-  for i in range(goodColors.shape[0]):
-    dMatrix[i, :] = ImageUtils.delta_e_mask_matrix(meshColors, goodColors[i],mask)
-  medMasks = Kmedoids(goodColors, dMatrix, k=5)
+    dMatrix = np.zeros((n,n))
+    for i in range(n):
+      dMatrix[i, :] = ImageUtils.delta_e_mask_matrix(colors[i], colors)
 
-  # Show each cluster.
-  maskIndices = np.transpose(np.nonzero(mask))
-  for k in range(medMasks.shape[0]):
-    clone = meshColors.copy()
-    kMask = np.reshape(medMasks[k, :], (goodColors.shape[0],))
-    badMask = kMask == False
+    medoids = []
+    bestMedoids = []
+    minCost = 10000.0
+    for iter in range(500):
+      try:
+        medoids, cost = Kmedoids(colors, dMatrix, k=k)
+        if cost < minCost:
+          minCost = cost
+          bestMedoids = medoids.copy()
+      except Exception as e:
+        print (e)
 
-    clone[maskIndices[badMask]] = [255, 255, 255]
-    ImageUtils.show_rgb(np.repeat(clone, 100, axis=1))
+    print ("Dividing image into K: ", k, " clusters, with MIN COST: ", minCost)
+    medoids = bestMedoids.copy()
+
+    # Divide ym mask into given medoid clusters.
+    allColors = f.image[f.ym]
+    n = allColors.shape[0]
+    newClusters = np.zeros((k, n))
+    for i in range(k):
+      newClusters[i, :] = ImageUtils.delta_e_mask_matrix(medoids[i]["medoid"], allColors)
+    clusterIndices = np.argmin(newClusters, axis=0)
+
+    allMasks = []
+    allCords = np.transpose(np.nonzero(f.ym))
+    for i in range(k):
+      # Points in mask closest to ith medoid.
+      clusterMask = clusterIndices == i
+      cm = np.zeros(f.faceMask.shape, dtype=bool)
+      cm[allCords[clusterMask][:, 0], allCords[clusterMask][:, 1]] = True
+      allMasks.append(cm)
+
+    fhMask = np.zeros(f.faceMask.shape, dtype=np.bool)
+    try:
+      fhMask = f.get_forehead_points()
+      print ("forehead mask")
+      f.show_mask(fhMask)
+    except Exception as e:
+      print ("forehead points not found: ", e)
+
+    # Show mask corresponding to each medoid.
+    for i in range(k):
+      #if np.count_nonzero(allMasks[i])/np.count_nonzero(f.ym) <= 0.05:
+      #  continue
+      print ("Medoid color: ", ImageUtils.RGB2HEX(medoids[i]["medoid"]))
+      print ("Percent: ", (np.count_nonzero(allMasks[i])/np.count_nonzero(f.ym))*100.0)
+      print ("Mean brightness: ", np.mean(f.brightImage[allMasks[i]], axis=0)[2]*(100.0/255.0))
+      print ("Mean sat: ", np.mean(f.satImage[allMasks[i]], axis=0)[1]*(100.0/255.0))
+      print ("Std brightness: ", np.std(f.brightImage[allMasks[i]], axis=0)[2]*(100.0/255.0))
+      print ("Mean ratio: ", np.mean(f.brightImage[allMasks[i]], axis=0)[2]/np.mean(f.satImage[allMasks[i]], axis=0)[1])
+      print ("Meoid cluster sum: ", np.sum(dMatrix[medoids[i]["idx"], medoids[i]["cIndices"]]), medoids[i]["cIndices"])
+      print ("")
+
+      # Add medoid to plot.
+      ax.add_patch(mpatch.Rectangle((count, i), 1, 1, color=ImageUtils.RGB2HEX(medoids[i]["medoid"])))
+
+      f.show_mask(allMasks[i])
+
+    # Show specular mask.
+    f.show_mask(np.bitwise_and(f.beta != 0, f.faceMask))
+
+    # Plot medoids.
+    plt.show(block=False)
+
+    count += 1
+    if f.show_orig_image() == ord("q"):
+      break
 
 """
 Kmedoids implements Kmedoids algorithm (using given
 distance matrix) to form k clusters for given colors.
+Returned cluster matrix is of size (k, n).
 """
 def Kmedoids(colors, dMatrix, k):
   n = dMatrix.shape[0]
 
-  pairs = [[i, i] for i in range(n)]
   medIndices = random.sample(range(n), k)
-
   costMap = {}
-  print ("Starting Kmedoids")
-  numIterations = 0
+  totalCost = 0.0
   while True:
     # Assign labels to non medoid data points.
-    cMap = {}
+    #print ("medIndices: ", medIndices)
+    clusterMap = {}
+    odMap = {}
     for i in range(n):
-      if i in set(medIndices):
-        continue
       id = np.argmin(dMatrix[i, medIndices])
-      pairs[i][1] = medIndices[id]
-      if medIndices[id] not in cMap:
-        cMap[medIndices[id]] = []
-      cMap[medIndices[id]].append(i)
+      if medIndices[id] not in clusterMap:
+        clusterMap[medIndices[id]] = set()
+      clusterMap[medIndices[id]].add(i)
+      odMap[i] = medIndices[id]
 
-    # Compute costs in each cluster and swap medoid if needed.
-    newIndices = []
-    for medIdx in medIndices:
-      cost = np.mean(dMatrix[medIdx, cMap[medIdx]])
-      bestIdx = -1
-      for j in cMap[medIdx]:
-        jCost = np.mean(dMatrix[j, cMap[medIdx]])
-        if jCost < cost:
-          cost = jCost
-          bestIdx = j
-      if bestIdx == -1:
-        bestIdx = medIdx
+    bestCost = 0.0
+    for m in medIndices:
+      bestCost += np.sum(dMatrix[m, list(clusterMap[m])])
+    totalCost = bestCost
 
-      costMap[bestIdx] = cost
-      newIndices.append(bestIdx)
+    # Compute total cost after swapping each non medoid with each medoid.
+    bestPair = (-1, -1)
+    medIndicesSet = set(medIndices)
+    for m in medIndices:
+      for i in range(n):
+        if i in medIndicesSet:
+          continue
 
-    if set(medIndices) == set(newIndices):
-      # complete.
-      print ("Kmeoids Computation complete")
+        # Swap i with m and compute cost of configuration.
+        odc = odMap[i]
+        clusterMap[i] = clusterMap[m].copy()
+        odMap[i] = i
+        del clusterMap[m]
+        if odc != m:
+          odMap[m] = odc
+          clusterMap[i].add(i)
+          clusterMap[i].remove(m)
+          clusterMap[odc].remove(i)
+          clusterMap[odc].add(m)
+        else:
+          odMap[m] = i
+
+        cost = 0.0
+        for r in clusterMap:
+          cost += np.sum(dMatrix[r, list(clusterMap[r])])
+
+        if cost < bestCost:
+          # Save current best pair.
+          bestCost = cost
+          bestPair = (m, i)
+
+        # Swap i and m back.
+        odMap[m] = m
+        odMap[i] = odc
+        clusterMap[m] = clusterMap[i].copy()
+        del clusterMap[i]
+        if odc != m:
+          clusterMap[odc].remove(m)
+          clusterMap[odc].add(i)
+          clusterMap[m].add(m)
+          clusterMap[m].remove(i)
+
+    if bestPair == (-1, -1) or math.isclose(totalCost, bestCost, rel_tol=1e-3):
+      #print ("Kmedoids complete")
       break
 
-    numIterations += 1
-    if numIterations == 100:
-      # Too many iterations, break.
-      print ("Too many iterations, complete computation.")
-      break
+    # Update medIndices.
+    medIndicesSet.remove(bestPair[0])
+    medIndicesSet.add(bestPair[1])
+    medIndices = list(medIndicesSet).copy()
 
-    medIndices = newIndices
+  medoids = []
+  for idx in medIndices:
+    med = {}
+    med["medoid"] = colors[idx]
+    med["cluster"] = colors[list(clusterMap[idx])]
+    med["idx"] = idx
+    med["cIndices"] = list(clusterMap[idx])
+    medoids.append(med)
 
-  mask = np.zeros((k, n), dtype=bool)
-  for i, medIdx in enumerate(medIndices):
-    mask[i, cMap[medIdx]] = True
-    print ("Medoid : ", ImageUtils.RGB2HEX(colors[medIdx]), " cost: ", costMap[medIdx], " percent: ", (len(cMap[medIdx])/n)*100.0)
-  return mask
+  return medoids, totalCost
 
 
 if __name__ == "__main__":
