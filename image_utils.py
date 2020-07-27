@@ -82,8 +82,8 @@ class ImageUtils:
   """
   Plots a histogram of the given image for given mask.
   """
-  def plot_histogram(img, mask, block=True):
-    plt.hist(img[mask][:, 0], bins=256, density=True)
+  def plot_histogram(img, mask, block=True, bins=40):
+    plt.hist(img[mask][:, 0], bins=bins, density=True)
     plt.xlim([0,256])
     plt.show(block=block)
 
@@ -897,6 +897,20 @@ class ImageUtils:
       (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_LAB2RGB), (-1, 3))
 
   """
+  sRGBtoYCrCb converts given sRGB array (n by 3) into (n, 3) YCrCb array.
+  """
+  def sRGBtoYCrCb(colorArr):
+    return np.reshape(cv2.cvtColor(np.reshape(colorArr,
+      (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_RGB2YCR_CB), (-1, 3))
+
+  """
+  YCrCbtosRGB converts given YCrCb array (n by 3) into (n, 3) sRGB array.
+  """
+  def YCrCbtosRGB(colorArr):
+    return np.reshape(cv2.cvtColor(np.reshape(colorArr,
+      (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_YCR_CB2RGB), (-1, 3))
+
+  """
   flatten_rgb flattens the given RGB tuple into its corresponding index number
   from 1 to 256*256*256.
   """
@@ -937,6 +951,107 @@ class ImageUtils:
       colormath.color_objects.sRGBColor(srgb_b[0], srgb_b[1], srgb_b[2], True),
       colormath.color_objects.LabColor)
     return delta_e_cie2000(lab_a, lab_b)
+
+  """
+  lab_colors converts given sRGB array(n,3) into LAB array(n,3).
+  """
+  def lab_colors(rgbColors):
+    labColors = ImageUtils.sRGBtoLab(rgbColors).astype(np.float)
+    labColors[:, 0] = labColors[:, 0]*(100.0/255.0)
+    labColors[:, 1] = labColors[:, 1] - 128
+    labColors[:, 2] = labColors[:, 2] - 128
+    return labColors
+
+  """
+  average_delta_e_cie2000_masks returns average delta_e_cie2000 difference between
+  two colors arrays which are (n1,3) and (n2,3) and n1 != n2.
+  The difference is taken between min(n1,n2) elements that are
+  randomly chosen from each array.
+  """
+  def average_delta_e_cie2000_masks(colors1, colors2):
+    n1 = colors1.shape[0]
+    n2 = colors2.shape[0]
+    n = min(n1, n2)
+
+    i1 = random.sample(range(n1), k=n)
+    i2 = random.sample(range(n2), k=n)
+    return np.mean(ImageUtils.delta_e_cie2000_vectors(colors1[i1], colors2[i2]))
+
+  """
+  delta_e_cie2000_vectors calculates the Delta E (CIE2000) distance matrix
+  for given vectors (n,3) of sRGB colors of type np.float.
+  """
+  def delta_e_cie2000_vectors(X1, X2, Kl=1, Kc=1, Kh=1):
+    X1 = ImageUtils.lab_colors(X1)
+    X2 = ImageUtils.lab_colors(X2)
+
+    avg_Lp = (X1[:, 0] + X2[:, 0]) / 2.0
+
+    C1 = np.sqrt(np.sum(np.power(X1[:, 1:], 2), axis=1))
+    C2 = np.sqrt(np.sum(np.power(X2[:, 1:], 2), axis=1))
+
+    avg_C1_C2 = (C1 + C2) / 2.0
+
+    G = 0.5 * (
+        1
+        - np.sqrt(
+            np.power(avg_C1_C2, 7.0)
+            / (np.power(avg_C1_C2, 7.0) + np.power(25.0, 7.0))
+        )
+    )
+
+    a1p = (1.0 + G) * X1[:, 1]
+    a2p = (1.0 + G) * X2[:, 1]
+
+    C1p = np.sqrt(np.power(a1p, 2) + np.power(X1[:, 2], 2))
+    C2p = np.sqrt(np.power(a2p, 2) + np.power(X2[:, 2], 2))
+
+    avg_C1p_C2p = (C1p + C2p) / 2.0
+
+    h1p = np.degrees(np.arctan2(X1[:, 2], a1p))
+    h1p += (h1p < 0) * 360
+
+    h2p = np.degrees(np.arctan2(X2[:, 2], a2p))
+    h2p += (h2p < 0) * 360
+
+    avg_Hp = (((np.fabs(h1p - h2p) > 180) * 360) + h1p + h2p) / 2.0
+
+    T = (
+        1
+        - 0.17 * np.cos(np.radians(avg_Hp - 30))
+        + 0.24 * np.cos(np.radians(2 * avg_Hp))
+        + 0.32 * np.cos(np.radians(3 * avg_Hp + 6))
+        - 0.2 * np.cos(np.radians(4 * avg_Hp - 63))
+    )
+
+    diff_h2p_h1p = h2p - h1p
+    delta_hp = diff_h2p_h1p + (np.fabs(diff_h2p_h1p) > 180) * 360
+    delta_hp -= (h2p > h1p) * 720
+
+    delta_Lp = X2[:, 0] - X1[:, 0]
+    delta_Cp = C2p - C1p
+    delta_Hp = 2 * np.sqrt(C2p * C1p) * np.sin(np.radians(delta_hp) / 2.0)
+
+    S_L = 1 + (
+        (0.015 * np.power(avg_Lp - 50, 2))
+        / np.sqrt(20 + np.power(avg_Lp - 50, 2.0))
+    )
+    S_C = 1 + 0.045 * avg_C1p_C2p
+    S_H = 1 + 0.015 * avg_C1p_C2p * T
+
+    delta_ro = 30 * np.exp(-(np.power(((avg_Hp - 275) / 25), 2.0)))
+    R_C = np.sqrt(
+        (np.power(avg_C1p_C2p, 7.0))
+        / (np.power(avg_C1p_C2p, 7.0) + np.power(25.0, 7.0))
+    )
+    R_T = -2 * R_C * np.sin(2 * np.radians(delta_ro))
+
+    return np.sqrt(
+        np.power(delta_Lp / (S_L * Kl), 2)
+        + np.power(delta_Cp / (S_C * Kc), 2)
+        + np.power(delta_Hp / (S_H * Kh), 2)
+        + R_T * (delta_Cp / (S_C * Kc)) * (delta_Hp / (S_H * Kh))
+    )
 
   """
   Calculates the Delta E (CIE2000) distance matrix for given matrix of colors.
@@ -1006,6 +1121,149 @@ class ImageUtils:
     )
 
   """
+  Kmedoids implements Kmedoids algorithm (using given
+  distance matrix) to form k clusters for given colors.
+  Returned cluster matrix is of size (k, n).
+  """
+  def Kmedoids(colors, dMatrix, k):
+    n = dMatrix.shape[0]
+
+    medIndices = random.sample(range(n), k)
+    costMap = {}
+    totalCost = 0.0
+    while True:
+      # Assign labels to non medoid data points.
+      #print ("medIndices: ", medIndices)
+      clusterMap = {}
+      odMap = {}
+      for i in range(n):
+        id = np.argmin(dMatrix[i, medIndices])
+        if medIndices[id] not in clusterMap:
+          clusterMap[medIndices[id]] = set()
+        clusterMap[medIndices[id]].add(i)
+        odMap[i] = medIndices[id]
+
+      bestCost = 0.0
+      for m in medIndices:
+        bestCost += np.sum(dMatrix[m, list(clusterMap[m])])
+      totalCost = bestCost
+
+      # Compute total cost after swapping each non medoid with each medoid.
+      bestPair = (-1, -1)
+      medIndicesSet = set(medIndices)
+      for m in medIndices:
+        for i in range(n):
+          if i in medIndicesSet:
+            continue
+
+          # Swap i with m and compute cost of configuration.
+          odc = odMap[i]
+          clusterMap[i] = clusterMap[m].copy()
+          odMap[i] = i
+          del clusterMap[m]
+          if odc != m:
+            odMap[m] = odc
+            clusterMap[i].add(i)
+            clusterMap[i].remove(m)
+            clusterMap[odc].remove(i)
+            clusterMap[odc].add(m)
+          else:
+            odMap[m] = i
+
+          cost = 0.0
+          for r in clusterMap:
+            cost += np.sum(dMatrix[r, list(clusterMap[r])])
+
+          if cost < bestCost:
+            # Save current best pair.
+            bestCost = cost
+            bestPair = (m, i)
+
+          # Swap i and m back.
+          odMap[m] = m
+          odMap[i] = odc
+          clusterMap[m] = clusterMap[i].copy()
+          del clusterMap[i]
+          if odc != m:
+            clusterMap[odc].remove(m)
+            clusterMap[odc].add(i)
+            clusterMap[m].add(m)
+            clusterMap[m].remove(i)
+
+      if bestPair == (-1, -1) or math.isclose(totalCost, bestCost, rel_tol=1e-3):
+        #print ("Kmedoids complete")
+        break
+
+      # Update medIndices for next iteration.
+      medIndicesSet.remove(bestPair[0])
+      medIndicesSet.add(bestPair[1])
+      medIndices = list(medIndicesSet).copy()
+
+    medoids = [colors[idx] for idx in medIndices]
+    return medoids
+
+  """
+  clusterCost returns the cost of using given medoids as cluster centers
+  (for given comparison mask) as well as the resultant masks.
+  """
+  def clusterCost(image, cmpMask, medoids):
+    allColors = image[cmpMask]
+    n = allColors.shape[0]
+    k = len(medoids)
+
+    newClusters = np.zeros((k, n))
+    for i in range(k):
+      newClusters[i, :] = ImageUtils.delta_e_mask_matrix(medoids[i], allColors)
+
+    clusterIndices = np.argmin(newClusters, axis=0)
+    allCords = np.transpose(np.nonzero(cmpMask))
+    cost = 0.0
+    allMasks = []
+    for i in range(k):
+      # Points in mask closest to ith medoid.
+      clusterMask = clusterIndices == i
+      cm = np.zeros(cmpMask.shape, dtype=bool)
+      cm[allCords[clusterMask][:, 0], allCords[clusterMask][:, 1]] = True
+      cost += np.mean(ImageUtils.delta_e_mask_matrix(medoids[i], image[cm]))
+      allMasks.append((cm, i))
+
+    return cost, allMasks
+
+  """
+  best_clusters returns k colors that best represent the given colors against given
+  mask cmpMask (for given image) as well as the corresponding masks.
+  """
+  def best_clusters(colors, image, cmpMask, k, numIters=500):
+    n = colors.shape[0]
+    dMatrix = np.zeros((n,n))
+    for i in range(n):
+      dMatrix[i, :] = ImageUtils.delta_e_mask_matrix(colors[i], colors)
+
+    def hash(mlist):
+      return ''.join(sorted([ImageUtils.RGB2HEX(m) for m in mlist]))
+
+    mdHashSet = set()
+    bestMedoids = []
+    bestMasks = []
+    minCost = 10000.0
+    for iter in range(numIters):
+      try:
+        medoids = ImageUtils.Kmedoids(colors, dMatrix, k=k)
+        mdHash = hash(medoids)
+        if mdHash in mdHashSet:
+          continue
+        mdHashSet.add(mdHash)
+        cost, allMasks = ImageUtils.clusterCost(image, cmpMask, medoids)
+        if cost < minCost:
+          minCost = cost
+          bestMedoids = medoids.copy()
+          bestMasks = allMasks.copy()
+      except Exception as e:
+        print (e)
+
+    return bestMedoids, bestMasks, minCost
+
+  """
   show_rgb is a function to display given RGB image.
   """
   def show_rgb(image, imgSize=900):
@@ -1061,7 +1319,10 @@ if __name__ == "__main__":
   #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
   #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
-  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#d3987e"), ImageUtils.HEX2RGB("#c38c6d")))
+  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#A68276"), ImageUtils.HEX2RGB("#BD9590")))
+  #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))
+  #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#ae8269"), ImageUtils.HEX2RGB("#bc8d78")))
+  #print ("ycbcr: ", ImageUtils.sRGBtoYCbCr(ImageUtils.HEX2RGB("#cf9d85")))
   #print ("delta 1: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFEBDA")))
   #print ("delta 2: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFF1E5")))
   #print ("deltas matrix: ", ImageUtils.delta_e_cie2000_matrix(np.array([[52.2883, 11.285, 18.2971],

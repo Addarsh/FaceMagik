@@ -22,6 +22,7 @@ lmfit = "*"
 requests = "*"
 django = "*"
 colormath = "*"
+deepface = "*"
 
 [requires]
 python_version = "3.7"

@@ -9,6 +9,7 @@ import cv2
 import h5py
 import argparse
 import json
+import tensorflow as tf
 from scipy import ndimage
 from scipy.optimize import minimize
 from image_utils import ImageUtils
@@ -35,10 +36,13 @@ from train import (
 )
 
 class Face:
-  def __init__(self, imagePath="", image=None):
+  def __init__(self, imagePath="", image=None, hdf5FileName=None):
     self.imagePath = imagePath
     self.faceMaskDirPath =  os.path.split(imagePath)[0]
-    self.hdf5File = "face_mask.hdf5"
+    if hdf5FileName is None:
+      self.hdf5FileName = "face_mask.hdf5"
+    else:
+      self.hdf5FileName = hdf5FileName
     self.CLASS_IDS_KEY = "class_ids"
     self.MASKS_KEY = "masks"
     self.id_label_map = {v: k for k, v in label_id_map.items()}
@@ -57,6 +61,8 @@ class Face:
     self.preds = self.detect_face()
     self.faceMask = self.get_face_mask()
     self.beta = self.specularity()
+    self.bgMask = self.detect_background()
+    self.rFaceMask = self.get_reduced_face_mask()
 
     if imagePath.startswith("server/data") or imagePath.startswith("server/video"):
       # Load lighting, normals and face vertices.
@@ -129,14 +135,24 @@ class Face:
     return cv2.waitKey(0) & 0xFF
 
   """
+  to_YCrCb converts self.image, self.satImage etc. from RGB to ycrcb.
+  """
+  def to_YCrCb(self):
+    self.image = cv2.cvtColor(self.image, cv2.COLOR_RGB2YCR_CB)
+    self.hueImage = self.to_hueImage(self.image)
+    self.satImage = self.to_satImage(self.image)
+    self.brightImage = self.to_brightImage(self.image)
+    self.ratioImage = self.to_ratioImage(self.image)
+
+  """
   detect_face will detect face in the given image and segment out eyes,
   eyebrows, nose, lips etc using a MaskRCNN network. It returns a predictions
   dictionary.
   """
   def detect_face(self):
-    if os.path.exists(os.path.join(self.faceMaskDirPath, self.hdf5File)):
+    if os.path.exists(os.path.join(self.faceMaskDirPath, self.hdf5FileName)):
       preds = {self.CLASS_IDS_KEY: []}
-      with h5py.File(os.path.join(self.faceMaskDirPath, self.hdf5File), 'r') as f:
+      with h5py.File(os.path.join(self.faceMaskDirPath, self.hdf5FileName), 'r') as f:
         preds[self.MASKS_KEY] = np.zeros((self.image.shape[0], self.image.shape[1], len(f.keys())), dtype=bool)
         for i, class_id in enumerate(f.keys()):
           preds[self.CLASS_IDS_KEY].append(int(class_id.split("-")[0]))
@@ -152,7 +168,7 @@ class Face:
     if not os.path.exists(self.faceMaskDirPath):
       os.makedirs(self.faceMaskDirPath)
 
-    with h5py.File(os.path.join(self.faceMaskDirPath, self.hdf5File), 'w') as f:
+    with h5py.File(os.path.join(self.faceMaskDirPath, self.hdf5FileName), 'w') as f:
       for i, class_id in enumerate(preds[self.CLASS_IDS_KEY]):
         mask = preds[self.MASKS_KEY][:, :, i]
         dset = f.create_dataset(str(class_id)+ "-" + str(i), mask.shape, dtype=bool, chunks=True, compression="gzip")
@@ -229,6 +245,47 @@ class Face:
     return (self.image.copy() - k*np.repeat(self.beta[:, :, np.newaxis], 3, axis=2)).astype(np.uint8)
 
   """
+  detect_background detects background of given face image.
+  """
+  def detect_background(self):
+    interpreter = tf.lite.Interpreter(
+      model_path="deeplabv3_1_default_1.tflite")
+
+    interpreter.allocate_tensors()
+
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    # check the type of the input tensor
+    floating_model = input_details[0]['dtype'] == np.float32
+
+    # NxHxWxC, H:1, W:2
+    height = input_details[0]['shape'][1]
+    width = input_details[0]['shape'][2]
+
+    ow, oh = self.image.shape[:2]
+    img = cv2.resize(self.image, (width,height))
+
+    # add N dim
+    input_data = np.expand_dims(img, axis=0)
+
+    if floating_model:
+      input_data = (np.float32(input_data) - 127.5) / 127.5
+
+    interpreter.set_tensor(input_details[0]['index'], input_data)
+
+    interpreter.invoke()
+
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+    results = np.squeeze(output_data)
+
+    out = np.apply_along_axis(np.argmax,2,results)
+
+    bg = np.where(out == 0, 255, 0).astype(np.uint8)
+    return cv2.resize(bg, (oh, ow), interpolation
+=cv2.INTER_NEAREST).astype(np.bool)
+
+  """
   biclustering_Kmeans returns the dominant and surrounding masks of given mask.
   The mask clustering is done using Kmeans of the original mask.
   """
@@ -294,41 +351,25 @@ class Face:
     return specularMask
 
   """
-  ym_colors returns colors that represent the ym (mask represented by y > 0).
-  Only applies for faces with existing mesh vertices.
+  distinct_colors returns distinct colors from given mask.
+  The colors are obtained by repeated subdivision of the mask
+  based on hue and saturation.
   """
-  def ym_colors(self):
-    verts = self.allVerts.astype(int)
-
-    # Get Y positive normals.
-    ym = np.zeros(self.faceMask.shape, dtype=bool)
-    vmask = verts[self.allVertNorms[:, 1] >= 0]
-    ym[vmask[:, 0], vmask[:, 1]] = True
-
-    # Remove points below the nose.
-    nosemask = self.get_attr_masks(NOSE)[0]
-    row, _, _, h = self.bbox(nosemask)
-    ym[(row+h):, :] = False
-    ym = np.bitwise_and(ym, self.faceMask)
-
-    # Store ym mask.
-    self.ym = ym
-
+  def distinct_colors(self, mask, tol=0.05):
     # Divide by hue and sat.
-    allHueMasks = self.divide_all_hue(ym)
+    allHueMasks = self.divide_all_hue(mask, tol=tol)
     allMasks = []
     for m in allHueMasks:
-      allMasks += self.divide_all_sat(m)
+      allMasks += self.divide_all_sat(m, tol=tol)
 
     # Return distinct colors(medians) from allMasks.
     colors = []
     mset = set()
     for m in allMasks:
       mc = np.median(self.image[m], axis=0)
-      mcs = ImageUtils.RGB2HEX(mc)
-      if mcs not in mset:
+      if ImageUtils.RGB2HEX(mc) not in mset:
         colors.append(mc)
-        mset.add(mcs)
+        mset.add(ImageUtils.RGB2HEX(mc))
 
     return np.array(colors)
 
@@ -558,45 +599,61 @@ class Face:
     if not faceFound:
       raise Exception("Face not found in image")
 
-    # Reduce facemask to remove beard.
-    """
+    return faceMask
+
+  """
+  get_reduced_face_mask returns reduced face mask (minus everything below nose).
+  """
+  def get_reduced_face_mask(self):
+    faceMask = self.faceMask.copy()
     nosemask = self.get_attr_masks(NOSE)[0]
     row, _, _, h = self.bbox(nosemask)
     faceMask[(row+h):, :] = False
-    """
-
     return faceMask
 
   """
   get_face_keypoints returns keypoints of the face that are best representatives
-  of skin tone.
+  of skin tone on the face (forehead, cheeks and nose).
   """
   def get_face_keypoints(self):
-    keypoints = np.zeros(self.image.shape[:2], dtype=bool)
-    for m in [self.get_forehead_keypoints(), self.get_left_cheek_keypoints(),  self.get_right_cheek_keypoints(), self.get_nose_keypoints()]:
-      keypoints = np.bitwise_xor(keypoints, m)
+    keypoints = np.zeros(self.faceMask.shape, dtype=bool)
+    for m in [self.get_forehead_points(), self.get_left_cheek_keypoints(),  self.get_right_cheek_keypoints(), self.get_nose_keypoints()]:
+      keypoints = np.bitwise_or(keypoints, m)
     return keypoints
 
   """
-  get_forehead_keypoints returns keypoints of the forehead that are best representatives
-  of skin tone on the face.
+  ratio get_ratio_range returns the range of ratio values on the face
+  keypoints. It gives a sense of how bright/how dark an image is.
   """
-  def get_forehead_keypoints(self):
-    eyebrow_masks = self.get_attr_masks(EYEBROW)
-    face_mask = self.get_attr_masks(FACE)[0]
-    assert len(eyebrow_masks) == 2, "Want 2 masks for eyebrow!"
-    (left_eyebrow, right_eyebrow) = (eyebrow_masks[0], eyebrow_masks[1]) if self.bbox(eyebrow_masks[0])[1] <= self.bbox(eyebrow_masks[1])[1] else (eyebrow_masks[1], eyebrow_masks[0])
-    left_row_min, left_col_min, left_width, left_height = self.bbox(left_eyebrow)
-    right_row_min, right_col_min, right_width, right_height = self.bbox(right_eyebrow)
+  def get_ratio_range(self):
+    allSatMasks = self.divide_all_sat(self.rFaceMask, tol=0.0005)
+    fhpts = self.get_face_keypoints()
+    mnmList = []
+    for m in allSatMasks:
+      gm = np.bitwise_and(m, fhpts)
+      mnm = np.mean(self.ratioImage[gm], axis=0)[1]
+      pcent = (np.count_nonzero(gm)/np.count_nonzero(fhpts))*100.0
+      if pcent >= 5.0:
+        mnmList.append(mnm)
+      print ("max ratio: ", mnm, pcent, np.mean(self.satImage[gm], axis=0)[1]*(100.0/255.0),  np.mean(self.brightImage[gm], axis=0)[2]*(100.0/255.0))
+      self.show_mask(gm)
 
-    left_col = left_col_min + int(left_width/2)
-    right_col = right_col_min + int(right_width/2)
-    row_max = min(left_row_min, right_row_min)
-    row_min = max(np.nonzero(face_mask[:, left_col])[0][0], np.nonzero(face_mask[:, right_col])[0][0])
+    return mnmList[0] -mnmList[-1]
 
-    keypoints = np.zeros(self.image.shape[:2], dtype=bool)
-    keypoints[row_min:row_max, left_col:right_col] = 1
-    return keypoints
+  """
+  get_eye_white_brightness returns eye white brightness that indicates brightness
+  of image.
+  """
+  def get_eye_white_brightness(self):
+    whiteMask = self.get_eye_white_points()
+    medoids, allMasks, minCost = ImageUtils.best_clusters(self.distinct_colors(whiteMask, tol=0.005), self.image, whiteMask, 3, numIters=100)
+    maxBrightness = 0
+    for m in allMasks:
+      print ("Mean brightness: ", np.mean(self.brightImage[m[0]], axis=0)[2]*(100.0/255.0), "percent: ", (np.count_nonzero(m[0])/np.count_nonzero(whiteMask))*100.0)
+      maxBrightness = max(maxBrightness, np.mean(self.brightImage[m[0]], axis=0)[2]*(100.0/255.0))
+      self.show_mask(m[0])
+
+    return maxBrightness
 
   """
   get_left_cheek_keypoints returns keypoints from left cheek that are best representatives of skin
@@ -622,8 +679,10 @@ class Face:
     row_min = row_min + int(height/4)
     row_max = row_max - int(height/4)
 
-    keypoints = np.zeros(self.image.shape[:2], dtype=bool)
-    keypoints[row_min:row_max, col_min:col_max] = 1
+    keypoints = self.faceMask.copy()
+    keypoints[:, col_max:] = False
+    keypoints[:row_min:, :] = False
+    keypoints[row_max:, :] = False
     return keypoints
 
   """
@@ -650,8 +709,10 @@ class Face:
     row_min = row_min + int(height/4)
     row_max = row_max - int(height/4)
 
-    keypoints = np.zeros(self.image.shape[:2], dtype=bool)
-    keypoints[row_min:row_max, col_min:col_max] = 1
+    keypoints = self.faceMask.copy()
+    keypoints[:, :col_min] = False
+    keypoints[:row_min:, :] = False
+    keypoints[row_max:, :] = False
     return keypoints
 
   """
@@ -738,11 +799,26 @@ class Face:
     eyebrowMasks = self.get_attr_masks(EYEBROW)
     assert len(eyebrowMasks) > 0, "Want atleast 1 mask for eyebrows"
 
-    mask = faceMask
+    mask = faceMask.copy()
     for ebMask in eyebrowMasks:
       rmin, _, _, _ = self.bbox(ebMask)
       mask[rmin:,:] = False
     return mask
+
+  """
+  get_eye_white_points returns mask of eye whites.
+  """
+  def get_eye_white_points(self):
+    eMask = np.zeros(self.faceMask.shape, dtype=bool)
+    ebMasks = self.get_attr_masks(EYEBALL)
+    eyMasks = self.get_attr_masks(EYE_OPEN)
+    assert len(ebMasks) == 2, "Want 2 eyeball masks"
+    assert len(eyMasks) == 2, "Want 2 eye masks"
+    for m in eyMasks:
+      eMask = np.bitwise_or(eMask, m)
+    for m in ebMasks:
+      eMask = np.bitwise_xor(eMask, m)
+    return eMask
 
   """
   good_face_points returns a mask containing points that are usually good to
@@ -854,30 +930,30 @@ class Face:
   """
   divide_all_hue divides given mask into hue masks repeatedly.
   """
-  def divide_all_hue(self, mask, image=np.zeros((0,3))):
+  def divide_all_hue(self, mask, image=np.zeros((0,3)), tol=0.05):
     if np.array_equal(image, np.zeros((0,3))):
       image = self.hueImage
 
-    if np.count_nonzero(mask)/np.count_nonzero(self.faceMask) < 0.05:
+    if np.count_nonzero(mask)/np.count_nonzero(self.faceMask) < tol:
       return [mask]
     a, b = self.divide_by_hue(mask, False, image)
     if np.array_equal(b, np.zeros(self.faceMask.shape, dtype=bool)) or \
       (np.mean(image[a], axis=0)[0] - np.mean(image[b], axis=0)[0]) < 2 \
-      or np.count_nonzero(mask)/np.count_nonzero(self.faceMask) < 0.05:
+      or np.count_nonzero(mask)/np.count_nonzero(self.faceMask) < tol:
       return [mask]
     return self.divide_all_hue(a, image) + self.divide_all_hue(b, image)
 
   """
   divide_all_sat divides given mask into saturation masks repeatedly.
   """
-  def divide_all_sat(self, mask, image=np.zeros((0,3))):
+  def divide_all_sat(self, mask, image=np.zeros((0,3)), tol=0.05):
     if np.array_equal(image, np.zeros((0,3))):
       image = self.satImage
 
     a, b = self.divide_by_saturation(mask, False, image)
     if np.array_equal(b, np.zeros(self.faceMask.shape, dtype=bool)) or \
       (np.mean(image[a], axis=0)[1] - np.mean(image[b], axis=0)[1])*100.0/255.0 < 2 \
-      or np.count_nonzero(mask)/np.count_nonzero(self.faceMask) < 0.05:
+      or np.count_nonzero(mask)/np.count_nonzero(self.faceMask) < tol:
       return [mask]
     return self.divide_all_sat(b, image) + self.divide_all_sat(a, image)
 
@@ -1225,11 +1301,9 @@ if __name__ == "__main__":
   # Parse command line arguments
   parser = argparse.ArgumentParser(description='Image path')
   parser.add_argument('--image', required=False,metavar="path or URL to image")
+  parser.add_argument('--mask', required=False,metavar="path to face mask file")
   args = parser.parse_args()
 
-  f = Face(args.image)
-  #f.get_neck_points()
-  f.detect_skin_tone()
-  #f.compute_diffuse()
-  #f.compute_diffuse_new()
-  #f.show(f.remove_specular_highlights())
+  f = Face(args.image, hdf5FileName=args.mask)
+  f.detect_background()
+  #f.detect_skin_tone()
