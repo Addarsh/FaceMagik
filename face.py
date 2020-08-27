@@ -84,6 +84,15 @@ class Face:
     self.windowSize = 900
 
   """
+  show_gray will show grayscale of RGB image.
+  """
+  def show_gray(self):
+    cv2.namedWindow(self.windowName, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(self.windowName, self.windowSize, self.windowSize)
+    cv2.imshow(self.windowName, cv2.cvtColor(self.image, cv2.COLOR_RGB2GRAY))
+    return cv2.waitKey(0) & 0xFF
+
+  """
   show_masks will display multiple masks in the image.
   """
   def show_masks(self, masks, colorList=[]):
@@ -94,6 +103,17 @@ class Face:
     for i, mask in enumerate(masks):
       clone[mask] = np.array(colorList[i])
     return self.show(clone)
+
+  """
+  show_masks_comb will combine given mask list and show it.
+  """
+  def show_masks_comb(self, masks):
+    if len(masks) == 0:
+      return self.show_orig_image()
+    res = np.zeros(self.faceMask.shape, dtype=bool)
+    for m in masks:
+      res = np.bitwise_or(res, m)
+    return self.show_mask(res)
 
   """
   show_mask will display given mask.
@@ -1116,7 +1136,6 @@ class Face:
       for j in range(i+1, len(allSkinTones)):
         q = allSkinTones[j]
         print ("\tColor diff with j: ", j, " is: ", ImageUtils.delta_cie2000(t[1], q[1]))
-
 
   """
   divide_by_hue divides given mask using hue image

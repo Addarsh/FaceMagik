@@ -88,6 +88,14 @@ class ImageUtils:
     plt.show(block=block)
 
   """
+  plot_gray_histogram plots histogram of the given gray image for given mask.
+  """
+  def plot_gray_histogram(gray, mask, block=True, bins=255):
+    plt.hist(gray[mask], bins=bins, density=True)
+    plt.xlim([0,256])
+    plt.show(block=block)
+
+  """
   color return the RGB tuple of given hex color. Hex color format is #FF0033.
   """
   @staticmethod
@@ -911,6 +919,18 @@ class ImageUtils:
       (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_YCR_CB2RGB), (-1, 3))
 
   """
+  sRGBtoMunsell converts given sRGB array (1,3) to munsell color (string).
+  """
+  def sRGBtoMunsell(sRGB):
+    sRGB = sRGB/255.0
+    try:
+      C = colour.ILLUMINANTS['CIE 1931 2 Degree Standard Observer']['C']
+      return colour.xyY_to_munsell_colour(colour.XYZ_to_xyY(colour.sRGB_to_XYZ(sRGB, C)))
+    except Exception as e:
+      return "Could not be converted"
+
+
+  """
   flatten_rgb flattens the given RGB tuple into its corresponding index number
   from 1 to 256*256*256.
   """
@@ -1219,21 +1239,23 @@ class ImageUtils:
     allCords = np.transpose(np.nonzero(cmpMask))
     cost = 0.0
     allMasks = []
+    allIndices = []
     for i in range(k):
       # Points in mask closest to ith medoid.
       clusterMask = clusterIndices == i
       cm = np.zeros(cmpMask.shape, dtype=bool)
       cm[allCords[clusterMask][:, 0], allCords[clusterMask][:, 1]] = True
       cost += np.mean(ImageUtils.delta_e_mask_matrix(medoids[i], image[cm]))
-      allMasks.append((cm, i))
+      allMasks.append(cm)
+      allIndices.append(i)
 
-    return cost, allMasks
+    return cost, allMasks, allIndices
 
   """
   best_clusters returns k colors that best represent the given colors against given
   mask cmpMask (for given image) as well as the corresponding masks.
   """
-  def best_clusters(colors, image, cmpMask, k, numIters=500):
+  def best_clusters(colors, image, cmpMask, k, numIters=500, tol=2):
     n = colors.shape[0]
     dMatrix = np.zeros((n,n))
     for i in range(n):
@@ -1245,6 +1267,7 @@ class ImageUtils:
     mdHashSet = set()
     bestMedoids = []
     bestMasks = []
+    bestIndices = []
     minCost = 10000.0
     for iter in range(numIters):
       try:
@@ -1253,15 +1276,18 @@ class ImageUtils:
         if mdHash in mdHashSet:
           continue
         mdHashSet.add(mdHash)
-        cost, allMasks = ImageUtils.clusterCost(image, cmpMask, medoids)
+        cost, allMasks, allIndices = ImageUtils.clusterCost(image, cmpMask, medoids)
         if cost < minCost:
           minCost = cost
           bestMedoids = medoids.copy()
           bestMasks = allMasks.copy()
+          bestIndices = allIndices.copy()
+          if cost <= tol:
+            break
       except Exception as e:
         print (e)
 
-    return bestMedoids, bestMasks, minCost
+    return bestMedoids, bestMasks, bestIndices, minCost
 
   """
   show_rgb is a function to display given RGB image.
@@ -1319,7 +1345,8 @@ if __name__ == "__main__":
   #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
   #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
-  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#A68276"), ImageUtils.HEX2RGB("#BD9590")))
+  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#525252"), ImageUtils.HEX2RGB("#838383")))
+  #print ("munsell: ", ImageUtils.sRGBtoMunsell(np.array([246, 191, 153])))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))
   #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#ae8269"), ImageUtils.HEX2RGB("#bc8d78")))
   #print ("ycbcr: ", ImageUtils.sRGBtoYCbCr(ImageUtils.HEX2RGB("#cf9d85")))

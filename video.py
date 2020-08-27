@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatch
 
 from face import Face
-from deepface import DeepFace
 
 """
 faces returns a list of face class instances in given video path.
@@ -25,7 +24,7 @@ def faces(videoPath):
 """
 analyze will process images within given video directory.
 """
-def analyze(videoPath=None, imagePath=None, k=3, green="False"):
+def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
   if videoPath is None and imagePath is None:
     raise Exception("One of videoPath/imagePath needs to be non-empty")
 
@@ -38,70 +37,203 @@ def analyze(videoPath=None, imagePath=None, k=3, green="False"):
   fig = plt.figure()
   ax = fig.add_axes([0, 0, 1, 1])
   ax.set_xlim(0, len(faceList))
-  ax.set_ylim(0, k+1)
   ax.axis('off')
   plt.ion()
-
-  if imagePath != "":
-    demography = DeepFace.analyze(imagePath, actions = ['gender', 'race'])
-    print("Gender: ", demography["gender"])
-    print("Race: ", demography["dominant_race"])
 
   count = 0
   for f in faceList:
     f.windowName = "image"
 
-    if green == "True":
-      f.to_YCrCb()
+    faceMask = f.get_face_keypoints()
+    medoids, allMasks, allIndices, _ = ImageUtils.best_clusters(f.distinct_colors(faceMask, tol=0.0005), f.image, faceMask, k)
 
-    medoids, allMasks, minCost = ImageUtils.best_clusters(f.distinct_colors(f.rFaceMask), f.image, f.rFaceMask, k)
-    print ("Dividing image into K: ", k, " clusters, with MIN COST: ", minCost/k)
+    done = False
+    while not done:
+      fMasks = []
+      fmedoids = []
+      fIndices = []
+      done = True
+
+      for i, m in zip(allIndices, allMasks):
+        if np.mean(ImageUtils.delta_e_mask_matrix(medoids[i], f.image[m])) <= delta_tol:
+          fMasks.append(m)
+          fIndices.append(len(fmedoids))
+          fmedoids.append(medoids[i])
+          continue
+        kmeds, kmasks, _ , _ = ImageUtils.best_clusters(f.distinct_colors(m, tol=0.0005), f.image, m, 2, delta_tol)
+        if len(kmasks) == 0:
+          fMasks.append(m)
+          fIndices.append(len(fmedoids))
+          fmedoids.append(medoids[i])
+          continue
+        fMasks.append(kmasks[0])
+        fIndices.append(len(fmedoids))
+        fmedoids.append(kmeds[0])
+
+        fMasks.append(kmasks[1])
+        fIndices.append(len(fmedoids))
+        fmedoids.append(kmeds[1])
+        done = False
+
+      allMasks = fMasks.copy()
+      allIndices = fIndices.copy()
+      medoids = fmedoids.copy()
+
+
+    print ("Dividing image into ", len(allMasks), " clusters")
 
     # Sort masks by decreasing brightness.
-    allMasks = sorted(allMasks, key=lambda m:-np.mean(f.brightImage[m[0]], axis=0)[2])
-    resMasks = [m[0] for m in allMasks]
-    iMasks = [m[1] for m in allMasks]
+    tupleList = [(m, i) for m, i in zip(allMasks, allIndices)]
+    stupleList = sorted(tupleList, key=lambda m:np.mean(f.brightImage[m[0]], axis=0)[2])
+    resMasks = [m[0] for m in stupleList]
+    iMasks = [m[1] for m in stupleList]
 
-    # Find good mask (neglecting first and last mask).
-    gMask = np.zeros(f.faceMask.shape, dtype=bool)
-    for i in range(1, len(resMasks)-1):
-      gMask = np.bitwise_or(gMask, resMasks[i])
+    ax.set_ylim(0, len(resMasks)+1)
 
-    resColor = [0.0, 0.0, 0.0]
     for i, m in enumerate(resMasks):
       meanColor = np.mean(f.image[m], axis=0)
+      print ("i: ", i)
       print ("Mean color: ", ImageUtils.RGB2HEX(meanColor))
-      print ("Percent: ", (np.count_nonzero(m)/np.count_nonzero(f.rFaceMask))*100.0)
+      print ("Percent: ", (np.count_nonzero(m)/np.count_nonzero(faceMask))*100.0)
       print ("Cluster Cost Mean: ", np.mean(ImageUtils.delta_e_mask_matrix(medoids[iMasks[i]], f.image[m])))
       print ("Mean brightness: ", np.mean(f.brightImage[m], axis=0)[2]*(100.0/255.0))
       print ("Mean sat: ", np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0))
-      print ("Std brightness: ", np.std(f.brightImage[m], axis=0)[2]*(100.0/255.0))
-      print ("Mean ratio: ", np.mean(f.brightImage[m], axis=0)[2]/np.mean(f.satImage[m], axis=0)[1])
-      print ("")
+      print ("Mean Hue: ", np.mean(f.hueImage[m], axis=0)[0])
+      print ("Mean ratio: ", np.mean(f.ratioImage[m], axis=0)[1])
 
-      # Find resultant color.
-      if i != 0 and i != len(resMasks) -1:
-        resColor = [x[0] + (np.count_nonzero(m)/np.count_nonzero(gMask))*x[1] for x in zip(resColor, meanColor)]
+      if i != 0:
+        pdiff = np.mean(f.ratioImage[m], axis=0)[1] - np.mean(f.ratioImage[resMasks[i-1]], axis=0)[1]
+        print ("PREV RATIO DIFF: ", pdiff)
+        if pdiff >= 0.4:
+          print ("\tLEVEL CHANGE")
+
+      print ("")
 
       # Add medoid to plot.
       ax.add_patch(mpatch.Rectangle((count, i), 1, 1, color=ImageUtils.RGB2HEX(np.mean(f.image[m], axis=0))))
       f.show_mask(m)
 
-    print ("Res Color: ", ImageUtils.RGB2HEX(resColor))
-    ax.add_patch(mpatch.Rectangle((count, k), 1, 1, color=ImageUtils.RGB2HEX(resColor)))
-
     print ("")
-    for i in range(len(resMasks)):
-      print ("Delta E with : ", i, " is: ", ImageUtils.delta_cie2000(np.mean(f.image[resMasks[i]], axis=0), resColor), np.mean(ImageUtils.delta_e_mask_matrix(resColor, f.image[resMasks[i]])))
-
-    print ("Delta E with gMask: ", np.mean(ImageUtils.delta_e_mask_matrix(resColor, f.image[gMask])))
+    print ("ResColor")
+    sMask = resMasks[-1]
+    resMasks = resMasks[:-1]
+    resColor = res_color(resMasks, f)
+    print_color_info(resColor)
 
     # Plot medoids.
+    ax.add_patch(mpatch.Rectangle((count, len(resMasks)+1), 1, 1, color=ImageUtils.RGB2HEX(resColor)))
     plt.show(block=False)
+    f.show_masks_comb(resMasks)
 
+    # Find mask of all sat < cutoff.
+    ctf = ImageUtils.sRGBtoHSV(resColor)[0, 1]*(100.0/255.0) - sat_tol
+
+    oldrm = np.zeros(f.faceMask.shape, dtype=bool)
+    oldsm = sMask.copy()
+    while True:
+      print ("cutoff sat : ", ctf)
+      hm = f.satImage[:, :, 1]*(100.0/255.0) < ctf
+      sm = np.bitwise_and(hm, sMask)
+      rm = np.bitwise_xor(sMask, sm)
+
+      print_mask_info(sm, resColor, faceMask, f)
+      if np.count_nonzero(rm) == 0:
+        print ("broke here")
+        break
+
+      # Update res_color.
+      newColor = res_color(resMasks + [rm], f)
+      dec = ImageUtils.delta_cie2000(resColor, newColor)
+      print ("\nDELTA BETWEEN OLD RES: ", ImageUtils.delta_cie2000(resColor, newColor))
+      print ("RATIO DIFF BETWEEN NEW SPEC MASK and NEW RES COLOR: ", np.mean(f.ratioImage[sm], axis=0)[1] -  ImageUtils.sRGBtoHSV(newColor)[0, 2]/ImageUtils.sRGBtoHSV(newColor)[0, 1])
+      print ("MASK PERCENTAGE CHANGE: ", (np.count_nonzero(oldsm)/np.count_nonzero(faceMask))*100.0 - (np.count_nonzero(sm)/np.count_nonzero(faceMask))*100.0)
+      f.show_masks_comb(resMasks + [rm])
+      if (np.count_nonzero(oldsm)/np.count_nonzero(faceMask))*100.0 - (np.count_nonzero(sm)/np.count_nonzero(faceMask))*100.0 < 10:
+        print ("")
+        print ("SPECULAR MASK FOUND")
+        if np.count_nonzero(oldrm) > 0:
+          resMasks.append(oldrm)
+        break
+
+      oldrm = rm.copy()
+      oldsm = sm.copy()
+      resColor = newColor
+      ax.add_patch(mpatch.Rectangle((count, len(resMasks)+1), 1, 1, color=ImageUtils.RGB2HEX(resColor)))
+      print_color_info(resColor)
+      ctf = ImageUtils.sRGBtoHSV(resColor)[0, 1]*(100.0/255.0) - sat_tol
+
+    #nMasks =  new_masks(resColor, resMasks, f)
+    nMasks = skip_shadow_masks(resColor, resMasks, f)
+    resColor = res_color(nMasks, f)
+    print_color_info(resColor)
+    print_mask_info(oldsm, resColor, faceMask, f)
+    print ("")
+    print ("RATIO DIFF: ", np.mean(f.ratioImage[oldsm], axis=0)[1] -  ImageUtils.sRGBtoHSV(resColor)[0, 2]/ImageUtils.sRGBtoHSV(resColor)[0, 1])
+    print_sats(resMasks, f)
+    ax.add_patch(mpatch.Rectangle((count, len(resMasks)), 1, 1, color=ImageUtils.RGB2HEX(resColor)))
+    f.show_masks_comb(nMasks)
+    f.show_mask(oldsm, [255, 0, 0])
     count += 1
     if f.show_orig_image() == ord("q"):
       break
+
+def skip_shadow_masks(resColor, masks, f):
+  print ("")
+  resMasks = []
+  for i, m in enumerate(masks):
+    de = abs(ImageUtils.sRGBtoHSV(resColor)[0, 1]*(100.0/255.0) - np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0))
+    print ("Sat diff with : ", i, " is: ", de)
+    if de <= 5:
+      resMasks.append(m)
+      print ("Got index: ", i)
+
+  return resMasks
+
+def print_mask_info(m, resColor, faceMask, f):
+  print ("")
+  print ("FINAL MASK")
+  print ("Final Mask with resColor: ", ImageUtils.RGB2HEX(resColor))
+  print ("Percent: ", (np.count_nonzero(m)/np.count_nonzero(faceMask))*100.0)
+  print ("Cluster Cost Mean: ", np.mean(ImageUtils.delta_e_mask_matrix(resColor, f.image[m])))
+  print ("Mean sat: ", np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0))
+  print ("Mean brightness: ", np.mean(f.brightImage[m], axis=0)[2]*(100.0/255.0))
+  print ("Mean ratio: ", np.mean(f.ratioImage[m], axis=0)[1])
+
+def new_masks(resColor, masks, f):
+  print ("")
+  resMasks = []
+  for i in range(len(masks)):
+    de = np.mean(ImageUtils.delta_e_mask_matrix(resColor, f.image[masks[i]]))
+    print ("Delta E with : ", i, " is: ", de)
+    if de < 9:
+      resMasks.append(masks[i])
+      print ("Got index: ", i)
+
+  return resMasks
+
+def print_sats(masks, f):
+  print ("")
+  for i, m in enumerate(masks):
+    print ("Sat mask ", i, " :", np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0))
+
+def res_color(masks, f):
+  resColor = [0.0, 0.0, 0.0]
+  rMask = np.zeros(f.faceMask.shape, dtype=bool)
+  for i, m in enumerate(masks):
+    rMask = np.bitwise_or(rMask, m)
+    meanColor = np.mean(f.image[m], axis=0)
+    resColor = [x[0] + np.count_nonzero(m) * x[1] for x in zip(resColor, meanColor)]
+
+  return [int(x/np.count_nonzero(rMask)) for x in resColor]
+
+def print_color_info(resColor):
+  print ("")
+  print ("RES COLOR")
+  print ("Res Color: ", ImageUtils.RGB2HEX(resColor))
+  print ("Res Hue: ", ImageUtils.sRGBtoHSV(resColor)[0, 0]*2)
+  print ("Res Sat: ", ImageUtils.sRGBtoHSV(resColor)[0, 1]*(100.0/255.0))
+  print ("Res val: ", ImageUtils.sRGBtoHSV(resColor)[0, 2]*(100.0/255.0))
+  print ("Res ratio: ", ImageUtils.sRGBtoHSV(resColor)[0, 2]/ImageUtils.sRGBtoHSV(resColor)[0, 1])
 
 if __name__ == "__main__":
   # Parse command line arguments
@@ -109,7 +241,15 @@ if __name__ == "__main__":
   parser.add_argument('--video', required=False,metavar="path to video file")
   parser.add_argument('--image', required=False,metavar="path to video file")
   parser.add_argument('--k', required=False,metavar="number of clusters")
-  parser.add_argument('--green', required=False,metavar="green")
+  parser.add_argument('--tol', required=False,metavar="tol")
+  parser.add_argument('--sat', required=False,metavar="sat")
   args = parser.parse_args()
 
-  analyze(args.video, args.image, int(args.k), args.green)
+  delta_tol = 4
+  sat_tol = 5
+  if args.tol is not None:
+    delta_tol = int(args.tol)
+  if args.sat is not None:
+    sat_tol = int(args.sat)
+
+  analyze(args.video, args.image, int(args.k), delta_tol, sat_tol)
