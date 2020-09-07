@@ -755,6 +755,26 @@ class Face:
     return nose_mask
 
   """
+  get_left_nose_points returns left half points on the nose.
+  """
+  def get_left_nose_points(self):
+    nsmask = self.get_nose_keypoints().copy()
+    _, cmin, w, _ = self.bbox(nsmask)
+    xmid = int(cmin + float(w)/2)
+    nsmask[:, xmid:] = False
+    return nsmask
+
+  """
+  get_right_nose_points returns right half points on the nose.
+  """
+  def get_right_nose_points(self):
+    nsmask = self.get_nose_keypoints().copy()
+    _, cmin, w, _ = self.bbox(nsmask)
+    xmid = int(cmin + float(w)/2)
+    nsmask[:, :xmid] = False
+    return nsmask
+
+  """
   get_chakra_keypoints returns keypoints between
   the two eyebrows.
   """
@@ -824,6 +844,26 @@ class Face:
       rmin, _, _, _ = self.bbox(ebMask)
       mask[rmin:,:] = False
     return mask
+
+  """
+  get_left_forehead_points returns left half points on the forehead.
+  """
+  def get_left_forehead_points(self):
+    fhmask = self.get_forehead_points().copy()
+    _, cmin, w, _ = self.bbox(fhmask)
+    xmid = int(cmin + float(w)/2)
+    fhmask[:, xmid:] = False
+    return fhmask
+
+  """
+  get_right_forehead_points returns right half points on the forehead.
+  """
+  def get_right_forehead_points(self):
+    fhmask = self.get_forehead_points().copy()
+    _, cmin, w, _ = self.bbox(fhmask)
+    xmid = int(cmin + float(w)/2)
+    fhmask[:, :xmid] = False
+    return fhmask
 
   """
   get_eye_white_points returns mask of eye whites.

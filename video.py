@@ -44,40 +44,10 @@ def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
   for f in faceList:
     f.windowName = "image"
 
+    faceClone = f.image.copy()
     faceMask = f.get_face_keypoints()
-    medoids, allMasks, allIndices, _ = ImageUtils.best_clusters(f.distinct_colors(faceMask, tol=0.0005), f.image, faceMask, k)
-
-    done = False
-    while not done:
-      fMasks = []
-      fmedoids = []
-      fIndices = []
-      done = True
-
-      for i, m in zip(allIndices, allMasks):
-        if np.mean(ImageUtils.delta_e_mask_matrix(medoids[i], f.image[m])) <= delta_tol:
-          fMasks.append(m)
-          fIndices.append(len(fmedoids))
-          fmedoids.append(medoids[i])
-          continue
-        kmeds, kmasks, _ , _ = ImageUtils.best_clusters(f.distinct_colors(m, tol=0.0005), f.image, m, 2, delta_tol)
-        if len(kmasks) == 0:
-          fMasks.append(m)
-          fIndices.append(len(fmedoids))
-          fmedoids.append(medoids[i])
-          continue
-        fMasks.append(kmasks[0])
-        fIndices.append(len(fmedoids))
-        fmedoids.append(kmeds[0])
-
-        fMasks.append(kmasks[1])
-        fIndices.append(len(fmedoids))
-        fmedoids.append(kmeds[1])
-        done = False
-
-      allMasks = fMasks.copy()
-      allIndices = fIndices.copy()
-      medoids = fmedoids.copy()
+    """
+    medoids, allMasks, allIndices = best_clusters(f, faceMask, delta_tol)
 
 
     print ("Dividing image into ", len(allMasks), " clusters")
@@ -90,6 +60,7 @@ def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
 
     ax.set_ylim(0, len(resMasks)+1)
 
+    cdict = {0: [], 1: [], 2: [], 3: [], 4: [], 5:[]}
     for i, m in enumerate(resMasks):
       meanColor = np.mean(f.image[m], axis=0)
       print ("i: ", i)
@@ -100,18 +71,59 @@ def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
       print ("Mean sat: ", np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0))
       print ("Mean Hue: ", np.mean(f.hueImage[m], axis=0)[0])
       print ("Mean ratio: ", np.mean(f.ratioImage[m], axis=0)[1])
+      print ("Std sat: ", np.std(f.satImage[m], axis=0)[1]*(100.0/255.0))
+      print ("Std brightness: ", np.std(f.brightImage[m], axis=0)[2]*(100.0/255.0))
+      print ("Medoid: ", ImageUtils.RGB2HEX(medoids[iMasks[i]]))
 
       if i != 0:
         pdiff = np.mean(f.ratioImage[m], axis=0)[1] - np.mean(f.ratioImage[resMasks[i-1]], axis=0)[1]
         print ("PREV RATIO DIFF: ", pdiff)
+        print ("PREV DELTA: ", ImageUtils.average_delta_e_cie2000_masks(f.image[m], f.image[resMasks[i-1]]))
         if pdiff >= 0.4:
           print ("\tLEVEL CHANGE")
 
       print ("")
 
       # Add medoid to plot.
-      ax.add_patch(mpatch.Rectangle((count, i), 1, 1, color=ImageUtils.RGB2HEX(np.mean(f.image[m], axis=0))))
+      #ax.add_patch(mpatch.Rectangle((count, i), 1, 1, color=ImageUtils.RGB2HEX(np.mean(f.image[m], axis=0))))
+      ax.add_patch(mpatch.Rectangle((count, i), 1, 1, color=ImageUtils.RGB2HEX(medoids[iMasks[i]])))
+      ImageUtils.plot_points_new(f.image, centroids(f, m, cdict), radius=5)
+      for key in cdict:
+        ImageUtils.plot_arrowed_line(f.image, cdict[key])
       f.show_mask(m)
+
+    #ax.add_patch(mpatch.Rectangle((count, len(resMasks)), 1, 1, color=ImageUtils.RGB2HEX(res_color(resMasks, f))))
+    plt.show(block=False)
+    f.show_orig_image() == ord("q")
+    """
+
+    f.image = faceClone.copy()
+    bri = np.max(f.brightImage[faceMask], axis=0)[2]
+    delta = 10
+    cd = [{"name": "left cheek"},{"name": "right cheek"},{"name": "forehead"}, {"name": "nose"}]
+    cur_sat = 0
+    prev_sat = 0
+    while bri >= np.min(f.brightImage[faceMask], axis=0)[2]:
+      mask = np.bitwise_and(faceMask, np.bitwise_xor(np.where(f.brightImage[:, :, 2] >= bri, True, False), np.where(f.brightImage[:, :, 2] >= bri + delta, True, False)))
+      if np.count_nonzero(mask) == 0:
+        print ("Skipped")
+        bri -= delta
+        continue
+      print ("bri: ", bri*(100.0/255.0), ", sat mean: ", np.mean(f.satImage[mask], axis=0)[1]*(100.0/255.0) ,", sat std: ", np.std(f.satImage[mask], axis=0)[1]*(100.0/255.0), ", hue mean: ", np.mean(f.hueImage[mask], axis=0)[0], ", ratio mean: ", np.mean(f.ratioImage[mask], axis=0)[1], ", percent: ", (np.count_nonzero(mask)/np.count_nonzero(faceMask))*100.0)
+      sbmasks = sub_masks(f, mask)
+      for i, m in enumerate(sbmasks):
+        if np.count_nonzero(m) == 0 or i != 3:
+          continue
+        cur_sat = np.mean(f.satImage[m], axis=0)[1]
+        print ("\tMask name: ", cd[i]["name"], ", sat mean: ", np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0),  ", delta sat: ", (cur_sat-prev_sat)*(100.0/255.0), ", sat std: ", np.std(f.satImage[m], axis=0)[1]*(100.0/255.0),", percent: ", (np.count_nonzero(m)/np.count_nonzero(f.get_nose_keypoints()))*100.0)
+
+      print ("")
+      if f.show_mask(mask) == ord("q"):
+        break
+      bri -= delta
+      prev_sat = cur_sat
+
+    break
 
     print ("")
     print ("ResColor")
@@ -148,7 +160,8 @@ def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
       print ("RATIO DIFF BETWEEN NEW SPEC MASK and NEW RES COLOR: ", np.mean(f.ratioImage[sm], axis=0)[1] -  ImageUtils.sRGBtoHSV(newColor)[0, 2]/ImageUtils.sRGBtoHSV(newColor)[0, 1])
       print ("MASK PERCENTAGE CHANGE: ", (np.count_nonzero(oldsm)/np.count_nonzero(faceMask))*100.0 - (np.count_nonzero(sm)/np.count_nonzero(faceMask))*100.0)
       f.show_masks_comb(resMasks + [rm])
-      if (np.count_nonzero(oldsm)/np.count_nonzero(faceMask))*100.0 - (np.count_nonzero(sm)/np.count_nonzero(faceMask))*100.0 < 10:
+      #if (np.count_nonzero(oldsm)/np.count_nonzero(faceMask))*100.0 - (np.count_nonzero(sm)/np.count_nonzero(faceMask))*100.0 < 10:
+      if np.mean(ImageUtils.delta_e_mask_matrix(np.mean(f.image[oldsm], axis=0), f.image[oldsm])) <= 2 or (np.count_nonzero(oldsm) <= np.count_nonzero(sm)):
         print ("")
         print ("SPECULAR MASK FOUND")
         if np.count_nonzero(oldrm) > 0:
@@ -174,8 +187,95 @@ def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
     f.show_masks_comb(nMasks)
     f.show_mask(oldsm, [255, 0, 0])
     count += 1
+
+    #f.image[sMask] = medoids[0]
+    #f.image[resMasks[0]] = medoids[1]
+
     if f.show_orig_image() == ord("q"):
       break
+
+"""
+best_clusters repeatedly divides each mask until the cluster mean (when calculating delta_e of cluster w.r.t medoid)
+is less than the given tolerance.
+"""
+def best_clusters(f, faceMask, delta_tol):
+  k = 2
+  allMedoids, allMasks, allIndices, _ = ImageUtils.best_clusters(f.distinct_colors(faceMask, tol=0.0005), f.image, faceMask, k)
+
+  while True:
+    masks = []
+    medoids = []
+    indices = []
+
+    for i, m in zip(allIndices, allMasks):
+      if np.mean(ImageUtils.delta_e_mask_matrix(allMedoids[i], f.image[m])) <= delta_tol:
+        # No need to sub divide mask.
+        masks.append(m)
+        indices.append(len(medoids))
+        medoids.append(allMedoids[i])
+        continue
+
+      cmeds, cmasks, _ , _ = ImageUtils.best_clusters(f.distinct_colors(m, tol=0.0005), f.image, m, k, delta_tol)
+      if len(cmasks) == 0:
+        # Some kind of exception occrured, just use the mask and move on.
+        masks.append(m)
+        indices.append(len(medoids))
+        medoids.append(allMedoids[i])
+        continue
+
+      # Append both sub masks.
+      masks.append(cmasks[0])
+      indices.append(len(medoids))
+      medoids.append(cmeds[0])
+
+      masks.append(cmasks[1])
+      indices.append(len(medoids))
+      medoids.append(cmeds[1])
+
+    if len(masks) == len(allMasks):
+      # Iterations complete, return masks.
+      break
+
+    allMasks = masks.copy()
+    allIndices = indices.copy()
+    allMedoids = medoids.copy()
+
+  return allMedoids, allMasks, allIndices
+
+"""
+sub_masks returns masks in each part of face.
+"""
+def sub_masks(f, mask):
+  lcmask = np.bitwise_and(f.get_left_cheek_keypoints(), mask)
+  rcmask = np.bitwise_and(f.get_right_cheek_keypoints(), mask)
+  fhmask = np.bitwise_and(f.get_forehead_points(), mask)
+  nsmask = np.bitwise_and(f.get_nose_keypoints(), mask)
+  return [lcmask, rcmask, fhmask, nsmask]
+
+"""
+centroids returns centroids associated with given mask. It returns
+one centroid (if it exists) per left cheek, right cheek, nose and forehead.
+"""
+def centroids(f, mask, cdict):
+  lcmask = np.bitwise_and(f.get_left_cheek_keypoints(), mask)
+  rcmask = np.bitwise_and(f.get_right_cheek_keypoints(), mask)
+  lfhmask = np.bitwise_and(f.get_left_forehead_points(), mask)
+  rfhmask = np.bitwise_and(f.get_right_forehead_points(), mask)
+  lnsmask = np.bitwise_and(f.get_left_nose_points(), mask)
+  rnsmask = np.bitwise_and(f.get_right_nose_points(), mask)
+
+  points = []
+  allMasks = [f.get_left_cheek_keypoints(), f.get_right_cheek_keypoints(), f.get_left_forehead_points(), f.get_right_forehead_points(), f.get_left_nose_points(), f.get_right_nose_points()]
+  for i, m in enumerate([lcmask, rcmask, lfhmask, rfhmask, lnsmask, rnsmask]):
+    if (np.count_nonzero(m)/np.count_nonzero(allMasks[i]))*100.0 < 5:
+      continue
+    #if (np.count_nonzero(m) == 0):
+    #  continue
+    pt = np.mean(np.argwhere(m),axis=0)
+    points.append(pt)
+    cdict[i].append(pt)
+
+  return points
 
 def skip_shadow_masks(resColor, masks, f):
   print ("")
@@ -194,7 +294,7 @@ def print_mask_info(m, resColor, faceMask, f):
   print ("FINAL MASK")
   print ("Final Mask with resColor: ", ImageUtils.RGB2HEX(resColor))
   print ("Percent: ", (np.count_nonzero(m)/np.count_nonzero(faceMask))*100.0)
-  print ("Cluster Cost Mean: ", np.mean(ImageUtils.delta_e_mask_matrix(resColor, f.image[m])))
+  print ("Cluster Cost Mean: ", np.mean(ImageUtils.delta_e_mask_matrix(np.mean(f.image[m], axis=0), f.image[m])))
   print ("Mean sat: ", np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0))
   print ("Mean brightness: ", np.mean(f.brightImage[m], axis=0)[2]*(100.0/255.0))
   print ("Mean ratio: ", np.mean(f.ratioImage[m], axis=0)[1])
