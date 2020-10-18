@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17156" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="B5q-Qv-D1j">
+    <device id="retina6_1" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17125"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--FaceMagik-->
+        <scene sceneID="tne-QT-ifu">
+            <objects>
+                <viewController id="BYZ-38-t0r" customClass="ViewController" customModule="FaceMagik" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="8bC-Xf-vdC">
+                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" ambiguous="YES" translatesAutoresizingMaskIntoConstraints="NO" id="UGR-fR-ul3">
+                                <rect key="frame" x="0.0" y="88" width="414" height="725"/>
+                            </imageView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <constraints>
+                            <constraint firstItem="UGR-fR-ul3" firstAttribute="leading" secondItem="8bC-Xf-vdC" secondAttribute="leading" id="VAe-oN-p9g"/>
+                            <constraint firstItem="UGR-fR-ul3" firstAttribute="top" secondItem="6Tk-OE-BBY" secondAttribute="top" id="ZZq-Up-QXy"/>
+                            <constraint firstItem="UGR-fR-ul3" firstAttribute="trailing" secondItem="8bC-Xf-vdC" secondAttribute="trailing" id="bo0-2c-h4s"/>
+                        </constraints>
+                    </view>
+                    <navigationItem key="navigationItem" title="FaceMagik" id="ZQG-Q0-qE4" userLabel="FaceMagik"/>
+                    <connections>
+                        <outlet property="overlayView" destination="gsR-VJ-Hgd" id="Wup-5r-0aQ"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
+                <view contentMode="scaleToFill" id="gsR-VJ-Hgd" userLabel="OverlayView">
+                    <rect key="frame" x="0.0" y="0.0" width="375" height="725"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <subviews>
+                        <toolbar opaque="NO" clearsContextBeforeDrawing="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="WSn-jo-0Xx" userLabel="OverlayToolbar">
+                            <rect key="frame" x="0.0" y="675" width="375" height="44"/>
+                            <items>
+                                <barButtonItem title="New" id="Szw-rS-xkf"/>
+                                <barButtonItem style="plain" systemItem="flexibleSpace" id="3ev-Cv-kcR"/>
+                                <barButtonItem title="Item" systemItem="camera" id="cHM-BR-F0y">
+                                    <connections>
+                                        <action selector="switchCamera" destination="BYZ-38-t0r" id="bjL-Jj-0tw"/>
+                                    </connections>
+                                </barButtonItem>
+                            </items>
+                        </toolbar>
+                    </subviews>
+                    <viewLayoutGuide key="safeArea" id="KyL-2L-CPV"/>
+                    <constraints>
+                        <constraint firstItem="WSn-jo-0Xx" firstAttribute="trailing" secondItem="gsR-VJ-Hgd" secondAttribute="trailing" id="7Mf-GH-N3u"/>
+                        <constraint firstItem="WSn-jo-0Xx" firstAttribute="top" secondItem="KyL-2L-CPV" secondAttribute="bottom" constant="-50" id="nJ1-XU-iGK"/>
+                        <constraint firstItem="WSn-jo-0Xx" firstAttribute="leading" secondItem="gsR-VJ-Hgd" secondAttribute="leading" id="tyF-Fq-zVR"/>
+                    </constraints>
+                </view>
+            </objects>
+            <point key="canvasLocation" x="944.92753623188412" y="93.75"/>
+        </scene>
+        <!--Navigation Controller-->
+        <scene sceneID="MmB-P9-cCz">
+            <objects>
+                <navigationController automaticallyAdjustsScrollViewInsets="NO" id="B5q-Qv-D1j" sceneMemberID="viewController">
+                    <toolbarItems/>
+                    <navigationBar key="navigationBar" contentMode="scaleToFill" insetsLayoutMarginsFromSafeArea="NO" id="mjB-59-bJR">
+                        <rect key="frame" x="0.0" y="44" width="414" height="44"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                    </navigationBar>
+                    <nil name="viewControllers"/>
+                    <connections>
+                        <segue destination="BYZ-38-t0r" kind="relationship" relationship="rootViewController" id="f17-qZ-1KO"/>
+                    </connections>
+                </navigationController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="a8R-MH-gyG" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="34.782608695652179" y="93.75"/>
+        </scene>
+    </scenes>
+    <resources>
+        <systemColor name="systemBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+    </resources>
+</document>
