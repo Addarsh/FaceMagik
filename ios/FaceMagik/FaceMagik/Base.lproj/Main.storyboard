@@ -17,7 +17,7 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <toolbar opaque="NO" clearsContextBeforeDrawing="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="rsQ-RA-22f">
-                                <rect key="frame" x="0.0" y="818" width="414" height="44"/>
+                                <rect key="frame" x="0.0" y="813" width="414" height="49"/>
                                 <items>
                                     <barButtonItem style="plain" systemItem="flexibleSpace" id="qJe-0s-2DE"/>
                                     <barButtonItem systemItem="camera" id="mL6-XU-Y2y">
@@ -28,7 +28,7 @@
                                 </items>
                             </toolbar>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Aoo-iz-tpS" customClass="PreviewView" customModule="FaceMagik" customModuleProvider="target">
-                                <rect key="frame" x="0.0" y="158" width="414" height="590"/>
+                                <rect key="frame" x="0.0" y="158" width="414" height="585"/>
                                 <color key="backgroundColor" systemColor="systemGray2Color"/>
                             </view>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Exposure: " textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="UEd-Ag-HsB">
@@ -120,7 +120,6 @@
         <!--Image View Controller-->
         <scene sceneID="3Ck-eu-a3w">
             <objects>
-                <placeholder placeholderIdentifier="IBFirstResponder" id="guw-te-oXs" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
                 <viewController id="lpk-Nn-UtH" customClass="ImageViewController" customModule="FaceMagik" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="axy-st-tb5">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
@@ -129,7 +128,17 @@
                             <toolbar opaque="NO" clearsContextBeforeDrawing="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="FNi-VT-eSJ">
                                 <rect key="frame" x="0.0" y="813" width="414" height="49"/>
                                 <items>
-                                    <barButtonItem title="Click" id="Etc-40-Pqs"/>
+                                    <barButtonItem title="Cancel" id="Etc-40-Pqs">
+                                        <connections>
+                                            <action selector="didCancel" destination="lpk-Nn-UtH" id="1jJ-sC-3Nh"/>
+                                        </connections>
+                                    </barButtonItem>
+                                    <barButtonItem style="plain" systemItem="flexibleSpace" id="1gp-ss-FMi"/>
+                                    <barButtonItem title="Save" id="ttk-2U-PBo">
+                                        <connections>
+                                            <action selector="didSave" destination="lpk-Nn-UtH" id="J89-Hh-5bW"/>
+                                        </connections>
+                                    </barButtonItem>
                                 </items>
                             </toolbar>
                             <navigationBar contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="zgg-YV-o1p">
@@ -159,13 +168,13 @@
                         <outlet property="imageView" destination="YaH-nu-Kab" id="sgp-u3-cJp"/>
                     </connections>
                 </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="guw-te-oXs" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
             </objects>
             <point key="canvasLocation" x="1448" y="84"/>
         </scene>
         <!--Navigation Controller-->
         <scene sceneID="MmB-P9-cCz">
             <objects>
-                <placeholder placeholderIdentifier="IBFirstResponder" id="a8R-MH-gyG" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
                 <navigationController automaticallyAdjustsScrollViewInsets="NO" id="B5q-Qv-D1j" sceneMemberID="viewController">
                     <toolbarItems/>
                     <navigationBar key="navigationBar" contentMode="scaleToFill" insetsLayoutMarginsFromSafeArea="NO" id="mjB-59-bJR">
@@ -177,6 +186,7 @@
                         <segue destination="BYZ-38-t0r" kind="relationship" relationship="rootViewController" id="7pM-aR-Fxk"/>
                     </connections>
                 </navigationController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="a8R-MH-gyG" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
             </objects>
             <point key="canvasLocation" x="-403" y="84"/>
         </scene>

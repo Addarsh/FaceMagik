@@ -27,6 +27,10 @@ class ViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        let notifCenter = NotificationCenter.default
+        notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
 
         sessionQueue = DispatchQueue(label: "session queue", qos: .userInitiated, attributes: [], autoreleaseFrequency: .workItem, target: .none)
         configureCaptureSession()
@@ -40,16 +44,36 @@ class ViewController: UIViewController {
             }
         }
     }
-
-    // startPicker starts a UIImagePickerController session.
-    @IBAction func startPicker() {
+    
+    @objc func appMovedToBackground() {
+        if captureSession.isRunning {
+            DispatchQueue.main.async {
+                self.captureSession.stopRunning()
+            }
+        }
+    }
+    
+    @objc func appMovedToForeground() {
+        if !captureSession.isRunning {
+            DispatchQueue.main.async {
+                self.captureSession.startRunning()
+            }
+        }
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
         if captureSession.isRunning {
             captureSession.stopRunning()
         }
-        
+    }
+
+    // startPicker starts a UIImagePickerController session.
+    @IBAction func startPicker() {
         picker.sourceType = .camera
         picker.cameraDevice = .front
         picker.showsCameraControls = false
+        picker.cameraFlashMode = .off
         picker.delegate = self
         picker.cameraOverlayView = overlayView
         
