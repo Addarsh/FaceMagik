@@ -10,6 +10,8 @@ import Photos
 class ImageViewController: UIViewController {
     @IBOutlet var imageView: UIImageView!
     var image: UIImage!
+    @IBOutlet var brightLabel: UILabel!
+    var brightPercent = 0.0
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -19,6 +21,7 @@ class ImageViewController: UIViewController {
         }
         
         imageView.image = image
+        brightLabel.text = String(brightPercent)
     }
     
     @IBAction func didCancel() {
