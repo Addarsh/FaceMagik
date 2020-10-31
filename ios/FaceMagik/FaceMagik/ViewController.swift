@@ -30,6 +30,7 @@ class ViewController: UIViewController {
     @IBOutlet var isoLabel: UILabel!
     var currentCamera: AVCaptureDevice.Position = .unspecified
     var brightPercent = 0.0
+    let photoProcessor = PhotoProcessor()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -327,9 +328,10 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             print ("Could not create new UIImage from PNG data")
             return
         }
+        print ("original UI Image size: \(newUIImage.size)")
         
-        capturedImage = newUIImage
-        
+        //capturedImage = newUIImage
+        capturedImage = photoProcessor.blendMask()
         
         performSegue(withIdentifier: imageViewSegue, sender: nil)
     }
@@ -343,7 +345,6 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
     }
     
     func inspectImage(image: CGImage, mask: CGImage) {
-        print ("Start")
         guard let providerData = image.dataProvider?.data
         else {
             print ("provider not found")
@@ -383,6 +384,8 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             }
         }
         brightPercent = (Double(brighterPoints)/Double(totalPoints))*100.0
-        print ("bright percent: \(brightPercent)")
+        
+        photoProcessor.detectFace(image, mask)
+        
     }
 }
