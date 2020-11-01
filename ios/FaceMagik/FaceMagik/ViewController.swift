@@ -289,103 +289,59 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             return
         }
         
+        guard let mainCGImage = getMainCGImage(photo) else {
+            print ("Error getting main CGImage from photo data")
+            return
+        }
+        
+        guard let portraitMatte = photo.portraitEffectsMatte else {
+            print ("Portait effect Matte not found")
+            return
+        }
+        guard let matteCGImage = getPortraitCGImage(portraitMatte.mattingImage, CGSize(width: mainCGImage.width, height: mainCGImage.height)) else {
+            print ("Could not convert portrait matte to CGImage")
+            return
+        }
+        photoProcessor.detectFace(mainCGImage, matteCGImage)
+        display(mainCGImage)
+    }
+    
+    // getPortraitCGImage returns portrait CGImage from given portrait pixel buffer and main image resolution.
+    func getPortraitCGImage(_ buffer: CVPixelBuffer, _ resolution: CGSize) -> CGImage? {
+        var ciImage = CIImage(cvPixelBuffer: buffer).oriented(forExifOrientation: Int32(CGImagePropertyOrientation.right.rawValue))
+        
+        let scale = CGAffineTransform(scaleX: resolution.width/ciImage.extent.size.width, y: resolution.height/ciImage.extent.size.height)
+        ciImage = ciImage.transformed(by: scale)
+        
+        return PhotoProcessor.CIImageToCGImage(ciImage)
+    }
+    
+    // getMainCGImage returns the main RGB CG image from given AVCapturePhoto.
+    func getMainCGImage(_ photo: AVCapturePhoto) -> CGImage? {
         guard let photoData = photo.fileDataRepresentation() else {
             print ("photo Data not found")
-            return
+            return nil
         }
         
         guard let uiImage = UIImage(data: photoData) else {
             print ("Could not create UI Image from photoData")
-            return
+            return nil
         }
         
-        guard let ciImage = CIImage(image: uiImage) else {
+        guard let ciImage = CIImage(image: uiImage)?.oriented(forExifOrientation: Int32(CGImagePropertyOrientation.right.rawValue)) else {
             print ("could not convert uiImage to ciImage")
-            return
+            return nil
         }
-        let newciImage = ciImage.oriented(forExifOrientation: Int32(CGImagePropertyOrientation.right.rawValue))
         
-        guard let matte = photo.portraitEffectsMatte else {
-            print ("Portait effect Matte not found")
-            return
-        }
-        var matteImage = CIImage(cvPixelBuffer: matte.mattingImage).oriented(forExifOrientation: Int32(CGImagePropertyOrientation.right.rawValue))
-        
-        let scale = CGAffineTransform(scaleX: newciImage.extent.size.width/matteImage.extent.size.width, y: newciImage.extent.size.height/matteImage.extent.size.height)
-        matteImage = matteImage.transformed(by: scale)
-
-        inspectImage(image: convertCIImageToCGImage(inputImage: newciImage)!, mask: convertCIImageToCGImage(inputImage: matteImage)!)
-        display(image: newciImage)
+        return PhotoProcessor.CIImageToCGImage(ciImage)
     }
     
-    func display(image: CIImage) {
-        let context = CIContext(options: [CIContextOption.useSoftwareRenderer: true])
-        guard let pngData = context.pngRepresentation(of: image, format: CIFormat.ARGB8, colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!) else {
-            return
-        }
-        
-        guard let newUIImage = UIImage(data: pngData) else {
-            print ("Could not create new UIImage from PNG data")
-            return
-        }
-        print ("original UI Image size: \(newUIImage.size)")
-        
-        //capturedImage = newUIImage
+    func display(_ image: CGImage) {
+        print ("got image width: \(image.width), height: \(image.height)")
+        //capturedImage = PhotoProcessor.CGImageToUIImage(image)
         capturedImage = photoProcessor.blendMask()
+        brightPercent = photoProcessor.overExposurePercent()
         
         performSegue(withIdentifier: imageViewSegue, sender: nil)
-    }
-    
-    func convertCIImageToCGImage(inputImage: CIImage) -> CGImage? {
-        let context = CIContext(options: nil)
-        if let cgImage = context.createCGImage(inputImage, from: inputImage.extent) {
-            return cgImage
-        }
-        return nil
-    }
-    
-    func inspectImage(image: CGImage, mask: CGImage) {
-        guard let providerData = image.dataProvider?.data
-        else {
-            print ("provider not found")
-            return
-        }
-        guard let data = CFDataGetBytePtr(providerData) else {
-            return
-        }
-        guard let maskProviderData = mask.dataProvider?.data
-        else {
-            print ("provider not found")
-            return
-        }
-        guard let maskData = CFDataGetBytePtr(maskProviderData) else {
-            return
-        }
-        
-        let numComponents = 4
-        let div = CGFloat(255.0)
-        let w = image.width
-        let h = image.height
-        
-        var totalPoints = 0
-        var brighterPoints = 0
-        for i in 0..<w {
-            for j in 0..<h {
-                let position = ((w*j) + i)*numComponents
-                if CGFloat(maskData[position])/div < 0.99 || CGFloat(maskData[position + 1])/div < 0.99 && CGFloat(maskData[position + 2])/div < 0.99 {
-                    // Outside portrait, skip.
-                    continue
-                }
-                let val = max(CGFloat(data[position]), CGFloat(data[position+1]), CGFloat(data[position+2]))
-                if val >= 240 {
-                    brighterPoints += 1
-                }
-                totalPoints += 1
-            }
-        }
-        brightPercent = (Double(brighterPoints)/Double(totalPoints))*100.0
-        
-        photoProcessor.detectFace(image, mask)
-        
     }
 }

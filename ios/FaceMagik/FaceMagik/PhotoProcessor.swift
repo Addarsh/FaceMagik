@@ -24,6 +24,26 @@ class PhotoProcessor: NSObject {
     var outerLipsMask: CGImage!
     var faceContourMask: CGImage!
     
+    // CIImageToCGImage converts CIImage to CGImage.
+    static func CIImageToCGImage(_ image: CIImage) -> CGImage? {
+        let context = CIContext(options: nil)
+        if let cgImage = context.createCGImage(image, from: image.extent) {
+            return cgImage
+        }
+        return nil
+    }
+    
+    // CGImageToUIImage converts CGImage to UIImage.
+    static func CGImageToUIImage(_ image: CGImage) -> UIImage? {
+        let ciImage = CIImage(cgImage: image)
+        let context = CIContext(options: [CIContextOption.useSoftwareRenderer: true])
+        
+        guard let pngData = context.pngRepresentation(of: ciImage, format: CIFormat.ARGB8, colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!) else {
+            return nil
+        }
+        return UIImage(data: pngData)
+    }
+    
     override init() {
         super.init()
         
@@ -211,6 +231,50 @@ class PhotoProcessor: NSObject {
     // to the CGImage coordinate system (left top origion).
     func toCGCoordinates(_ points: [CGPoint]) -> [CGPoint] {
         points.compactMap({ return CGPoint(x: $0.x, y: CGFloat(CGFloat(mainImage.height) - $0.y)) })
+    }
+    
+    // overExposurePercent returns the percentage amount by which given main image is overexposed.
+    func overExposurePercent() -> Double {
+        guard let providerData = mainImage.dataProvider?.data
+        else {
+            print ("mainImage data provider not found")
+            return -1.0
+        }
+        guard let data = CFDataGetBytePtr(providerData) else {
+            print ("CGData Pointer not found for main image providerData")
+            return -1.0
+        }
+        guard let maskProviderData = portraitMask.dataProvider?.data else {
+            print ("portrait mask data provider not found")
+            return -1.0
+        }
+        guard let maskData = CFDataGetBytePtr(maskProviderData) else {
+            print ("CGData Pointer not found for portrait mask providerData")
+            return -1.0
+        }
+        
+        let numComponents = 4
+        let div = CGFloat(255.0)
+        let w = mainImage.width
+        let h = mainImage.height
+        
+        var totalPoints = 0
+        var brighterPoints = 0
+        for i in 0..<w {
+            for j in 0..<h {
+                let position = ((w*j) + i)*numComponents
+                if CGFloat(maskData[position])/div < 0.99 || CGFloat(maskData[position + 1])/div < 0.99 && CGFloat(maskData[position + 2])/div < 0.99 {
+                    // Outside portrait, skip.
+                    continue
+                }
+                let val = max(CGFloat(data[position]), CGFloat(data[position+1]), CGFloat(data[position+2]))
+                if val >= 240 {
+                    brighterPoints += 1
+                }
+                totalPoints += 1
+            }
+        }
+        return (Double(brighterPoints)/Double(totalPoints))*100.0
     }
     
     func blendMask() -> UIImage {
