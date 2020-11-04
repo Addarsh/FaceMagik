@@ -15,6 +15,7 @@ class ViewController: UIViewController {
     @IBOutlet var overlayView: UIView!
     var capturedImage: UIImage!
     let imageViewSegue = "imageView"
+    @IBOutlet var maskSwitch: UISwitch!
     
     // AVCaptureSession variables.
     @objc var cameraDevice: AVCaptureDevice!
@@ -29,11 +30,12 @@ class ViewController: UIViewController {
     @IBOutlet var tempLabel: UILabel!
     @IBOutlet var isoLabel: UILabel!
     var currentCamera: AVCaptureDevice.Position = .unspecified
-    var brightPercent = 0.0
     let photoProcessor = PhotoProcessor()
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        maskSwitch.isOn = false
         
         let notifCenter = NotificationCenter.default
         notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
@@ -120,7 +122,7 @@ class ViewController: UIViewController {
                 return
             }
             destVC.image = capturedImage
-            destVC.brightPercent = brightPercent
+            destVC.overExposedPercent = photoProcessor.overExposedPercent()
         }
     }
     
@@ -199,7 +201,6 @@ class ViewController: UIViewController {
         
         
         captureSession.sessionPreset = .hd1280x720
-        captureSession.automaticallyConfiguresCaptureDeviceForWideColor = true
         captureSession.addOutput(photoOutput)
             
         if let photoConnection = photoOutput.connection(with: .video) {
@@ -302,8 +303,18 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             print ("Could not convert portrait matte to CGImage")
             return
         }
-        photoProcessor.detectFace(mainCGImage, matteCGImage)
-        display(mainCGImage)
+        let start = CFAbsoluteTimeGetCurrent()
+        photoProcessor.prepareDetectionRequest(mainCGImage, matteCGImage)
+        photoProcessor.detectFace()
+        photoProcessor.semaphore.wait()
+        if maskSwitch.isOn {
+            capturedImage = PhotoProcessor.CGImageToUIImage(mainCGImage)
+        }else {
+            capturedImage = photoProcessor.overlayOverExposedMask()
+        }
+        print ("photo processing time time: \(CFAbsoluteTimeGetCurrent() - start)")
+        
+        performSegue(withIdentifier: imageViewSegue, sender: nil)
     }
     
     // getPortraitCGImage returns portrait CGImage from given portrait pixel buffer and main image resolution.
@@ -334,14 +345,5 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
         }
         
         return PhotoProcessor.CIImageToCGImage(ciImage)
-    }
-    
-    func display(_ image: CGImage) {
-        print ("got image width: \(image.width), height: \(image.height)")
-        //capturedImage = PhotoProcessor.CGImageToUIImage(image)
-        capturedImage = photoProcessor.blendMask()
-        brightPercent = photoProcessor.overExposurePercent()
-        
-        performSegue(withIdentifier: imageViewSegue, sender: nil)
     }
 }
