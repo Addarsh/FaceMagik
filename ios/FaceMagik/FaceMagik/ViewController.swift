@@ -31,23 +31,32 @@ class ViewController: UIViewController {
     @IBOutlet var isoLabel: UILabel!
     var currentCamera: AVCaptureDevice.Position = .unspecified
     let photoProcessor = PhotoProcessor()
+    
+    // Layer UI for drawing Vision results
+    var videoResolution: CGSize!
+    var detectionOverlayLayer: CALayer?
+    var detectedFaceLayer: CAShapeLayer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        maskSwitch.isOn = false
+        self.maskSwitch.isOn = false
         
         let notifCenter = NotificationCenter.default
         notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
-
-        sessionQueue = DispatchQueue(label: "session queue", qos: .userInitiated, attributes: [], autoreleaseFrequency: .workItem, target: .none)
-        configureCaptureSession()
+        self.sessionQueue = DispatchQueue(label: "session queue", qos: .userInitiated, attributes: [], autoreleaseFrequency: .workItem, target: .none)
+        
+        //self.setupPhotoCaptureSession()
+        
+        // Setup video capture session.
+        self.setupVideoCaptureSession()
+        self.setupVisionDrawingLayers()
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidLoad()
-        if !captureSession.isRunning {
+        if !self.captureSession.isRunning {
             DispatchQueue.main.async {
                 self.captureSession.startRunning()
             }
@@ -55,7 +64,7 @@ class ViewController: UIViewController {
     }
     
     @objc func appMovedToBackground() {
-        if captureSession.isRunning {
+        if self.captureSession.isRunning {
             DispatchQueue.main.async {
                 self.captureSession.stopRunning()
             }
@@ -63,7 +72,7 @@ class ViewController: UIViewController {
     }
     
     @objc func appMovedToForeground() {
-        if !captureSession.isRunning {
+        if !self.captureSession.isRunning {
             DispatchQueue.main.async {
                 self.captureSession.startRunning()
             }
@@ -72,23 +81,23 @@ class ViewController: UIViewController {
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        if captureSession.isRunning {
-            captureSession.stopRunning()
+        if self.captureSession.isRunning {
+            self.captureSession.stopRunning()
         }
     }
 
     // startPicker starts a UIImagePickerController session.
     @IBAction func startPicker() {
-        picker.sourceType = .camera
-        picker.cameraDevice = .front
-        picker.showsCameraControls = false
-        picker.cameraFlashMode = .off
-        picker.delegate = self
-        picker.cameraOverlayView = overlayView
+        self.picker.sourceType = .camera
+        self.picker.cameraDevice = .front
+        self.picker.showsCameraControls = false
+        self.picker.cameraFlashMode = .off
+        self.picker.delegate = self
+        self.picker.cameraOverlayView = overlayView
         
-        picker.cameraViewTransform = CGAffineTransform(translationX: 0, y: 120)
+        self.picker.cameraViewTransform = CGAffineTransform(translationX: 0, y: 120)
         
-        present(picker, animated: true)
+        present(self.picker, animated: true)
     }
     
     // dismissPicker dismisses given picker and -re-starts capture session.
@@ -96,45 +105,45 @@ class ViewController: UIViewController {
         DispatchQueue.main.async {
             self.captureSession.startRunning()
         }
-        picker.dismiss(animated: true)
+        self.picker.dismiss(animated: true)
     }
     
     // Picker take Picture.
     @IBAction func takePicture() {
-        picker.takePicture()
+        self.picker.takePicture()
     }
     
     // Start recording video.
     @IBAction func startRecording() {
         let photoSettings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
         photoSettings.flashMode = .off
-        if currentCamera == .front {
+        if self.currentCamera == .front {
             photoSettings.isDepthDataDeliveryEnabled = true
             photoSettings.isPortraitEffectsMatteDeliveryEnabled = true
         }
         
-        captureOutput.capturePhoto(with: photoSettings, delegate: self)
+        self.captureOutput.capturePhoto(with: photoSettings, delegate: self)
     }
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if segue.identifier == imageViewSegue {
+        if segue.identifier == self.imageViewSegue {
             guard let destVC = segue.destination as? ImageViewController else {
                 return
             }
             destVC.image = capturedImage
-            destVC.overExposedPercent = photoProcessor.overExposedPercent()
+            destVC.overExposedPercent = self.photoProcessor.overExposedPercent()
         }
     }
     
     @IBAction func switchSessions() {
-        stopObservingDevice()
+        self.stopObservingDevice()
         
-        guard let currentCameraInput = captureSession.inputs.first else {
+        guard let currentCameraInput = self.captureSession.inputs.first else {
             return
         }
-        captureSession.beginConfiguration()
+        self.captureSession.beginConfiguration()
         
-        captureSession.removeInput(currentCameraInput)
+        self.captureSession.removeInput(currentCameraInput)
         
         var newDev: AVCaptureDevice?
         var newPosition: AVCaptureDevice.Position = .unspecified
@@ -150,58 +159,58 @@ class ViewController: UIViewController {
         guard let dev = newDev else {
             return
         }
-        cameraDevice = dev
+        self.cameraDevice = dev
         
-        guard let captureInput = try? AVCaptureDeviceInput(device: cameraDevice), captureSession.canAddInput(captureInput) else {
+        guard let captureInput = try? AVCaptureDeviceInput(device: self.cameraDevice), self.captureSession.canAddInput(captureInput) else {
             return
         }
-        captureSession.addInput(captureInput)
+        self.captureSession.addInput(captureInput)
         
         if newPosition == .front {
-            captureOutput.isDepthDataDeliveryEnabled = true
-            captureOutput.isPortraitEffectsMatteDeliveryEnabled = true
+            self.captureOutput.isDepthDataDeliveryEnabled = true
+            self.captureOutput.isPortraitEffectsMatteDeliveryEnabled = true
         } else {
-            captureOutput.isDepthDataDeliveryEnabled = false
-            captureOutput.isPortraitEffectsMatteDeliveryEnabled = false
+            self.captureOutput.isDepthDataDeliveryEnabled = false
+            self.captureOutput.isPortraitEffectsMatteDeliveryEnabled = false
         }
         
-        if let photoConnection = captureOutput.connection(with: .video) {
+        if let photoConnection = self.captureOutput.connection(with: .video) {
             photoConnection.videoOrientation = .portrait
         }
         
-        captureSession.commitConfiguration()
-        currentCamera = newPosition
+        self.captureSession.commitConfiguration()
+        self.currentCamera = newPosition
 
-        observeDevice()
+        self.observeDevice()
     }
     
-    // configureCaptureSession configures AVCaptureSession.
-    func configureCaptureSession() {
-        captureSession.beginConfiguration()
-        previewLayer.videoPreviewLayer.session = captureSession
+    // setupPhotoCaptureSession sets up a capture session to capture photos.
+    func setupPhotoCaptureSession() {
+        self.captureSession.beginConfiguration()
+        self.previewLayer.videoPreviewLayer.session = self.captureSession
         
         // Add capture session input.
         guard let dev = AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front) else {
             return
         }
-        cameraDevice = dev
-        currentCamera = .front
+        self.cameraDevice = dev
+        self.currentCamera = .front
         
         // Add capture session input.
-        guard let captureInput = try? AVCaptureDeviceInput(device: cameraDevice), captureSession.canAddInput(captureInput) else {
+        guard let captureInput = try? AVCaptureDeviceInput(device: self.cameraDevice), self.captureSession.canAddInput(captureInput) else {
             return
         }
-        captureSession.addInput(captureInput)
+        self.captureSession.addInput(captureInput)
         
         // Add capture session output.
         let photoOutput = AVCapturePhotoOutput()
-        guard captureSession.canAddOutput(photoOutput) else {
+        guard self.captureSession.canAddOutput(photoOutput) else {
             return
         }
         
         
-        captureSession.sessionPreset = .hd1280x720
-        captureSession.addOutput(photoOutput)
+        self.captureSession.sessionPreset = .hd1280x720
+        self.captureSession.addOutput(photoOutput)
             
         if let photoConnection = photoOutput.connection(with: .video) {
             photoConnection.videoOrientation = .portrait
@@ -209,26 +218,68 @@ class ViewController: UIViewController {
         
         photoOutput.isDepthDataDeliveryEnabled = true
         photoOutput.isPortraitEffectsMatteDeliveryEnabled = true
-        captureOutput = photoOutput
+        self.captureOutput = photoOutput
         
-        captureSession.commitConfiguration()
+        self.captureSession.commitConfiguration()
         
-        observeDevice()
+        self.observeDevice()
         
-        sessionQueue.async {
+        self.sessionQueue.async {
+            self.captureSession.startRunning()
+        }
+    }
+    
+    // setupVideoCaptureSession sets up a capture session to capture video.
+    func setupVideoCaptureSession() {
+        self.captureSession.beginConfiguration()
+        self.previewLayer.videoPreviewLayer.session = self.captureSession
+        
+        // Add capture session input.
+        guard let dev = AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front) else {
+            return
+        }
+        self.cameraDevice = dev
+        self.currentCamera = .front
+        
+        // Add capture session input.
+        guard let captureInput = try? AVCaptureDeviceInput(device: self.cameraDevice), self.captureSession.canAddInput(captureInput) else {
+            return
+        }
+        self.captureSession.addInput(captureInput)
+        
+        // Add capture session output.
+        let videoOutput = AVCaptureVideoDataOutput()
+        videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "com.Addarsh.FaceMagik"))
+        videoOutput.alwaysDiscardsLateVideoFrames = true
+        guard self.captureSession.canAddOutput(videoOutput) else {
+            return
+        }
+        
+        self.captureSession.sessionPreset = .hd1280x720
+        self.captureSession.addOutput(videoOutput)
+            
+        if let videoConnection = videoOutput.connection(with: .video) {
+            videoConnection.videoOrientation = .portrait
+            videoConnection.isEnabled = true
+        }
+        self.captureSession.commitConfiguration()
+        
+        self.videoResolution = CGSize(width: 720, height: 1280)
+        
+        self.sessionQueue.async {
             self.captureSession.startRunning()
         }
     }
     
     func stopObservingDevice() {
-        exposureObservation?.invalidate()
-        tempObservation?.invalidate()
-        isoObservation?.invalidate()
+        self.exposureObservation?.invalidate()
+        self.tempObservation?.invalidate()
+        self.isoObservation?.invalidate()
     }
     
     func observeDevice() {
         // Start observing camera device exposureDuration.
-        exposureObservation = observe(\.cameraDevice.exposureDuration, options: .new){
+        self.exposureObservation = observe(\.self.cameraDevice.exposureDuration, options: .new){
             object, change in
             guard let newVal = change.newValue else {
                 return
@@ -239,7 +290,7 @@ class ViewController: UIViewController {
         }
         
         // Start observing camera device white balance gains.
-        tempObservation = observe(\.cameraDevice.deviceWhiteBalanceGains, options: .new){
+        self.tempObservation = observe(\.self.cameraDevice.deviceWhiteBalanceGains, options: .new){
             obj, chng in
             let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
             DispatchQueue.main.async {
@@ -248,7 +299,7 @@ class ViewController: UIViewController {
         }
         
         // Start observing camera device white balance gains.
-        isoObservation = observe(\.cameraDevice.iso, options: .new){
+        self.isoObservation = observe(\.self.cameraDevice.iso, options: .new){
             obj, change in
             guard let newVal = change.newValue else {
                 return
@@ -267,9 +318,9 @@ extension ViewController: UIImagePickerControllerDelegate, UINavigationControlle
         guard let uiimage = info[UIImagePickerController.InfoKey.originalImage] as? UIImage else {
             return
         }
-        capturedImage = uiimage
+        self.capturedImage = uiimage
         
-        performSegue(withIdentifier: imageViewSegue, sender: nil)
+        performSegue(withIdentifier: self.imageViewSegue, sender: nil)
         picker.dismiss(animated: true, completion: nil)
     }
 }
@@ -290,7 +341,7 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             return
         }
         
-        guard let mainCGImage = getMainCGImage(photo) else {
+        guard let mainCGImage = self.getMainCGImage(photo) else {
             print ("Error getting main CGImage from photo data")
             return
         }
@@ -299,22 +350,24 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             print ("Portait effect Matte not found")
             return
         }
-        guard let matteCGImage = getPortraitCGImage(portraitMatte.mattingImage, CGSize(width: mainCGImage.width, height: mainCGImage.height)) else {
+        guard let matteCGImage = self.getPortraitCGImage(portraitMatte.mattingImage, CGSize(width: mainCGImage.width, height: mainCGImage.height)) else {
             print ("Could not convert portrait matte to CGImage")
             return
         }
         let start = CFAbsoluteTimeGetCurrent()
-        photoProcessor.prepareDetectionRequest(mainCGImage, matteCGImage)
-        photoProcessor.detectFace()
-        photoProcessor.semaphore.wait()
-        if maskSwitch.isOn {
-            capturedImage = PhotoProcessor.CGImageToUIImage(mainCGImage)
+        self.photoProcessor.prepareDetectionRequest(mainCGImage)
+        self.photoProcessor.detectFace()
+        self.photoProcessor.semaphore.wait()
+        self.photoProcessor.computeFinalFaceMask(matteCGImage)
+        self.photoProcessor.calculateOverExposedPoints()
+        if self.maskSwitch.isOn {
+            self.capturedImage = PhotoProcessor.CGImageToUIImage(mainCGImage)
         }else {
-            capturedImage = photoProcessor.overlayOverExposedMask()
+            self.capturedImage = self.photoProcessor.overlayOverExposedMask()
         }
         print ("photo processing time time: \(CFAbsoluteTimeGetCurrent() - start)")
         
-        performSegue(withIdentifier: imageViewSegue, sender: nil)
+        performSegue(withIdentifier: self.imageViewSegue, sender: nil)
     }
     
     // getPortraitCGImage returns portrait CGImage from given portrait pixel buffer and main image resolution.
@@ -345,5 +398,91 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
         }
         
         return PhotoProcessor.CIImageToCGImage(ciImage)
+    }
+}
+
+extension ViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        // Do nothing for now.
+    }
+    
+    // Stream video frames from camrea input.
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            print("Failed to obtain a CVPixelBuffer for the current output frame.")
+            return
+        }
+        guard let cgImage = PhotoProcessor.CIImageToCGImage(CIImage(cvPixelBuffer: pixelBuffer)) else {
+            print ("Could not convert to cgimage")
+            return
+        }
+        let start = CFAbsoluteTimeGetCurrent()
+        self.photoProcessor.prepareDetectionRequest(cgImage)
+        self.photoProcessor.detectFace()
+        self.photoProcessor.semaphore.wait()
+        DispatchQueue.main.async {
+            self.drawFace()
+        }
+        print ("Processing time: \(CFAbsoluteTimeGetCurrent() - start)")
+    }
+    
+    // setupVisionDrawingLayers sets up overlays for drawing face detection results.
+    func setupVisionDrawingLayers() {
+        let captureDeviceBounds = CGRect(x: 0,y: 0,width: videoResolution.width,height: videoResolution.height)
+        let captureDeviceBoundsCenterPoint = CGPoint(x: captureDeviceBounds.midX, y: captureDeviceBounds.midY)
+        let normalizedCenterPoint = CGPoint(x: 0.5, y: 0.5)
+        
+        let overlayLayer = CALayer()
+        overlayLayer.name = "DetectionOverlay"
+        overlayLayer.masksToBounds = true
+        overlayLayer.anchorPoint = normalizedCenterPoint
+        overlayLayer.bounds = captureDeviceBounds
+        overlayLayer.position = CGPoint(x: self.previewLayer.videoPreviewLayer.bounds.midX, y: self.previewLayer.videoPreviewLayer.bounds.midY)
+        
+        let faceRectangleShapeLayer = CAShapeLayer()
+        faceRectangleShapeLayer.name = "RectangleOutlineLayer"
+        faceRectangleShapeLayer.bounds = captureDeviceBounds
+        faceRectangleShapeLayer.anchorPoint = normalizedCenterPoint
+        faceRectangleShapeLayer.position = captureDeviceBoundsCenterPoint
+        faceRectangleShapeLayer.fillColor = nil
+        faceRectangleShapeLayer.strokeColor = UIColor.green.withAlphaComponent(0.7).cgColor
+        faceRectangleShapeLayer.lineWidth = 5
+        faceRectangleShapeLayer.shadowOpacity = 1.0
+        faceRectangleShapeLayer.shadowRadius = 5
+        
+        overlayLayer.addSublayer(faceRectangleShapeLayer)
+        self.detectionOverlayLayer = overlayLayer
+        self.detectedFaceLayer = faceRectangleShapeLayer
+        self.previewLayer.videoPreviewLayer.addSublayer(overlayLayer)
+        
+        self.scaleOverlayGeometry()
+    }
+    
+    // scaleOverlayGeometry scales detection overlay layer to video preview layer coordinates.
+    func scaleOverlayGeometry() {
+        CATransaction.setValue(NSNumber(value: true), forKey: kCATransactionDisableActions)
+        let videoPreviewRect = self.previewLayer.videoPreviewLayer.layerRectConverted(fromMetadataOutputRect: CGRect(x: 0, y: 0, width: 1, height: 1))
+        
+        let affineTransform = CGAffineTransform(scaleX: -videoPreviewRect.width / self.videoResolution.width, y: videoPreviewRect.height/self.videoResolution.height)
+        self.detectionOverlayLayer!.setAffineTransform(affineTransform)
+        self.detectionOverlayLayer!.position = CGPoint(x: self.previewLayer.bounds.midX, y: self.previewLayer.bounds.midY)
+    }
+    
+    // drawFace draws results from face detection onto video.
+    func drawFace() {
+        if self.photoProcessor.numFaces == 0 {
+            return
+        }
+        CATransaction.begin()
+        
+        CATransaction.setValue(NSNumber(value: true), forKey: kCATransactionDisableActions)
+        
+        let faceRectanglePath = CGMutablePath()
+        faceRectanglePath.addRect(self.photoProcessor.faceBoundsRect)
+        self.detectedFaceLayer!.path = faceRectanglePath
+        
+        self.scaleOverlayGeometry()
+        
+        CATransaction.commit()
     }
 }

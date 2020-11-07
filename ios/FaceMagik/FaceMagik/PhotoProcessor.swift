@@ -15,7 +15,6 @@ class PhotoProcessor: NSObject {
     var detectionRequests: [VNDetectFaceLandmarksRequest] = []
     var numFaces = 0
     var mainImage: CGImage!
-    var portraitMask: CGImage!
     var faceBoundsMask: CGImage!
     var leftEyeMask: CGImage!
     var rightEyeMask: CGImage!
@@ -27,6 +26,7 @@ class PhotoProcessor: NSObject {
     var overExposedPoints: [CGPoint] = []
     var allFacePoints: [CGPoint] = []
     var overExposedMask: CGImage!
+    var faceBoundsRect: CGRect!
     
     // CIImageToCGImage converts CIImage to CGImage.
     static func CIImageToCGImage(_ image: CIImage) -> CGImage? {
@@ -53,9 +53,8 @@ class PhotoProcessor: NSObject {
     }
     
     // prepareDetectionRequest creates a face + landmarks detection request.
-    func prepareDetectionRequest(_ image: CGImage, _ mask: CGImage) {
-        mainImage = image
-        portraitMask = mask
+    func prepareDetectionRequest(_ image: CGImage) {
+        self.mainImage = image
         
         let faceDetectionRequest = VNDetectFaceLandmarksRequest(completionHandler: { (request, error) in
             defer { self.semaphore.signal() }
@@ -143,34 +142,22 @@ class PhotoProcessor: NSObject {
                 return
             }
             self.faceContourMask = faceContourMask
-            
-            self.finalFaceMask = self.getFinalFaceMask()
-            
-            let vals = self.calculateOverExposedPoints()
-            self.overExposedPoints = vals.0
-            self.allFacePoints = vals.1
-            
-            guard let overExposedMask = self.createOverExposedMask() else {
-                print ("Couldnot create over exposed mask")
-                return
-            }
-            self.overExposedMask = overExposedMask
         })
-        detectionRequests = [faceDetectionRequest]
+        self.detectionRequests = [faceDetectionRequest]
     }
     
-    // detectFace calls Visionto detect face for given image.
+    // detectFace calls Vision to detect face for given image.
     func detectFace() {
-        if detectionRequests.count == 0 {
+        if self.detectionRequests.count == 0 {
             print ("No detection requests found")
             return
         }
         // Create a request handler.
-        let imageRequestHandler = VNImageRequestHandler(cgImage: mainImage,
+        let imageRequestHandler = VNImageRequestHandler(cgImage: self.mainImage,
                                                         orientation: .up,
                                                         options: [:])
         do {
-            try imageRequestHandler.perform(detectionRequests)
+            try imageRequestHandler.perform(self.detectionRequests)
         } catch let error as NSError {
             print ("Failed to perform Face detection with error: \(error)")
         }
@@ -179,21 +166,23 @@ class PhotoProcessor: NSObject {
     // overExposedPercent returns the percentage of face points that are overexposed.
     // Returns -1 if there was no face detected.
     func overExposedPercent() -> Double {
-        if allFacePoints.count == 0 {
+        if self.allFacePoints.count == 0 {
             return -1.0
         }
-        return (Double(overExposedPoints.count)/Double(allFacePoints.count))*100.0
+        return (Double(self.overExposedPoints.count)/Double(self.allFacePoints.count))*100.0
     }
     
     // createFaceBoundsMask creates a CGImage with given face bounds mask.
     func createFaceBoundsMask(_ normRect: CGRect) -> CGImage? {
-        let rect = VNImageRectForNormalizedRect(normRect, Int(mainImage.width), Int(mainImage.height))
+        let rect = VNImageRectForNormalizedRect(normRect, Int(self.mainImage.width), Int(self.mainImage.height))
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: Int(mainImage.width), height: Int(mainImage.height)), format: format)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: Int(self.mainImage.width), height: Int(self.mainImage.height)), format: format)
 
         let img = renderer.image { ctx in
-            let rectangle = CGRect(x: CGFloat(Int(rect.minX)), y: CGFloat(mainImage.height-Int(rect.maxY)), width: CGFloat(Int(rect.width)), height: CGFloat(mainImage.height - Int(rect.height)))
+            let rectangle = CGRect(x: CGFloat(Int(rect.minX)), y: CGFloat(self.mainImage.height-Int(rect.maxY)), width: CGFloat(Int(rect.width)), height: CGFloat(Int(rect.height)))
+            
+            self.faceBoundsRect = rectangle
             ctx.cgContext.setFillColor(UIColor.white.cgColor)
             ctx.cgContext.addRect(rectangle)
             ctx.cgContext.drawPath(using: .fill)
@@ -205,11 +194,11 @@ class PhotoProcessor: NSObject {
     func createLandmarkMask(_ landmark: VNFaceLandmarkRegion2D) -> CGImage? {
         // Convert normalized points to image coordinate space.
         var landmarkPoints = landmark.pointsInImage(imageSize: CGSize(width: CGFloat(self.mainImage.width), height: CGFloat(self.mainImage.height)))
-        landmarkPoints = toCGCoordinates(landmarkPoints)
+        landmarkPoints = self.toCGCoordinates(landmarkPoints)
         
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: Int(mainImage.width), height: Int(mainImage.height)), format: format)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: Int(self.mainImage.width), height: Int(self.mainImage.height)), format: format)
         let img = renderer.image { ctx in
             ctx.cgContext.setFillColor(UIColor.white.cgColor)
             
@@ -224,11 +213,11 @@ class PhotoProcessor: NSObject {
     func createFaceContourMask(_ faceContour: VNFaceLandmarkRegion2D) -> CGImage? {
         // Convert normalized points to image coordinate space.
         var faceContourPoints = faceContour.pointsInImage(imageSize: CGSize(width: CGFloat(self.mainImage.width), height: CGFloat(self.mainImage.height)))
-        faceContourPoints = toCGCoordinates(faceContourPoints)
+        faceContourPoints = self.toCGCoordinates(faceContourPoints)
         
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: Int(mainImage.width), height: Int(mainImage.height)), format: format)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: Int(self.mainImage.width), height: Int(self.mainImage.height)), format: format)
         
         let img = renderer.image { ctx in
             ctx.cgContext.setFillColor(UIColor.white.cgColor)
@@ -256,11 +245,11 @@ class PhotoProcessor: NSObject {
     func createOverExposedMask() -> CGImage? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: Int(mainImage.width), height: Int(mainImage.height)), format: format)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: Int(self.mainImage.width), height: Int(self.mainImage.height)), format: format)
         
         let img = renderer.image { ctx in
             ctx.cgContext.setFillColor(UIColor.white.cgColor)
-            for p in overExposedPoints {
+            for p in self.overExposedPoints {
                 let rect = CGRect(x: p.x, y: p.y, width: 1, height: 1)
                 ctx.cgContext.addRect(rect)
             }
@@ -272,24 +261,24 @@ class PhotoProcessor: NSObject {
     // toCGCoordinates maps given points from UIImage coordinate system (left bottom origin)
     // to the CGImage coordinate system (left top origion).
     func toCGCoordinates(_ points: [CGPoint]) -> [CGPoint] {
-        points.compactMap({ return CGPoint(x: $0.x, y: CGFloat(CGFloat(mainImage.height) - $0.y)) })
+        points.compactMap({ return CGPoint(x: $0.x, y: CGFloat(CGFloat(self.mainImage.height) - $0.y)) })
     }
     
-    // calculateOverExposedPoints inspects the image and stores overexposed points on the face.
-    func calculateOverExposedPoints() -> ([CGPoint], [CGPoint]) {
-        guard let mainArr = pixelDataArray(cgImage: mainImage) else {
+    // calculateOverExposedPoints calculates overexposed points on the face.
+    func calculateOverExposedPoints() {
+        guard let mainArr = self.pixelDataArray(cgImage: self.mainImage) else {
             print ("Main image pixel array not found")
-            return ([], [])
+            return
         }
         
-        guard let faceMaskArr = pixelDataArray(cgImage: finalFaceMask) else {
+        guard let faceMaskArr = self.pixelDataArray(cgImage: self.finalFaceMask) else {
             print ("Final face mask pixel array not found")
-            return ([], [])
+            return
         }
         
         let div = CGFloat(255.0)
         let numIterations = mainArr.count/4
-        let w = mainImage.width
+        let w = self.mainImage.width
         
         var exposedPoints: [CGPoint] = []
         var allPoints: [CGPoint] = []
@@ -304,7 +293,15 @@ class PhotoProcessor: NSObject {
             }
             allPoints.append(CGPoint(x: CGFloat(i % w), y: CGFloat(i/w)))
         }
-        return (exposedPoints, allPoints)
+        
+        self.overExposedPoints = exposedPoints
+        self.allFacePoints = allPoints
+        
+        guard let overExposedMask = self.createOverExposedMask() else {
+            print ("Couldnot create over exposed mask")
+            return
+        }
+        self.overExposedMask = overExposedMask
     }
     
     // pixelDataArray returns the image data as an array of pixel values.
@@ -324,57 +321,57 @@ class PhotoProcessor: NSObject {
         return pixelData
     }
     
-    // getFinalFaceMask returns the face mask after combining all masks.
-    func getFinalFaceMask() -> CGImage? {
+    // computeFinalFaceMask computes the face mask after combining given portrait mask with all face masks.
+    func computeFinalFaceMask(_ portraitMask: CGImage) {
         // blend portrait and face contour mask.
         var comp = CIFilter.minimumCompositing()
         comp.inputImage = CIImage(cgImage: portraitMask)
-        comp.backgroundImage = CIImage(cgImage: faceContourMask)
+        comp.backgroundImage = CIImage(cgImage: self.faceContourMask)
         var out = comp.outputImage
         
         // blend face bounds mask.
         comp.inputImage = out
-        comp.backgroundImage = CIImage(cgImage: faceBoundsMask)
+        comp.backgroundImage = CIImage(cgImage: self.faceBoundsMask)
         out = comp.outputImage
         
         // blend left eye mask.
         comp = CIFilter.differenceBlendMode()
         comp.backgroundImage = out
-        comp.inputImage = CIImage(cgImage: leftEyeMask)
+        comp.inputImage = CIImage(cgImage: self.leftEyeMask)
         out = comp.outputImage!
         
         // blend right eye mask.
         comp.backgroundImage = out
-        comp.inputImage = CIImage(cgImage: rightEyeMask)
+        comp.inputImage = CIImage(cgImage: self.rightEyeMask)
         out = comp.outputImage!
         
         // blend left eyebrow mask.
         comp.backgroundImage = out
-        comp.inputImage = CIImage(cgImage: leftEyebrowMask)
+        comp.inputImage = CIImage(cgImage: self.leftEyebrowMask)
         out = comp.outputImage!
         
         // blend right eyebrow mask.
         comp.backgroundImage = out
-        comp.inputImage = CIImage(cgImage: rightEyebrowMask)
+        comp.inputImage = CIImage(cgImage: self.rightEyebrowMask)
         out = comp.outputImage!
         
         // blend outer lips mask.
         comp.backgroundImage = out
-        comp.inputImage = CIImage(cgImage: outerLipsMask)
+        comp.inputImage = CIImage(cgImage: self.outerLipsMask)
         out = comp.outputImage!
 
         if out == nil {
-            return nil
+            return
         }
         guard let cgImage = PhotoProcessor.CIImageToCGImage(out!) else {
-            return nil
+            return
         }
-        return cgImage
+        self.finalFaceMask = cgImage
     }
     
     // overlayOverExposedMask returns image with over exposed mask overlayed.
     func overlayOverExposedMask() -> UIImage {
-        let mainCIImage = CIImage(cgImage: mainImage)
+        let mainCIImage = CIImage(cgImage: self.mainImage)
         
         let cmap = CIFilter.colorMap()
         cmap.inputImage = mainCIImage
@@ -383,7 +380,7 @@ class PhotoProcessor: NSObject {
         let blend = CIFilter.blendWithMask()
         blend.backgroundImage = mainCIImage
         blend.inputImage = makeup
-        blend.maskImage =  CIImage(cgImage: overExposedMask)
+        blend.maskImage =  CIImage(cgImage: self.overExposedMask)
         
         return UIImage(ciImage: blend.outputImage!)
     }
