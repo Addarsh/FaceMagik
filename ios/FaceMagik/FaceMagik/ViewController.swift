@@ -31,11 +31,18 @@ class ViewController: UIViewController {
     @IBOutlet var isoLabel: UILabel!
     var currentCamera: AVCaptureDevice.Position = .unspecified
     let photoProcessor = PhotoProcessor()
+    let videoOutput = AVCaptureVideoDataOutput()
+    let depthDataOutput = AVCaptureDepthDataOutput()
+    private var outputSynchronizer: AVCaptureDataOutputSynchronizer!
+    var depthCutOff: Float = 1.0
+    let dataOutputQueue = DispatchQueue(label: "com.Addarsh.FaceMagik")
+    let FRAME_RATE = 10
     
     // Layer UI for drawing Vision results
     var videoResolution: CGSize!
     var detectionOverlayLayer: CALayer?
     var detectedFaceLayer: CAShapeLayer?
+    var detecteddLandMarksLayer: CAShapeLayer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -47,11 +54,14 @@ class ViewController: UIViewController {
         notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         self.sessionQueue = DispatchQueue(label: "session queue", qos: .userInitiated, attributes: [], autoreleaseFrequency: .workItem, target: .none)
         
-        //self.setupPhotoCaptureSession()
+        self.setupPhotoCaptureSession()
         
         // Setup video capture session.
-        self.setupVideoCaptureSession()
-        self.setupVisionDrawingLayers()
+        //self.setupVideoCaptureSession()
+        //self.setupVisionDrawingLayers()
+        
+        // Setup face detection request.
+        self.photoProcessor.prepareDetectionRequest()
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -208,7 +218,8 @@ class ViewController: UIViewController {
             return
         }
         
-        
+        // Set sRGB as default color space.
+        self.captureSession.automaticallyConfiguresCaptureDeviceForWideColor = false
         self.captureSession.sessionPreset = .hd1280x720
         self.captureSession.addOutput(photoOutput)
             
@@ -219,6 +230,16 @@ class ViewController: UIViewController {
         photoOutput.isDepthDataDeliveryEnabled = true
         photoOutput.isPortraitEffectsMatteDeliveryEnabled = true
         self.captureOutput = photoOutput
+        
+        // Set sRGB as default color space.
+        do {
+            try self.cameraDevice.lockForConfiguration()
+            self.cameraDevice.activeColorSpace = .sRGB
+            self.cameraDevice.unlockForConfiguration()
+        } catch {
+            print("Error! Could not lock device for configuration: \(error)")
+            return
+        }
         
         self.captureSession.commitConfiguration()
         
@@ -248,23 +269,75 @@ class ViewController: UIViewController {
         self.captureSession.addInput(captureInput)
         
         // Add capture session output.
-        let videoOutput = AVCaptureVideoDataOutput()
-        videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "com.Addarsh.FaceMagik"))
-        videoOutput.alwaysDiscardsLateVideoFrames = true
-        guard self.captureSession.canAddOutput(videoOutput) else {
+        self.videoOutput.setSampleBufferDelegate(self, queue: self.dataOutputQueue)
+        self.videoOutput.alwaysDiscardsLateVideoFrames = true
+        guard self.captureSession.canAddOutput(self.videoOutput) else {
             return
         }
         
+        // Set sRGB as default color space.
+        self.captureSession.automaticallyConfiguresCaptureDeviceForWideColor = false
         self.captureSession.sessionPreset = .hd1280x720
-        self.captureSession.addOutput(videoOutput)
+        self.videoResolution = CGSize(width: 720, height: 1280)
+        self.captureSession.addOutput(self.videoOutput)
             
-        if let videoConnection = videoOutput.connection(with: .video) {
+        if let videoConnection = self.videoOutput.connection(with: .video) {
             videoConnection.videoOrientation = .portrait
             videoConnection.isEnabled = true
         }
-        self.captureSession.commitConfiguration()
         
-        self.videoResolution = CGSize(width: 720, height: 1280)
+        // Set sRGB as default color space.
+        do {
+            try self.cameraDevice.lockForConfiguration()
+            self.cameraDevice.activeColorSpace = .sRGB
+            self.cameraDevice.unlockForConfiguration()
+        } catch {
+            print("Error! Could not lock device for configuration: \(error)")
+            return
+        }
+        
+        // Add depth data output.
+        //self.depthDataOutput.alwaysDiscardsLateDepthData = true
+        self.depthDataOutput.isFilteringEnabled = true
+        self.captureSession.addOutput(self.depthDataOutput)
+        
+        if let depthConnection = self.depthDataOutput.connection(with: .depthData) {
+            depthConnection.videoOrientation = .portrait
+            depthConnection.isEnabled = true
+        }
+        
+        // Search for highest resolution with floating-point depth values
+        let depthFormats = self.cameraDevice.activeFormat.supportedDepthDataFormats
+        let depth32formats = depthFormats.filter({
+            CMFormatDescriptionGetMediaSubType($0.formatDescription) == kCVPixelFormatType_DepthFloat32
+        })
+        if depth32formats.isEmpty {
+            print("Error! Device does not support Float32 depth format")
+            return
+        }
+        
+        let selectedFormat = depth32formats.max(by: { first, second in
+            CMVideoFormatDescriptionGetDimensions(first.formatDescription).width <
+                CMVideoFormatDescriptionGetDimensions(second.formatDescription).width })
+        
+        do {
+            try self.cameraDevice.lockForConfiguration()
+            //self.cameraDevice.activeDepthDataFormat = selectedFormat
+            // TODO inspect
+            self.cameraDevice.activeVideoMinFrameDuration = CMTimeMake(value: 1, timescale: Int32(FRAME_RATE))
+            self.cameraDevice.activeVideoMaxFrameDuration = CMTimeMake(value: 1, timescale: Int32(FRAME_RATE))
+            self.cameraDevice.unlockForConfiguration()
+        } catch {
+            print("Error! Could not lock device for configuration: \(error)")
+            return
+        }
+        
+        // Use an AVCaptureDataOutputSynchronizer to synchronize the video data and depth data outputs.
+        // The first output in the dataOutputs array, in this case the AVCaptureVideoDataOutput, is the "master" output.
+        self.outputSynchronizer = AVCaptureDataOutputSynchronizer(dataOutputs: [self.videoOutput, self.depthDataOutput])
+        self.outputSynchronizer.setDelegate(self, queue: self.dataOutputQueue)
+        
+        self.captureSession.commitConfiguration()
         
         self.sessionQueue.async {
             self.captureSession.startRunning()
@@ -355,13 +428,18 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             return
         }
         let start = CFAbsoluteTimeGetCurrent()
-        self.photoProcessor.prepareDetectionRequest(mainCGImage)
-        self.photoProcessor.detectFace()
+        self.photoProcessor.detectFace(mainCGImage)
         self.photoProcessor.semaphore.wait()
         self.photoProcessor.computeFinalFaceMask(matteCGImage)
-        self.photoProcessor.calculateOverExposedPoints()
         if self.maskSwitch.isOn {
-            self.capturedImage = PhotoProcessor.CGImageToUIImage(mainCGImage)
+            self.photoProcessor.calculateOverExposedPointsGPU()
+        }else {
+            self.photoProcessor.calculateOverExposedPointsCPU()
+        }
+        
+        if self.maskSwitch.isOn {
+            //self.capturedImage = PhotoProcessor.CGImageToUIImage(mainCGImage)
+            self.capturedImage = self.photoProcessor.overlayOverExposedMask()
         }else {
             self.capturedImage = self.photoProcessor.overlayOverExposedMask()
         }
@@ -417,8 +495,7 @@ extension ViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
             return
         }
         let start = CFAbsoluteTimeGetCurrent()
-        self.photoProcessor.prepareDetectionRequest(cgImage)
-        self.photoProcessor.detectFace()
+        self.photoProcessor.detectFace(cgImage)
         self.photoProcessor.semaphore.wait()
         DispatchQueue.main.async {
             self.drawFace()
@@ -450,9 +527,23 @@ extension ViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
         faceRectangleShapeLayer.shadowOpacity = 1.0
         faceRectangleShapeLayer.shadowRadius = 5
         
+        let faceLandmarksShapeLayer = CAShapeLayer()
+        faceLandmarksShapeLayer.name = "FaceLandmarksLayer"
+        faceLandmarksShapeLayer.bounds = captureDeviceBounds
+        faceLandmarksShapeLayer.anchorPoint = normalizedCenterPoint
+        faceLandmarksShapeLayer.position = captureDeviceBoundsCenterPoint
+        faceLandmarksShapeLayer.fillColor = nil
+        faceLandmarksShapeLayer.strokeColor = UIColor.yellow.withAlphaComponent(0.7).cgColor
+        faceLandmarksShapeLayer.lineWidth = 3
+        faceLandmarksShapeLayer.shadowOpacity = 1.0
+        faceLandmarksShapeLayer.shadowRadius = 5
+        
+        faceRectangleShapeLayer.addSublayer(faceLandmarksShapeLayer)
         overlayLayer.addSublayer(faceRectangleShapeLayer)
+        
         self.detectionOverlayLayer = overlayLayer
         self.detectedFaceLayer = faceRectangleShapeLayer
+        self.detecteddLandMarksLayer = faceLandmarksShapeLayer
         self.previewLayer.videoPreviewLayer.addSublayer(overlayLayer)
         
         self.scaleOverlayGeometry()
@@ -479,10 +570,135 @@ extension ViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
         
         let faceRectanglePath = CGMutablePath()
         faceRectanglePath.addRect(self.photoProcessor.faceBoundsRect)
+        
+        /*let landmarksPath = CGMutablePath()
+        for p in self.photoProcessor.allFacePoints {
+            let rect = CGRect(x: p.x, y: p.y, width: 1, height: 1)
+            landmarksPath.addRect(rect)
+        }*/
+        
         self.detectedFaceLayer!.path = faceRectanglePath
+        //self.detecteddLandMarksLayer!.path = landmarksPath
         
         self.scaleOverlayGeometry()
         
         CATransaction.commit()
+    }
+}
+
+extension ViewController: AVCaptureDataOutputSynchronizerDelegate {
+    func dataOutputSynchronizer(_ synchronizer: AVCaptureDataOutputSynchronizer, didOutput synchronizedDataCollection: AVCaptureSynchronizedDataCollection) {
+        
+        guard let syncedVideoData = synchronizedDataCollection.synchronizedData(for: self.videoOutput) as? AVCaptureSynchronizedSampleBufferData else {
+            return
+        }
+        guard let syncedDepthData = synchronizedDataCollection.synchronizedData(for: self.depthDataOutput) as? AVCaptureSynchronizedDepthData else {
+            return
+        }
+        if syncedDepthData.depthDataWasDropped || syncedVideoData.sampleBufferWasDropped {
+            return
+        }
+        
+        guard let videoPixelBuffer = CMSampleBufferGetImageBuffer(syncedVideoData.sampleBuffer) else {
+            print ("Could not convert video sample buffer to cvpixelbuffer")
+            return
+        }
+        
+        let depthPixelBuffer = syncedDepthData.depthData.depthDataMap
+        guard let mainCGImage = PhotoProcessor.CIImageToCGImage(CIImage(cvPixelBuffer: videoPixelBuffer)) else {
+            print ("Could not convert video pixelbuffer to cgimage")
+            return
+        }
+        
+        // detect face.
+        let start = CFAbsoluteTimeGetCurrent()
+        self.photoProcessor.detectFace(mainCGImage)
+        
+        // draw detected face.
+        self.photoProcessor.semaphore.wait()
+        if photoProcessor.numFaces == 0 {
+            return
+        }
+        DispatchQueue.main.async {
+            self.drawFace()
+        }
+        self.depthCutOff = computeDepthCutoff(mainCGImage, depthPixelBuffer)
+        //convertDepthMapToMask(depthPixelBuffer)
+        guard var depthMaskCIImage = convertDepthMapToMask2(CIImage(cvPixelBuffer: depthPixelBuffer)) else {
+            print ("Could not convert depth mask to CIImage")
+            return
+        }
+        
+        let scale = CGAffineTransform(scaleX:  CGFloat(CVPixelBufferGetWidth(depthPixelBuffer))/CGFloat(mainCGImage.width), y: CGFloat(CVPixelBufferGetHeight(depthPixelBuffer))/CGFloat(mainCGImage.height))
+        depthMaskCIImage = depthMaskCIImage.transformed(by: scale)
+        
+        guard let depthCGImage = PhotoProcessor.CIImageToCGImage(depthMaskCIImage) else {
+            print ("cannot convert depth ciimage to cgimage")
+            return
+        }
+        
+        self.photoProcessor.computeFinalFaceMask(depthCGImage)
+        
+        print ("P2 time: \(CFAbsoluteTimeGetCurrent() - start)")
+        self.photoProcessor.calculateOverExposedPointsCPU()
+        
+        
+        DispatchQueue.main.async {
+            self.drawFace()
+        }
+        
+    }
+    
+    // computeDepthCutoff returns the depth value at the center of the detected face.
+    func computeDepthCutoff(_ mainCGImage: CGImage, _ depthPixelBuffer: CVPixelBuffer) -> Float {
+        let scale = CGFloat(CVPixelBufferGetWidth(depthPixelBuffer))/CGFloat(mainCGImage.width)
+        guard let face = self.photoProcessor.faceBoundsRect else {
+            return -1.0
+        }
+        let center = CGPoint(x: face.midX, y: face.minY)
+        let pixelX = Int((center.x * scale).rounded())
+        let pixelY = Int((center.y * scale).rounded())
+        
+        CVPixelBufferLockBaseAddress(depthPixelBuffer, .readOnly)
+        
+        let rowData = CVPixelBufferGetBaseAddress(depthPixelBuffer)! + pixelY * CVPixelBufferGetBytesPerRow(depthPixelBuffer)
+        let faceCenterDepth = rowData.assumingMemoryBound(to: Float32.self)[pixelX]
+        CVPixelBufferUnlockBaseAddress(depthPixelBuffer, .readOnly)
+        
+        return faceCenterDepth
+    }
+    
+    // convertDepthMapToMask updates given depth map (in place) to a mask using a depth cutoff (already computed).
+    // Every pixel above cutoff is converted to 1. otherwise it's 0.
+    func convertDepthMapToMask(_ depthPixelBuffer: CVPixelBuffer) {
+        let depthWidth = CVPixelBufferGetWidth(depthPixelBuffer)
+        let depthHeight = CVPixelBufferGetHeight(depthPixelBuffer)
+        
+        CVPixelBufferLockBaseAddress(depthPixelBuffer, CVPixelBufferLockFlags(rawValue: 0))
+        for yMap in 0 ..< depthHeight {
+            let rowData = CVPixelBufferGetBaseAddress(depthPixelBuffer)! + yMap * CVPixelBufferGetBytesPerRow(depthPixelBuffer)
+            let data = UnsafeMutableBufferPointer<Float32>(start: rowData.assumingMemoryBound(to: Float32.self), count: depthWidth)
+            for index in 0 ..< depthWidth {
+                if data[index] > 0 && data[index] <= self.depthCutOff {
+                    data[index] = 1.0
+                } else {
+                    data[index] = 0.0
+                }
+            }
+        }
+        CVPixelBufferUnlockBaseAddress(depthPixelBuffer, CVPixelBufferLockFlags(rawValue: 0))
+    }
+    
+    func convertDepthMapToMask2(_ depthMaskCIImage:CIImage) -> CIImage? {
+        let s :CGFloat = 4
+        let b :CGFloat = 0.25
+        
+        guard let mat = CIFilter(name: "CIColorMatrix", parameters: ["inputImage": depthMaskCIImage, "inputRVector": CIVector(x: s, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: s, z: 0, w: 0),"inputBVector": CIVector(x: 0, y: 0, z: s, w: 0),"inputBiasVector": CIVector(x: b, y: b, z: b, w: 0)]) else {
+            print ("Could not construct CIFilter")
+            return nil
+        }
+        let clamp = CIFilter.colorClamp()
+        clamp.inputImage = mat.outputImage
+        return clamp.outputImage
     }
 }

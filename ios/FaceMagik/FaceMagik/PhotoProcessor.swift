@@ -23,14 +23,16 @@ class PhotoProcessor: NSObject {
     var outerLipsMask: CGImage!
     var faceContourMask: CGImage!
     var finalFaceMask: CGImage!
-    var overExposedPoints: [CGPoint] = []
-    var allFacePoints: [CGPoint] = []
     var overExposedMask: CGImage!
     var faceBoundsRect: CGRect!
+    var allFacePointsCount: Int = 0
+    var overExposedPointsCount: Int = 0
+    let device = MTLCreateSystemDefaultDevice()
     
     // CIImageToCGImage converts CIImage to CGImage.
     static func CIImageToCGImage(_ image: CIImage) -> CGImage? {
-        let context = CIContext(options: nil)
+        let context = CIContext(options: [CIContextOption.useSoftwareRenderer: true])
+        //let context = CIContext(options: [.workingColorSpace: NSNull(), .outputColorSpace: NSNull()])
         if let cgImage = context.createCGImage(image, from: image.extent) {
             return cgImage
         }
@@ -42,7 +44,7 @@ class PhotoProcessor: NSObject {
         let ciImage = CIImage(cgImage: image)
         let context = CIContext(options: [CIContextOption.useSoftwareRenderer: true])
         
-        guard let pngData = context.pngRepresentation(of: ciImage, format: CIFormat.ARGB8, colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!) else {
+        guard let pngData = context.pngRepresentation(of: ciImage, format: CIFormat.ARGB8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!) else {
             return nil
         }
         return UIImage(data: pngData)
@@ -53,9 +55,7 @@ class PhotoProcessor: NSObject {
     }
     
     // prepareDetectionRequest creates a face + landmarks detection request.
-    func prepareDetectionRequest(_ image: CGImage) {
-        self.mainImage = image
-        
+    func prepareDetectionRequest() {
         let faceDetectionRequest = VNDetectFaceLandmarksRequest(completionHandler: { (request, error) in
             defer { self.semaphore.signal() }
             
@@ -69,7 +69,6 @@ class PhotoProcessor: NSObject {
             }
             self.numFaces = results.count
             if results.count != 1 {
-                print ("Error! Want 1 Face in image, Got \(results.count) Faces in image!")
                 return
             }
             let result = results[0]
@@ -147,7 +146,9 @@ class PhotoProcessor: NSObject {
     }
     
     // detectFace calls Vision to detect face for given image.
-    func detectFace() {
+    func detectFace(_ image: CGImage) {
+        self.mainImage = image
+        
         if self.detectionRequests.count == 0 {
             print ("No detection requests found")
             return
@@ -166,10 +167,10 @@ class PhotoProcessor: NSObject {
     // overExposedPercent returns the percentage of face points that are overexposed.
     // Returns -1 if there was no face detected.
     func overExposedPercent() -> Double {
-        if self.allFacePoints.count == 0 {
+        if self.allFacePointsCount == 0 {
             return -1.0
         }
-        return (Double(self.overExposedPoints.count)/Double(self.allFacePoints.count))*100.0
+        return (Double(self.overExposedPointsCount)/Double(self.allFacePointsCount))*100.0
     }
     
     // createFaceBoundsMask creates a CGImage with given face bounds mask.
@@ -242,14 +243,14 @@ class PhotoProcessor: NSObject {
     }
     
     // createOverExposedMask creates the mask of overexposed points on the face.
-    func createOverExposedMask() -> CGImage? {
+    func createOverExposedMask(_ overExposedPoints: [CGPoint]) -> CGImage? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: Int(self.mainImage.width), height: Int(self.mainImage.height)), format: format)
         
         let img = renderer.image { ctx in
             ctx.cgContext.setFillColor(UIColor.white.cgColor)
-            for p in self.overExposedPoints {
+            for p in overExposedPoints {
                 let rect = CGRect(x: p.x, y: p.y, width: 1, height: 1)
                 ctx.cgContext.addRect(rect)
             }
@@ -264,8 +265,9 @@ class PhotoProcessor: NSObject {
         points.compactMap({ return CGPoint(x: $0.x, y: CGFloat(CGFloat(self.mainImage.height) - $0.y)) })
     }
     
-    // calculateOverExposedPoints calculates overexposed points on the face.
-    func calculateOverExposedPoints() {
+    // calculateOverExposedPointsCPU calculates overexposed points on the face using CPU.
+    // This is generally slower to compute because sequential nature of computation.
+    func calculateOverExposedPointsCPU() {
         guard let mainArr = self.pixelDataArray(cgImage: self.mainImage) else {
             print ("Main image pixel array not found")
             return
@@ -283,7 +285,7 @@ class PhotoProcessor: NSObject {
         var exposedPoints: [CGPoint] = []
         var allPoints: [CGPoint] = []
         for i in 0..<numIterations {
-            if (CGFloat(faceMaskArr[4*i])/div < 0.90) && (CGFloat(faceMaskArr[4*i + 1])/div < 0.90) && (CGFloat(faceMaskArr[4*i + 2])/div < 0.90) {
+            if (CGFloat(faceMaskArr[4*i])/div < 1.0) || (CGFloat(faceMaskArr[4*i + 1])/div < 1.0) || (CGFloat(faceMaskArr[4*i + 2])/div < 1.0) {
                 // Not in face mask, skip.
                 continue
             }
@@ -294,26 +296,121 @@ class PhotoProcessor: NSObject {
             allPoints.append(CGPoint(x: CGFloat(i % w), y: CGFloat(i/w)))
         }
         
-        self.overExposedPoints = exposedPoints
-        self.allFacePoints = allPoints
+        self.overExposedPointsCount = exposedPoints.count
+        self.allFacePointsCount = allPoints.count
         
-        guard let overExposedMask = self.createOverExposedMask() else {
+        print ("CPU overexposed points count: \(self.overExposedPointsCount)")
+        print ("CPU all face points count: \(self.allFacePointsCount)")
+        
+        // Create mask of over exposed points.
+        guard let overExposedMask = self.createOverExposedMask(exposedPoints) else {
             print ("Couldnot create over exposed mask")
             return
         }
         self.overExposedMask = overExposedMask
     }
     
-    // pixelDataArray returns the image data as an array of pixel values.
+    // calculateOverExposedPointsGPU calculates overposed points faster on face using GPU.
+    // It uses CIImage to parallelize computation that makes it faster than using CPU.
+    func calculateOverExposedPointsGPU() {
+        // Find overexposed mask (threshold >= 0.94 i.e. 240).
+        guard let out = self.createThresholdMask( CIImage(cgImage: self.mainImage), Float(0.94)) else {
+            print ("Failed to create threshold mask")
+            return
+        }
+        let exposedPointsCount = self.countMaskPixels(out)
+        if exposedPointsCount < 0 {
+            print ("Error in counting mask pixels, returned val: \(exposedPointsCount)")
+            return
+        }
+        self.overExposedMask = PhotoProcessor.CIImageToCGImage(out)
+        
+        // Count all face points.
+        let facePointsCount = self.countMaskPixels(CIImage(cgImage: self.finalFaceMask))
+        if facePointsCount < 0 {
+            print ("Error in counting face mask points, returned val: \(facePointsCount)")
+            return
+        }
+        print ("GPU exposed points count: \(exposedPointsCount)")
+        print ("GPU all face points count: \(facePointsCount)")
+        
+        self.overExposedPointsCount = exposedPointsCount
+        self.allFacePointsCount = facePointsCount
+    }
+    
+    // countMaskPixels counts the number of white pixels(value 1.0) in given mask ciimage.
+    func countMaskPixels(_ image: CIImage) -> Int {
+        guard let hist = CIFilter(name: "CIAreaHistogram", parameters: ["inputImage": image, "inputExtent": image.extent, "inputCount": 256]) else {
+            print ("Could not create CIFilter")
+            return -1
+        }
+        guard let out = hist.outputImage else {
+            print ("Histogram output is nil")
+            return -1
+        }
+        
+        // Create temporary pixel buffer and render output to it.
+        var temp :CVPixelBuffer? = nil
+        let ret = CVPixelBufferCreate(nil, Int(out.extent.width), Int(out.extent.height), kCVPixelFormatType_OneComponent32Float
+, nil, &temp)
+        if ret != 0 {
+            print ("Could not create cvpixelbuffer with return: \(ret)")
+            return -1
+        }
+        guard let buf = temp else {
+            print ("CVPixelBuffer returned nil")
+            return -1
+        }
+        let context = CIContext(options: [.workingColorSpace: NSNull(), .outputColorSpace: NSNull()])
+        context.render(out, to: buf)
+        
+        CVPixelBufferLockBaseAddress(buf, .readOnly)
+        let base = CVPixelBufferGetBaseAddress(buf)!
+        let val = base.assumingMemoryBound(to: Float32.self)[255]
+        CVPixelBufferUnlockBaseAddress(buf, .readOnly)
+        
+        return Int(val * Float(image.extent.width) * Float(image.extent.height))
+    }
+    
+    // createThresholdMask returns a mask of pixels that exceed given threshold value in Value(HSV).
+    // Pixels that exceed the threshold are white(1.0) and rest and black(0.0) in the mask.
+    func createThresholdMask(_ image: CIImage, _ threshold: Float) -> CIImage? {
+        // convert to Value image (HSV).
+        let gray = CIFilter.maximumComponent()
+        gray.inputImage = image
+        guard let out = gray.outputImage else {
+            print ("Could not convert to gray image")
+            return nil
+        }
+        
+        // Apply threshold kernel.
+        let kernel = try? ThresholdImageProcessorKernel.apply(
+            withExtent: out.extent,
+            inputs: [out],
+            arguments: ["device": self.device!, "thresholdValue": threshold])
+        if kernel == nil {
+            print ("Threshold kernel failed")
+            return nil
+        }
+        
+        // Bitwise AND with face mask to get overexposed mask on face.
+        let comp = CIFilter.minimumCompositing()
+        comp.inputImage = kernel
+        comp.backgroundImage = CIImage(cgImage: self.finalFaceMask)
+        return comp.outputImage
+    }
+    
+    // pixelDataArray returns the image data as an array of pixel values for given CGImage.
     func pixelDataArray(cgImage: CGImage) -> [UInt8]? {
-        let dataSize = cgImage.width * cgImage.height * 4
+        let numComponents = cgImage.bitsPerPixel/cgImage.bitsPerComponent
+        let dataSize = cgImage.width * cgImage.height * numComponents
         var pixelData = [UInt8](repeating: 0, count: Int(dataSize))
         guard let context = CGContext(data: &pixelData,
                                 width: cgImage.width,
                                 height: cgImage.height,
-                                bitsPerComponent: 8,
-                                bytesPerRow: 4 * cgImage.width,
-                                space: CGColorSpace(name: CGColorSpace.displayP3)!,
+                                bitsPerComponent: cgImage.bitsPerComponent,
+                                bytesPerRow: numComponents * cgImage.width,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                 bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
             return nil
         }
@@ -358,11 +455,11 @@ class PhotoProcessor: NSObject {
         // blend outer lips mask.
         comp.backgroundImage = out
         comp.inputImage = CIImage(cgImage: self.outerLipsMask)
-        out = comp.outputImage!
-
+        out = comp.outputImage
         if out == nil {
             return
         }
+        
         guard let cgImage = PhotoProcessor.CIImageToCGImage(out!) else {
             return
         }
@@ -371,15 +468,9 @@ class PhotoProcessor: NSObject {
     
     // overlayOverExposedMask returns image with over exposed mask overlayed.
     func overlayOverExposedMask() -> UIImage {
-        let mainCIImage = CIImage(cgImage: self.mainImage)
-        
-        let cmap = CIFilter.colorMap()
-        cmap.inputImage = mainCIImage
-        let makeup = cmap.outputImage
-        
         let blend = CIFilter.blendWithMask()
-        blend.backgroundImage = mainCIImage
-        blend.inputImage = makeup
+        blend.backgroundImage = CIImage(cgImage: self.mainImage)
+        blend.inputImage = CIImage(color: .green)
         blend.maskImage =  CIImage(cgImage: self.overExposedMask)
         
         return UIImage(ciImage: blend.outputImage!)

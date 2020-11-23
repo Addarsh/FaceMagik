@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984B11C2256218B1005809C3 /* ThresholdKernel.swift */; };
 		9851D36F253A461C0009D709 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D36E253A461C0009D709 /* AppDelegate.swift */; };
 		9851D371253A461C0009D709 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D370253A461C0009D709 /* SceneDelegate.swift */; };
 		9851D373253A461C0009D709 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D372253A461C0009D709 /* ViewController.swift */; };
@@ -38,6 +39,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		984B11C2256218B1005809C3 /* ThresholdKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdKernel.swift; sourceTree = "<group>"; };
 		9851D36B253A461C0009D709 /* FaceMagik.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FaceMagik.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9851D36E253A461C0009D709 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		9851D370253A461C0009D709 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -109,6 +111,7 @@
 				9851D370253A461C0009D709 /* SceneDelegate.swift */,
 				9851D372253A461C0009D709 /* ViewController.swift */,
 				98984AD9254C52D9009E7AC7 /* PhotoProcessor.swift */,
+				984B11C2256218B1005809C3 /* ThresholdKernel.swift */,
 				986921E9253CD9E700C98065 /* PreviewView.swift */,
 				9851D374253A461C0009D709 /* Main.storyboard */,
 				98B171062543360700D464BF /* ImageViewController.swift */,
@@ -269,6 +272,7 @@
 			files = (
 				9851D373253A461C0009D709 /* ViewController.swift in Sources */,
 				986921EA253CD9E700C98065 /* PreviewView.swift in Sources */,
+				984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */,
 				98B171072543360700D464BF /* ImageViewController.swift in Sources */,
 				9851D36F253A461C0009D709 /* AppDelegate.swift in Sources */,
 				9851D371253A461C0009D709 /* SceneDelegate.swift in Sources */,

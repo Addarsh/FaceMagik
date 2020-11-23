@@ -20,8 +20,8 @@ class ImageViewController: UIViewController {
             guard status == .authorized else { return }
         }
         
-        imageView.image = image
-        overExposedLabel.text = String(overExposedPercent)
+        self.imageView.image = image
+        self.overExposedLabel.text = String(overExposedPercent)
     }
     
     @IBAction func didCancel() {
