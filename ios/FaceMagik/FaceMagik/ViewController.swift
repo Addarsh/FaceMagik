@@ -414,8 +414,8 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             return
         }
         
-        guard let mainCGImage = self.getMainCGImage(photo) else {
-            print ("Error getting main CGImage from photo data")
+        guard let mainCIImage = self.getMainCIImage(photo) else {
+            print ("Error getting main IGImage from photo data")
             return
         }
         
@@ -423,14 +423,10 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             print ("Portait effect Matte not found")
             return
         }
-        guard let matteCGImage = self.getPortraitCGImage(portraitMatte.mattingImage, CGSize(width: mainCGImage.width, height: mainCGImage.height)) else {
-            print ("Could not convert portrait matte to CGImage")
-            return
-        }
         let start = CFAbsoluteTimeGetCurrent()
-        self.photoProcessor.detectFace(mainCGImage)
+        self.photoProcessor.detectFace(mainCIImage)
         self.photoProcessor.semaphore.wait()
-        self.photoProcessor.computeFinalFaceMask(matteCGImage)
+        self.photoProcessor.computeFinalFaceMask(self.getPortraitCIImage(portraitMatte.mattingImage, CGSize(width: mainCIImage.extent.width, height: mainCIImage.extent.height)) )
         if self.maskSwitch.isOn {
             self.photoProcessor.calculateOverExposedPointsGPU()
         }else {
@@ -438,28 +434,27 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
         }
         
         if self.maskSwitch.isOn {
-            //self.capturedImage = PhotoProcessor.CGImageToUIImage(mainCGImage)
+            //self.capturedImage = PhotoProcessor.CIImageToUIImage(mainCIImage)
             self.capturedImage = self.photoProcessor.overlayOverExposedMask()
         }else {
             self.capturedImage = self.photoProcessor.overlayOverExposedMask()
         }
-        print ("photo processing time time: \(CFAbsoluteTimeGetCurrent() - start)")
+        print ("photo processing time: \(CFAbsoluteTimeGetCurrent() - start)")
         
         performSegue(withIdentifier: self.imageViewSegue, sender: nil)
     }
     
-    // getPortraitCGImage returns portrait CGImage from given portrait pixel buffer and main image resolution.
-    func getPortraitCGImage(_ buffer: CVPixelBuffer, _ resolution: CGSize) -> CGImage? {
-        var ciImage = CIImage(cvPixelBuffer: buffer).oriented(forExifOrientation: Int32(CGImagePropertyOrientation.right.rawValue))
+    // getPortraitCIImage returns portrait CIImage from given portrait pixel buffer and main image resolution.
+    func getPortraitCIImage(_ buffer: CVPixelBuffer, _ resolution: CGSize) -> CIImage {
+        let ciImage = CIImage(cvPixelBuffer: buffer).oriented(forExifOrientation: Int32(CGImagePropertyOrientation.right.rawValue))
         
         let scale = CGAffineTransform(scaleX: resolution.width/ciImage.extent.size.width, y: resolution.height/ciImage.extent.size.height)
-        ciImage = ciImage.transformed(by: scale)
         
-        return PhotoProcessor.CIImageToCGImage(ciImage)
+        return ciImage.transformed(by: scale)
     }
     
-    // getMainCGImage returns the main RGB CG image from given AVCapturePhoto.
-    func getMainCGImage(_ photo: AVCapturePhoto) -> CGImage? {
+    // getMainCIImage returns the main CIImage from given AVCapturePhoto.
+    func getMainCIImage(_ photo: AVCapturePhoto) -> CIImage? {
         guard let photoData = photo.fileDataRepresentation() else {
             print ("photo Data not found")
             return nil
@@ -474,8 +469,7 @@ extension ViewController: AVCapturePhotoCaptureDelegate {
             print ("could not convert uiImage to ciImage")
             return nil
         }
-        
-        return PhotoProcessor.CIImageToCGImage(ciImage)
+        return ciImage
     }
 }
 
@@ -490,12 +484,8 @@ extension ViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
             print("Failed to obtain a CVPixelBuffer for the current output frame.")
             return
         }
-        guard let cgImage = PhotoProcessor.CIImageToCGImage(CIImage(cvPixelBuffer: pixelBuffer)) else {
-            print ("Could not convert to cgimage")
-            return
-        }
         let start = CFAbsoluteTimeGetCurrent()
-        self.photoProcessor.detectFace(cgImage)
+        self.photoProcessor.detectFace(CIImage(cvPixelBuffer: pixelBuffer))
         self.photoProcessor.semaphore.wait()
         DispatchQueue.main.async {
             self.drawFace()
@@ -605,14 +595,11 @@ extension ViewController: AVCaptureDataOutputSynchronizerDelegate {
         }
         
         let depthPixelBuffer = syncedDepthData.depthData.depthDataMap
-        guard let mainCGImage = PhotoProcessor.CIImageToCGImage(CIImage(cvPixelBuffer: videoPixelBuffer)) else {
-            print ("Could not convert video pixelbuffer to cgimage")
-            return
-        }
+        let mainCIImage = CIImage(cvPixelBuffer: videoPixelBuffer)
         
         // detect face.
         let start = CFAbsoluteTimeGetCurrent()
-        self.photoProcessor.detectFace(mainCGImage)
+        self.photoProcessor.detectFace(mainCIImage)
         
         // draw detected face.
         self.photoProcessor.semaphore.wait()
@@ -622,22 +609,16 @@ extension ViewController: AVCaptureDataOutputSynchronizerDelegate {
         DispatchQueue.main.async {
             self.drawFace()
         }
-        self.depthCutOff = computeDepthCutoff(mainCGImage, depthPixelBuffer)
+        self.depthCutOff = computeDepthCutoff(mainCIImage, depthPixelBuffer)
         //convertDepthMapToMask(depthPixelBuffer)
         guard var depthMaskCIImage = convertDepthMapToMask2(CIImage(cvPixelBuffer: depthPixelBuffer)) else {
             print ("Could not convert depth mask to CIImage")
             return
         }
         
-        let scale = CGAffineTransform(scaleX:  CGFloat(CVPixelBufferGetWidth(depthPixelBuffer))/CGFloat(mainCGImage.width), y: CGFloat(CVPixelBufferGetHeight(depthPixelBuffer))/CGFloat(mainCGImage.height))
+        let scale = CGAffineTransform(scaleX:  CGFloat(CVPixelBufferGetWidth(depthPixelBuffer))/mainCIImage.extent.width, y: CGFloat(CVPixelBufferGetHeight(depthPixelBuffer))/mainCIImage.extent.height)
         depthMaskCIImage = depthMaskCIImage.transformed(by: scale)
-        
-        guard let depthCGImage = PhotoProcessor.CIImageToCGImage(depthMaskCIImage) else {
-            print ("cannot convert depth ciimage to cgimage")
-            return
-        }
-        
-        self.photoProcessor.computeFinalFaceMask(depthCGImage)
+        self.photoProcessor.computeFinalFaceMask(depthMaskCIImage)
         
         print ("P2 time: \(CFAbsoluteTimeGetCurrent() - start)")
         self.photoProcessor.calculateOverExposedPointsCPU()
@@ -650,8 +631,8 @@ extension ViewController: AVCaptureDataOutputSynchronizerDelegate {
     }
     
     // computeDepthCutoff returns the depth value at the center of the detected face.
-    func computeDepthCutoff(_ mainCGImage: CGImage, _ depthPixelBuffer: CVPixelBuffer) -> Float {
-        let scale = CGFloat(CVPixelBufferGetWidth(depthPixelBuffer))/CGFloat(mainCGImage.width)
+    func computeDepthCutoff(_ mainCIImage: CIImage, _ depthPixelBuffer: CVPixelBuffer) -> Float {
+        let scale = CGFloat(CVPixelBufferGetWidth(depthPixelBuffer))/mainCIImage.extent.width
         guard let face = self.photoProcessor.faceBoundsRect else {
             return -1.0
         }
