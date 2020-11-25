@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */; };
 		984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984B11C2256218B1005809C3 /* ThresholdKernel.swift */; };
 		9851D36F253A461C0009D709 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D36E253A461C0009D709 /* AppDelegate.swift */; };
 		9851D371253A461C0009D709 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D370253A461C0009D709 /* SceneDelegate.swift */; };
@@ -16,6 +17,7 @@
 		9851D37B253A46200009D709 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9851D379253A46200009D709 /* LaunchScreen.storyboard */; };
 		9851D386253A46210009D709 /* FaceMagikTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D385253A46210009D709 /* FaceMagikTests.swift */; };
 		9851D391253A46210009D709 /* FaceMagikUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D390253A46210009D709 /* FaceMagikUITests.swift */; };
+		985F8B72256C80F800EAA558 /* PreviewMetalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985F8B71256C80F800EAA558 /* PreviewMetalView.swift */; };
 		986921EA253CD9E700C98065 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986921E9253CD9E700C98065 /* PreviewView.swift */; };
 		98984ADA254C52DA009E7AC7 /* PhotoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98984AD9254C52D9009E7AC7 /* PhotoProcessor.swift */; };
 		98B171072543360700D464BF /* ImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B171062543360700D464BF /* ImageViewController.swift */; };
@@ -39,6 +41,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PassThrough.metal; sourceTree = "<group>"; };
 		984B11C2256218B1005809C3 /* ThresholdKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdKernel.swift; sourceTree = "<group>"; };
 		9851D36B253A461C0009D709 /* FaceMagik.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FaceMagik.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9851D36E253A461C0009D709 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -54,6 +57,7 @@
 		9851D38C253A46210009D709 /* FaceMagikUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FaceMagikUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9851D390253A46210009D709 /* FaceMagikUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceMagikUITests.swift; sourceTree = "<group>"; };
 		9851D392253A46210009D709 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		985F8B71256C80F800EAA558 /* PreviewMetalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewMetalView.swift; sourceTree = "<group>"; };
 		986921E9253CD9E700C98065 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
 		98984AD9254C52D9009E7AC7 /* PhotoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoProcessor.swift; sourceTree = "<group>"; };
 		98B171062543360700D464BF /* ImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewController.swift; sourceTree = "<group>"; };
@@ -84,6 +88,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		9816BAAD256CAF6C00FF90C6 /* Shaders */ = {
+			isa = PBXGroup;
+			children = (
+				9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */,
+			);
+			path = Shaders;
+			sourceTree = "<group>";
+		};
 		9851D362253A461C0009D709 = {
 			isa = PBXGroup;
 			children = (
@@ -107,9 +119,11 @@
 		9851D36D253A461C0009D709 /* FaceMagik */ = {
 			isa = PBXGroup;
 			children = (
+				9816BAAD256CAF6C00FF90C6 /* Shaders */,
 				9851D36E253A461C0009D709 /* AppDelegate.swift */,
 				9851D370253A461C0009D709 /* SceneDelegate.swift */,
 				9851D372253A461C0009D709 /* ViewController.swift */,
+				985F8B71256C80F800EAA558 /* PreviewMetalView.swift */,
 				98984AD9254C52D9009E7AC7 /* PhotoProcessor.swift */,
 				984B11C2256218B1005809C3 /* ThresholdKernel.swift */,
 				986921E9253CD9E700C98065 /* PreviewView.swift */,
@@ -271,6 +285,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				9851D373253A461C0009D709 /* ViewController.swift in Sources */,
+				9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */,
+				985F8B72256C80F800EAA558 /* PreviewMetalView.swift in Sources */,
 				986921EA253CD9E700C98065 /* PreviewView.swift in Sources */,
 				984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */,
 				98B171072543360700D464BF /* ImageViewController.swift in Sources */,

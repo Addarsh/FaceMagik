@@ -347,8 +347,6 @@ class PhotoProcessor: NSObject {
             print ("Error in counting face mask points, returned val: \(facePointsCount)")
             return
         }
-        print ("GPU exposed points count: \(exposedPointsCount)")
-        print ("GPU all face points count: \(facePointsCount)")
         
         self.overExposedPointsCount = exposedPointsCount
         self.allFacePointsCount = facePointsCount
@@ -483,13 +481,12 @@ class PhotoProcessor: NSObject {
         self.finalFaceMask = res
     }
     
-    // overlayOverExposedMask returns image with over exposed mask overlayed.
-    func overlayOverExposedMask() -> UIImage {
+    // overExposedImage returns image with over exposed mask blended.
+    func overExposedImage() -> CIImage {
         let blend = CIFilter.blendWithMask()
         blend.backgroundImage = self.mainImage
         blend.inputImage = CIImage(color: .green)
         blend.maskImage =  self.overExposedMask
-        
-        return UIImage(ciImage: blend.outputImage!)
+        return blend.outputImage!
     }
 }

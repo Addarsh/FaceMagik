@@ -2,7 +2,7 @@
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17156" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="B5q-Qv-D1j">
     <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17125"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17126"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -34,7 +34,7 @@
                                     </barButtonItem>
                                 </items>
                             </toolbar>
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Aoo-iz-tpS" customClass="PreviewView" customModule="FaceMagik" customModuleProvider="target">
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Aoo-iz-tpS" customClass="PreviewMetalView" customModule="FaceMagik" customModuleProvider="target">
                                 <rect key="frame" x="0.0" y="158" width="414" height="585"/>
                                 <color key="backgroundColor" systemColor="systemGray2Color"/>
                             </view>
@@ -110,7 +110,7 @@
                         <outlet property="isoLabel" destination="eSh-6M-e1p" id="l5Y-eY-t1J"/>
                         <outlet property="maskSwitch" destination="1oy-zg-Dz0" id="mvp-ZS-sQb"/>
                         <outlet property="overlayView" destination="gsR-VJ-Hgd" id="Wup-5r-0aQ"/>
-                        <outlet property="previewLayer" destination="Aoo-iz-tpS" id="jNV-fN-tyn"/>
+                        <outlet property="previewView" destination="Aoo-iz-tpS" id="4ZO-od-qyO"/>
                         <outlet property="tempLabel" destination="7rm-Gr-XPp" id="3qk-mV-iNW"/>
                         <segue destination="lpk-Nn-UtH" kind="show" identifier="imageView" id="0Ya-Km-2eq"/>
                     </connections>
