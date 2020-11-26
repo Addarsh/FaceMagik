@@ -18,6 +18,7 @@ class EnvViewController: UIViewController {
     
     // AVCaptureSession variables.
     @objc var cameraDevice: AVCaptureDevice!
+    var currentCamera: AVCaptureDevice.Position = .unspecified
     var sessionQueue: DispatchQueue!
     var captureSession =  AVCaptureSession()
     var captureOutput: AVCapturePhotoOutput!
@@ -88,6 +89,7 @@ class EnvViewController: UIViewController {
             return
         }
         self.cameraDevice = dev
+        self.currentCamera = .back
         
         // Add capture session input.
         guard let captureInput = try? AVCaptureDeviceInput(device: self.cameraDevice), self.captureSession.canAddInput(captureInput) else {
@@ -167,6 +169,64 @@ class EnvViewController: UIViewController {
     // startVideoProcessing segues into video processing view controller.
     @IBAction func startVideoProcessing() {
         performSegue(withIdentifier: self.segueIdentifier, sender: nil)
+    }
+    
+    
+    // switchCamera is a helper function to switch cameras (front to back and vice versa).
+    func switchCamera() {
+        self.stopObservingDevice()
+        
+        guard let currentCameraInput = self.captureSession.inputs.first else {
+            return
+        }
+        self.captureSession.beginConfiguration()
+        
+        self.captureSession.removeInput(currentCameraInput)
+        
+        var newDev: AVCaptureDevice?
+        var newPosition: AVCaptureDevice.Position = .unspecified
+        if let input = currentCameraInput as? AVCaptureDeviceInput {
+            if input.device.position == .front {
+                newDev = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+                newPosition = .back
+            } else {
+                newDev = AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front)
+                newPosition = .front
+            }
+        }
+        guard let dev = newDev else {
+            return
+        }
+        self.cameraDevice = dev
+        
+        guard let captureInput = try? AVCaptureDeviceInput(device: self.cameraDevice), self.captureSession.canAddInput(captureInput) else {
+            return
+        }
+        self.captureSession.addInput(captureInput)
+        
+        if newPosition == .front {
+            self.captureOutput.isDepthDataDeliveryEnabled = true
+            self.captureOutput.isPortraitEffectsMatteDeliveryEnabled = true
+        } else {
+            self.captureOutput.isDepthDataDeliveryEnabled = false
+            self.captureOutput.isPortraitEffectsMatteDeliveryEnabled = false
+        }
+        
+        if let photoConnection = self.captureOutput.connection(with: .video) {
+            photoConnection.videoOrientation = .portrait
+        }
+        
+        self.captureSession.commitConfiguration()
+        self.currentCamera = newPosition
+
+        self.observeDevice()
+    }
+    
+    // stoObservingDevice stops observing camera device.
+    func stopObservingDevice() {
+        self.exposureObservation?.invalidate()
+        self.tempObservation?.invalidate()
+        self.isoObservation?.invalidate()
     }
 }
 
