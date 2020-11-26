@@ -324,7 +324,6 @@ class ViewController: UIViewController {
         do {
             try self.cameraDevice.lockForConfiguration()
             self.cameraDevice.activeDepthDataFormat = selectedFormat
-            // TODO inspect
             self.cameraDevice.activeVideoMinFrameDuration = CMTimeMake(value: 1, timescale: Int32(FRAME_RATE))
             self.cameraDevice.activeVideoMaxFrameDuration = CMTimeMake(value: 1, timescale: Int32(FRAME_RATE))
             self.cameraDevice.unlockForConfiguration()
