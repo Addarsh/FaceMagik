@@ -8,6 +8,12 @@
 import UIKit
 import Photos
 
+struct SensorReadout {
+    var iso: Int
+    var exposure: Int
+    var temp: Int
+}
+
 class EnvViewController: UIViewController {
     
     @IBOutlet private var previewLayer: PreviewView!
@@ -15,6 +21,7 @@ class EnvViewController: UIViewController {
     @IBOutlet var tempLabel: UILabel!
     @IBOutlet var isoLabel: UILabel!
     @IBOutlet var dirLabel: UILabel!
+    @IBOutlet var rotLabel: UILabel!
     
     // AVCaptureSession variables.
     @objc var cameraDevice: AVCaptureDevice!
@@ -25,9 +32,16 @@ class EnvViewController: UIViewController {
     var exposureObservation: NSKeyValueObservation?
     var tempObservation: NSKeyValueObservation?
     var isoObservation: NSKeyValueObservation?
-    var segueIdentifier = "videoView"
+    let segueIdentifier = "videoView"
+    var currTemp: Int = 0
+    var currISO: Int = 0
+    var currExposure: Int = 0
     
-    var locationManager = CLLocationManager()
+    // Location related variables.
+    let locationManager = CLLocationManager()
+    var sensorDict: [Int: SensorReadout] = [:]
+    let totalHeadingVals = 300
+    let rotationComplete = "Done"
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -41,6 +55,12 @@ class EnvViewController: UIViewController {
         self.sessionQueue = DispatchQueue(label: "session queue", qos: .userInitiated, attributes: [], autoreleaseFrequency: .workItem, target: .none)
         
         self.setupPhotoCaptureSession()
+        
+        self.observeDevice()
+        
+        self.sessionQueue.async {
+            self.captureSession.startRunning()
+        }
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -124,12 +144,6 @@ class EnvViewController: UIViewController {
         }
         
         self.captureSession.commitConfiguration()
-        
-        self.observeDevice()
-        
-        self.sessionQueue.async {
-            self.captureSession.startRunning()
-        }
     }
     
     // observeDevice observes the exposure duration and color temperature of current device.
@@ -140,8 +154,9 @@ class EnvViewController: UIViewController {
             guard let newVal = change.newValue else {
                 return
             }
+            self.currExposure = Int(1/(newVal.seconds))
             DispatchQueue.main.async {
-                self.exposureLabel.text = String(Int(1/(newVal.seconds)))
+                self.exposureLabel.text = String(self.currExposure)
             }
         }
         
@@ -149,8 +164,9 @@ class EnvViewController: UIViewController {
         self.tempObservation = observe(\.self.cameraDevice.deviceWhiteBalanceGains, options: .new){
             obj, chng in
             let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
+            self.currTemp = Int(temp)
             DispatchQueue.main.async {
-                self.tempLabel.text = String(Int(temp)) + "K"
+                self.tempLabel.text = String(self.currTemp) + "K"
             }
         }
         
@@ -160,8 +176,9 @@ class EnvViewController: UIViewController {
             guard let newVal = change.newValue else {
                 return
             }
+            self.currISO = Int(newVal)
             DispatchQueue.main.async {
-                self.isoLabel.text = String(Int(newVal))
+                self.isoLabel.text = String(self.currISO)
             }
         }
     }
@@ -233,7 +250,17 @@ class EnvViewController: UIViewController {
 extension EnvViewController: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         DispatchQueue.main.async {
-            self.dirLabel.text = String(Int(newHeading.magneticHeading))
+            let heading = Int(newHeading.magneticHeading)
+            self.dirLabel.text = String(heading)
+            if self.sensorDict[heading] == nil {
+                self.sensorDict[heading] = SensorReadout(iso: self.currISO, exposure: self.currExposure, temp: self.currTemp)
+            }
+            if self.sensorDict.keys.count >= self.totalHeadingVals {
+                DispatchQueue.main.async {
+                    self.rotLabel.textColor = .systemGreen
+                    self.rotLabel.text = String(self.rotationComplete)
+                }
+            }
         }
     }
 }
