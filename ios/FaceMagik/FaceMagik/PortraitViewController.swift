@@ -34,8 +34,9 @@ class PortraitViewController: UIViewController {
         self.yawArr = Array(repeating: 0, count: self.mAvgInterval)
     }
     
-    // goToNext performs segue to next view controller.
-    @IBAction func goToNext() {
+    
+    // goToNextView segues to next view in storyboard.
+    @IBAction func goToNextView() {
         performSegue(withIdentifier: self.segueIdentifier, sender: nil)
     }
     
@@ -45,10 +46,6 @@ class PortraitViewController: UIViewController {
         if let destVC = segue.destination as? EnvViewController {
             destVC.modalPresentationStyle = .fullScreen
         }
-    }
-    
-    @IBAction func button() {
-        print ("state: , \(self.checkBox.state)")
     }
     
     override func viewDidAppear(_ animated: Bool) {
