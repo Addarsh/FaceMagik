@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSMotionUsageDescription</key>
+	<string>FaceMagik would like to access motion sesnors to help you navigate your environment.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>FaceMagik would like to access your location for navigation</string>
 	<key>NSPhotoLibraryUsageDescription</key>

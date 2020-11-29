@@ -1,5 +1,5 @@
 //
-//  IntroViewController.swift
+//  InstructViewController.swift
 //  FaceMagik
 //
 //  Created by Addarsh Chandrasekar on 11/26/20.
@@ -8,22 +8,22 @@
 import UIKit
 
 
-class IntroViewController: UIViewController {
-    private let segueIdentifier = "instructView"
+class InstructViewController: UIViewController {
+    private let segueIdentifier = "portaitView"
     
     override func viewDidLoad() {
         super.viewDidLoad()
     }
     
-    // goToNextView segues to next view in storyboard.
-    @IBAction func goToNextView() {
+    // goToNext performs segue to next view controller.
+    @IBAction func goToNext() {
         performSegue(withIdentifier: self.segueIdentifier, sender: nil)
     }
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         super.prepare(for: segue, sender: sender)
 
-        if let destVC = segue.destination as? InstructViewController {
+        if let destVC = segue.destination as? EnvViewController {
             destVC.modalPresentationStyle = .fullScreen
         }
     }

@@ -10,6 +10,8 @@
 		9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */; };
 		9816BAB4256EEF7700FF90C6 /* EnvViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAB3256EEF7700FF90C6 /* EnvViewController.swift */; };
 		9816BABC2570335500FF90C6 /* IntroViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BABB2570335500FF90C6 /* IntroViewController.swift */; };
+		9816BAC12570BE0400FF90C6 /* InstructViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAC02570BE0400FF90C6 /* InstructViewController.swift */; };
+		9816BAC62572D46600FF90C6 /* PortraitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAC52572D46600FF90C6 /* PortraitViewController.swift */; };
 		984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984B11C2256218B1005809C3 /* ThresholdKernel.swift */; };
 		9851D36F253A461C0009D709 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D36E253A461C0009D709 /* AppDelegate.swift */; };
 		9851D371253A461C0009D709 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D370253A461C0009D709 /* SceneDelegate.swift */; };
@@ -46,6 +48,8 @@
 		9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PassThrough.metal; sourceTree = "<group>"; };
 		9816BAB3256EEF7700FF90C6 /* EnvViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvViewController.swift; sourceTree = "<group>"; };
 		9816BABB2570335500FF90C6 /* IntroViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroViewController.swift; sourceTree = "<group>"; };
+		9816BAC02570BE0400FF90C6 /* InstructViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructViewController.swift; sourceTree = "<group>"; };
+		9816BAC52572D46600FF90C6 /* PortraitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortraitViewController.swift; sourceTree = "<group>"; };
 		984B11C2256218B1005809C3 /* ThresholdKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdKernel.swift; sourceTree = "<group>"; };
 		9851D36B253A461C0009D709 /* FaceMagik.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FaceMagik.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9851D36E253A461C0009D709 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -132,7 +136,9 @@
 				984B11C2256218B1005809C3 /* ThresholdKernel.swift */,
 				986921E9253CD9E700C98065 /* PreviewView.swift */,
 				9851D374253A461C0009D709 /* Main.storyboard */,
+				9816BAC52572D46600FF90C6 /* PortraitViewController.swift */,
 				9816BABB2570335500FF90C6 /* IntroViewController.swift */,
+				9816BAC02570BE0400FF90C6 /* InstructViewController.swift */,
 				9816BAB3256EEF7700FF90C6 /* EnvViewController.swift */,
 				98B171062543360700D464BF /* ImageViewController.swift */,
 				9851D377253A46200009D709 /* Assets.xcassets */,
@@ -291,7 +297,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				9851D373253A461C0009D709 /* ViewController.swift in Sources */,
+				9816BAC62572D46600FF90C6 /* PortraitViewController.swift in Sources */,
 				9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */,
+				9816BAC12570BE0400FF90C6 /* InstructViewController.swift in Sources */,
 				985F8B72256C80F800EAA558 /* PreviewMetalView.swift in Sources */,
 				986921EA253CD9E700C98065 /* PreviewView.swift in Sources */,
 				984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */,
@@ -479,7 +487,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 8DK67H4V9H;
 				INFOPLIST_FILE = FaceMagik/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -499,7 +507,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 8DK67H4V9H;
 				INFOPLIST_FILE = FaceMagik/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

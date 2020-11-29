@@ -7,6 +7,7 @@
 
 import UIKit
 import Photos
+import CoreMotion
 
 struct SensorReadout {
     var iso: Int
@@ -39,8 +40,11 @@ class EnvViewController: UIViewController {
     
     // Location related variables.
     let locationManager = CLLocationManager()
+    let motionManager = CMMotionManager()
+    var motionQueue = OperationQueue()
     var sensorDict: [Int: SensorReadout] = [:]
     let totalHeadingVals = 300
+    let motionFrequency = 1.0/30.0
     let rotationComplete = "Done"
     
     override func viewDidLoad() {
@@ -70,7 +74,12 @@ class EnvViewController: UIViewController {
                 self.captureSession.startRunning()
             }
         }
-        self.locationManager.startUpdatingHeading()
+        if CLLocationManager.headingAvailable() {
+            self.locationManager.startUpdatingHeading()
+        }
+        if self.motionManager.isDeviceMotionAvailable {
+            self.startMotionUpdates()
+        }
     }
     
     @objc func appMovedToBackground() {
@@ -79,7 +88,12 @@ class EnvViewController: UIViewController {
                 self.captureSession.stopRunning()
             }
         }
-        self.locationManager.stopUpdatingHeading()
+        if CLLocationManager.headingAvailable() {
+            self.locationManager.stopUpdatingHeading()
+        }
+        if self.motionManager.isDeviceMotionAvailable {
+            self.motionManager.stopDeviceMotionUpdates()
+        }
     }
     
     @objc func appMovedToForeground() {
@@ -88,7 +102,12 @@ class EnvViewController: UIViewController {
                 self.captureSession.startRunning()
             }
         }
-        self.locationManager.startUpdatingHeading()
+        if CLLocationManager.headingAvailable() {
+            self.locationManager.startUpdatingHeading()
+        }
+        if self.motionManager.isDeviceMotionAvailable {
+            self.startMotionUpdates()
+        }
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -96,7 +115,22 @@ class EnvViewController: UIViewController {
         if self.captureSession.isRunning {
             self.captureSession.stopRunning()
         }
-        self.locationManager.stopUpdatingHeading()
+        if CLLocationManager.headingAvailable() {
+            self.locationManager.stopUpdatingHeading()
+        }
+        if self.motionManager.isDeviceMotionAvailable {
+            self.motionManager.stopDeviceMotionUpdates()
+        }
+    }
+    
+    // startMotionUpdates starts to receive motion updates from motion manager.
+    func startMotionUpdates() {
+        self.motionManager.deviceMotionUpdateInterval = self.motionFrequency
+        self.motionManager.startDeviceMotionUpdates(using: .xMagneticNorthZVertical, to: self.motionQueue, withHandler: { (data, error) in
+            if let validData = data {
+                print ("heading: \(validData.heading)")
+            }
+        })
     }
     
     // setupPhotoCaptureSession sets up a capture session to capture photos.
