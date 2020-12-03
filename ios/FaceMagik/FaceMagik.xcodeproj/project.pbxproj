@@ -14,6 +14,8 @@
 		9816BAC62572D46600FF90C6 /* PortraitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAC52572D46600FF90C6 /* PortraitViewController.swift */; };
 		984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984B11C2256218B1005809C3 /* ThresholdKernel.swift */; };
 		985121242575EDB300F11004 /* CircularProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985121232575EDB300F11004 /* CircularProgressView.swift */; };
+		9851212925789E7100F11004 /* AlertViewController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9851212825789E7100F11004 /* AlertViewController.storyboard */; };
+		985121362578B1A400F11004 /* AlertViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985121352578B1A400F11004 /* AlertViewController.swift */; };
 		9851D36F253A461C0009D709 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D36E253A461C0009D709 /* AppDelegate.swift */; };
 		9851D371253A461C0009D709 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D370253A461C0009D709 /* SceneDelegate.swift */; };
 		9851D373253A461C0009D709 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9851D372253A461C0009D709 /* ViewController.swift */; };
@@ -53,6 +55,8 @@
 		9816BAC52572D46600FF90C6 /* PortraitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortraitViewController.swift; sourceTree = "<group>"; };
 		984B11C2256218B1005809C3 /* ThresholdKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdKernel.swift; sourceTree = "<group>"; };
 		985121232575EDB300F11004 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
+		9851212825789E7100F11004 /* AlertViewController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = AlertViewController.storyboard; sourceTree = "<group>"; };
+		985121352578B1A400F11004 /* AlertViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertViewController.swift; sourceTree = "<group>"; };
 		9851D36B253A461C0009D709 /* FaceMagik.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FaceMagik.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9851D36E253A461C0009D709 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		9851D370253A461C0009D709 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -138,6 +142,8 @@
 				984B11C2256218B1005809C3 /* ThresholdKernel.swift */,
 				986921E9253CD9E700C98065 /* PreviewView.swift */,
 				9851D374253A461C0009D709 /* Main.storyboard */,
+				9851212825789E7100F11004 /* AlertViewController.storyboard */,
+				985121352578B1A400F11004 /* AlertViewController.swift */,
 				9816BAC52572D46600FF90C6 /* PortraitViewController.swift */,
 				985121232575EDB300F11004 /* CircularProgressView.swift */,
 				9816BABB2570335500FF90C6 /* IntroViewController.swift */,
@@ -274,6 +280,7 @@
 			files = (
 				9851D37B253A46200009D709 /* LaunchScreen.storyboard in Resources */,
 				9851D378253A46200009D709 /* Assets.xcassets in Resources */,
+				9851212925789E7100F11004 /* AlertViewController.storyboard in Resources */,
 				9851D376253A461C0009D709 /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -312,6 +319,7 @@
 				985121242575EDB300F11004 /* CircularProgressView.swift in Sources */,
 				9816BABC2570335500FF90C6 /* IntroViewController.swift in Sources */,
 				9851D371253A461C0009D709 /* SceneDelegate.swift in Sources */,
+				985121362578B1A400F11004 /* AlertViewController.swift in Sources */,
 				98984ADA254C52DA009E7AC7 /* PhotoProcessor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

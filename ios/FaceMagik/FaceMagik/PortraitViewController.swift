@@ -143,9 +143,12 @@ class PortraitViewController: UIViewController {
                 // Previous alert is still being presented.
                 return
             }
-            let alert = UIAlertController(title: "Phone orientation incorrect", message: "Please keep the phone straight and in portrait orientation.", preferredStyle: .alert)
+            /*let alert = UIAlertController(title: "Phone orientation incorrect", message: "Please keep the phone straight and in portrait orientation.", preferredStyle: .alert)
             let ok = UIAlertAction(title: "Ok", style: .default , handler: nil)
-            alert.addAction(ok)
+            alert.addAction(ok)*/
+            guard let alert = AlertViewController.storyboardInstance() else {
+                return
+            }
             self.present(alert, animated: true)
         }
     }
