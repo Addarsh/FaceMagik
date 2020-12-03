@@ -11,16 +11,21 @@ import CoreMotion
 class PortraitViewController: UIViewController {
     private let segueIdentifier = "envView"
     @IBOutlet var checkBox: UIButton!
+    @IBOutlet var textView: UITextView!
+    @IBOutlet var progressView: CircularProgressView!
     let motionManager = CMMotionManager()
     var motionQueue = OperationQueue()
     let motionFrequency = 1.0/30.0
-    let stableIterationsThreshold = 30*3 // 3 seconds at 30 Hz.
+    let stableOrientationThreshold = 30*3 // 1 seconds at 30 Hz.
+    let unstableOrientationThreshold = 30*3 // 1 seconds at 30 Hz.
     let mAvgInterval = 20
     var dataCount: Int = 0
     var pitchArr: [Double]!
     var rollArr: [Double]!
     var yawArr :[Double]!
-    var stableIterationsCount: Int = 0
+    var unstableOrientationCount: Int = 0
+    var stableOrientationCount: Int = 0
+    let htmlInstructions = "Stand up.<br/><br/>Hold up your phone <b>straight</b> in <b>portrait</b> orientation as if you are taking a selfie."
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -32,6 +37,10 @@ class PortraitViewController: UIViewController {
         self.pitchArr = Array(repeating: 0, count: self.mAvgInterval)
         self.rollArr = Array(repeating: 0, count: self.mAvgInterval)
         self.yawArr = Array(repeating: 0, count: self.mAvgInterval)
+        
+        DispatchQueue.main.async {
+            self.textView.attributedText = self.htmlInstructions.htmlAttributedString()
+        }
     }
     
     
@@ -104,12 +113,21 @@ class PortraitViewController: UIViewController {
                     (result.yaw < 1 || result.yaw > 3) {
                     DispatchQueue.main.async {
                         self.checkBox.isEnabled = false
+                        self.progressView.animate(0)
                     }
-                    self.stableIterationsCount = 0
+                    self.stableOrientationCount = 0
+                    self.unstableOrientationCount += 1
+                    if (self.unstableOrientationCount == 1) || (self.unstableOrientationCount % self.unstableOrientationThreshold == 0) {
+                        self.presentAlert()
+                    }
                     return
                 }
-                self.stableIterationsCount += 1
-                if self.stableIterationsCount >= self.stableIterationsCount {
+                self.unstableOrientationCount = 0
+                self.stableOrientationCount += 1
+                DispatchQueue.main.async {
+                    self.progressView.animate(Float(self.stableOrientationCount)/Float(self.stableOrientationThreshold))
+                }
+                if self.stableOrientationCount >= self.stableOrientationThreshold {
                     DispatchQueue.main.async {
                         self.checkBox.isEnabled = true
                     }
@@ -117,10 +135,59 @@ class PortraitViewController: UIViewController {
             }
         })
     }
+    
+    // presentAlert presents an alert dialog if user is unable to orient the phone correctly.
+    func presentAlert() {
+        DispatchQueue.main.async {
+            if self.presentedViewController != nil {
+                // Previous alert is still being presented.
+                return
+            }
+            let alert = UIAlertController(title: "Phone orientation incorrect", message: "Please keep the phone straight and in portrait orientation.", preferredStyle: .alert)
+            let ok = UIAlertAction(title: "Ok", style: .default , handler: nil)
+            alert.addAction(ok)
+            self.present(alert, animated: true)
+        }
+    }
 }
 
 extension Sequence where Element: AdditiveArithmetic {
     func sum() -> Element {
         return reduce(.zero, +)
+    }
+}
+
+extension String {
+    func htmlAttributedString() -> NSAttributedString? {
+        let htmlTemplate = """
+        <!doctype html>
+        <html>
+          <head>
+            <style>
+              body {
+                font-family: -apple-system;
+                font-size: 21px;
+              }
+            </style>
+          </head>
+          <body>
+            \(self)
+          </body>
+        </html>
+        """
+
+        guard let data = htmlTemplate.data(using: .utf8) else {
+            return nil
+        }
+
+        guard let attributedString = try? NSAttributedString(
+            data: data,
+            options: [.documentType: NSAttributedString.DocumentType.html],
+            documentAttributes: nil
+            ) else {
+            return nil
+        }
+
+        return attributedString
     }
 }
