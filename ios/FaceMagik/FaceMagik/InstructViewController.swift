@@ -23,7 +23,7 @@ class InstructViewController: UIViewController {
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         super.prepare(for: segue, sender: sender)
 
-        if let destVC = segue.destination as? EnvViewController {
+        if let destVC = segue.destination as? LightingViewController {
             destVC.modalPresentationStyle = .fullScreen
         }
     }
