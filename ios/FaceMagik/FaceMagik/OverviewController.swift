@@ -10,6 +10,7 @@ import UIKit
 class OverviewController: UIViewController {
     private let pageControl = UIPageControl()
     private let scrollView = UIScrollView()
+    @IBOutlet private var button: UIButton!
     let numPages = 3
     
     override func viewDidLoad() {
@@ -17,6 +18,7 @@ class OverviewController: UIViewController {
         
         self.view.addSubview(self.scrollView)
         self.view.addSubview(self.pageControl)
+        self.view.addSubview(self.button)
     }
     
     override func viewDidLayoutSubviews() {
@@ -60,9 +62,20 @@ class OverviewController: UIViewController {
     func configPageControl() {
         self.pageControl.numberOfPages = self.numPages
         self.pageControl.pageIndicatorTintColor = .systemGray
-        self.pageControl.currentPageIndicatorTintColor = .systemBlue
+        self.pageControl.currentPageIndicatorTintColor = .systemIndigo
         let height :CGFloat = 250
         self.pageControl.frame = CGRect(x: 0, y: self.view.frame.height-height, width: self.view.frame.width, height: height)
+    }
+    
+    // getStarted starts user journey in the app.
+    @IBAction func getStarted() {
+        DispatchQueue.main.async {
+            guard let vc = LightConditionsController.storyboardInstance() else {
+                return
+            }
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
+        }
     }
 }
 
