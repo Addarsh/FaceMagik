@@ -22,4 +22,13 @@ class LightConditionsController: UIViewController {
     @IBAction func userNotReady() {
         self.dismiss(animated: true)
     }
+    
+    // readyToTest indicates user is ready to test environmental lighting conditions.
+    @IBAction func readyToTest() {
+        guard let vc = StandupController.storyboardInstance() else {
+            return
+        }
+        vc.modalPresentationStyle = .fullScreen
+        self.present(vc, animated: true)
+    }
 }

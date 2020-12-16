@@ -119,6 +119,9 @@
                                                 <integer key="value" value="10"/>
                                             </userDefinedRuntimeAttribute>
                                         </userDefinedRuntimeAttributes>
+                                        <connections>
+                                            <action selector="readyToTest" destination="8bv-LO-oNi" eventType="touchDown" id="b5t-ha-U2q"/>
+                                        </connections>
                                     </button>
                                 </subviews>
                                 <constraints>
