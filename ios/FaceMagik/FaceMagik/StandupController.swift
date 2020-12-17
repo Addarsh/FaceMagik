@@ -19,8 +19,17 @@ class StandupController: UIViewController {
         super.viewDidLoad()
     }
     
-    // back allows user to go back to previous veiwcontroller.
+    // back allows user to go back to previous view controller.
     @IBAction func back() {
         self.dismiss(animated: true)
+    }
+    
+    // done allows user to progress to next view controller.
+    @IBAction func done() {
+        guard let vc = PhoneOrientationController.storyboardInstance() else {
+            return
+        }
+        vc.modalPresentationStyle = .fullScreen
+        self.present(vc, animated: true)
     }
 }

@@ -47,6 +47,9 @@
                                                 <integer key="value" value="10"/>
                                             </userDefinedRuntimeAttribute>
                                         </userDefinedRuntimeAttributes>
+                                        <connections>
+                                            <action selector="done" destination="aER-WM-Izj" eventType="touchDown" id="YPm-6V-yn4"/>
+                                        </connections>
                                     </button>
                                 </subviews>
                                 <constraints>
@@ -65,10 +68,10 @@
                             <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" translatesAutoresizingMaskIntoConstraints="NO" id="Ewa-QG-vRR" userLabel="Image Stack View">
                                 <rect key="frame" x="20" y="274" width="374" height="300"/>
                                 <subviews>
-                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="standing" translatesAutoresizingMaskIntoConstraints="NO" id="ljt-y6-9ir">
+                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="no-sitting" translatesAutoresizingMaskIntoConstraints="NO" id="ljt-y6-9ir">
                                         <rect key="frame" x="0.0" y="0.0" width="187" height="300"/>
                                     </imageView>
-                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="no-sitting" translatesAutoresizingMaskIntoConstraints="NO" id="P6b-Yd-bpN">
+                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="standing" translatesAutoresizingMaskIntoConstraints="NO" id="P6b-Yd-bpN">
                                         <rect key="frame" x="187" y="0.0" width="187" height="300"/>
                                     </imageView>
                                 </subviews>

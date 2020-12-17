@@ -34,6 +34,8 @@
 		986471C22589CABD0080F976 /* StandupController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 986471C12589CABD0080F976 /* StandupController.storyboard */; };
 		986921EA253CD9E700C98065 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986921E9253CD9E700C98065 /* PreviewView.swift */; };
 		98984ADA254C52DA009E7AC7 /* PhotoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98984AD9254C52D9009E7AC7 /* PhotoProcessor.swift */; };
+		989F4593258A71A7005B1D4B /* PhoneOrientationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 989F4592258A71A7005B1D4B /* PhoneOrientationController.swift */; };
+		989F4598258A71CF005B1D4B /* PhoneOrientationController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 989F4597258A71CF005B1D4B /* PhoneOrientationController.storyboard */; };
 		98B171072543360700D464BF /* ImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B171062543360700D464BF /* ImageViewController.swift */; };
 /* End PBXBuildFile section */
 
@@ -88,6 +90,8 @@
 		986471C12589CABD0080F976 /* StandupController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = StandupController.storyboard; sourceTree = "<group>"; };
 		986921E9253CD9E700C98065 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
 		98984AD9254C52D9009E7AC7 /* PhotoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoProcessor.swift; sourceTree = "<group>"; };
+		989F4592258A71A7005B1D4B /* PhoneOrientationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneOrientationController.swift; sourceTree = "<group>"; };
+		989F4597258A71CF005B1D4B /* PhoneOrientationController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = PhoneOrientationController.storyboard; sourceTree = "<group>"; };
 		98B171062543360700D464BF /* ImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -159,6 +163,8 @@
 				986471B22586A1690080F976 /* LightConditionsController.storyboard */,
 				986471BC2589CA6C0080F976 /* StandupController.swift */,
 				986471C12589CABD0080F976 /* StandupController.storyboard */,
+				989F4592258A71A7005B1D4B /* PhoneOrientationController.swift */,
+				989F4597258A71CF005B1D4B /* PhoneOrientationController.storyboard */,
 				986471B72586A1A00080F976 /* LightConditionsController.swift */,
 				9851213D257AA0CA00F11004 /* OverviewController.swift */,
 				9851212825789E7100F11004 /* AlertViewController.storyboard */,
@@ -305,6 +311,7 @@
 				986471B32586A1690080F976 /* LightConditionsController.storyboard in Resources */,
 				98512162258130C800F11004 /* SceneMapping.json in Resources */,
 				986471C22589CABD0080F976 /* StandupController.storyboard in Resources */,
+				989F4598258A71CF005B1D4B /* PhoneOrientationController.storyboard in Resources */,
 				9851D376253A461C0009D709 /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -348,6 +355,7 @@
 				9851D371253A461C0009D709 /* SceneDelegate.swift in Sources */,
 				985121362578B1A400F11004 /* AlertViewController.swift in Sources */,
 				9851213E257AA0CA00F11004 /* OverviewController.swift in Sources */,
+				989F4593258A71A7005B1D4B /* PhoneOrientationController.swift in Sources */,
 				98984ADA254C52DA009E7AC7 /* PhotoProcessor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
