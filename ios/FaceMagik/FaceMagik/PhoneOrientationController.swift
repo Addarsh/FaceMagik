@@ -22,4 +22,13 @@ class PhoneOrientationController: UIViewController {
     @IBAction func back() {
         self.dismiss(animated: true)
     }
+    
+    // done allows user to progress to next view controller.
+    @IBAction func done() {
+        guard let vc = RotateInstructionsController.storyboardInstance() else {
+            return
+        }
+        vc.modalPresentationStyle = .fullScreen
+        self.present(vc, animated: true)
+    }
 }

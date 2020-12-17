@@ -47,6 +47,9 @@
                                                 <integer key="value" value="10"/>
                                             </userDefinedRuntimeAttribute>
                                         </userDefinedRuntimeAttributes>
+                                        <connections>
+                                            <action selector="done" destination="Z0V-U9-Q3H" eventType="touchDown" id="Rlp-Lc-Ksf"/>
+                                        </connections>
                                     </button>
                                 </subviews>
                                 <constraints>

@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 50;
+	objectVersion = 52;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -36,6 +36,10 @@
 		98984ADA254C52DA009E7AC7 /* PhotoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98984AD9254C52D9009E7AC7 /* PhotoProcessor.swift */; };
 		989F4593258A71A7005B1D4B /* PhoneOrientationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 989F4592258A71A7005B1D4B /* PhoneOrientationController.swift */; };
 		989F4598258A71CF005B1D4B /* PhoneOrientationController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 989F4597258A71CF005B1D4B /* PhoneOrientationController.storyboard */; };
+		989F459D258BCAF9005B1D4B /* RotateInstructionsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 989F459C258BCAF9005B1D4B /* RotateInstructionsController.swift */; };
+		989F45A2258BCB14005B1D4B /* RotateInstructionsController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 989F45A1258BCB14005B1D4B /* RotateInstructionsController.storyboard */; };
+		989F45A8258BD2B2005B1D4B /* Gifu in Frameworks */ = {isa = PBXBuildFile; productRef = 989F45A7258BD2B2005B1D4B /* Gifu */; };
+		989F45AE258BD685005B1D4B /* rotate-woman.gif in Resources */ = {isa = PBXBuildFile; fileRef = 989F45AD258BD684005B1D4B /* rotate-woman.gif */; };
 		98B171072543360700D464BF /* ImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B171062543360700D464BF /* ImageViewController.swift */; };
 /* End PBXBuildFile section */
 
@@ -92,6 +96,9 @@
 		98984AD9254C52D9009E7AC7 /* PhotoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoProcessor.swift; sourceTree = "<group>"; };
 		989F4592258A71A7005B1D4B /* PhoneOrientationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneOrientationController.swift; sourceTree = "<group>"; };
 		989F4597258A71CF005B1D4B /* PhoneOrientationController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = PhoneOrientationController.storyboard; sourceTree = "<group>"; };
+		989F459C258BCAF9005B1D4B /* RotateInstructionsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RotateInstructionsController.swift; sourceTree = "<group>"; };
+		989F45A1258BCB14005B1D4B /* RotateInstructionsController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = RotateInstructionsController.storyboard; sourceTree = "<group>"; };
+		989F45AD258BD684005B1D4B /* rotate-woman.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = "rotate-woman.gif"; sourceTree = "<group>"; };
 		98B171062543360700D464BF /* ImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -100,6 +107,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				989F45A8258BD2B2005B1D4B /* Gifu in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -165,6 +173,8 @@
 				986471C12589CABD0080F976 /* StandupController.storyboard */,
 				989F4592258A71A7005B1D4B /* PhoneOrientationController.swift */,
 				989F4597258A71CF005B1D4B /* PhoneOrientationController.storyboard */,
+				989F459C258BCAF9005B1D4B /* RotateInstructionsController.swift */,
+				989F45A1258BCB14005B1D4B /* RotateInstructionsController.storyboard */,
 				986471B72586A1A00080F976 /* LightConditionsController.swift */,
 				9851213D257AA0CA00F11004 /* OverviewController.swift */,
 				9851212825789E7100F11004 /* AlertViewController.storyboard */,
@@ -178,6 +188,7 @@
 				9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */,
 				98B171062543360700D464BF /* ImageViewController.swift */,
 				9851D377253A46200009D709 /* Assets.xcassets */,
+				989F45AC258BD64D005B1D4B /* gifs */,
 				9851D379253A46200009D709 /* LaunchScreen.storyboard */,
 				9851D37C253A46200009D709 /* Info.plist */,
 			);
@@ -202,6 +213,14 @@
 			path = FaceMagikUITests;
 			sourceTree = "<group>";
 		};
+		989F45AC258BD64D005B1D4B /* gifs */ = {
+			isa = PBXGroup;
+			children = (
+				989F45AD258BD684005B1D4B /* rotate-woman.gif */,
+			);
+			path = gifs;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -218,6 +237,9 @@
 			dependencies = (
 			);
 			name = FaceMagik;
+			packageProductDependencies = (
+				989F45A7258BD2B2005B1D4B /* Gifu */,
+			);
 			productName = FaceMagik;
 			productReference = 9851D36B253A461C0009D709 /* FaceMagik.app */;
 			productType = "com.apple.product-type.application";
@@ -289,6 +311,9 @@
 				Base,
 			);
 			mainGroup = 9851D362253A461C0009D709;
+			packageReferences = (
+				989F45A6258BD2B2005B1D4B /* XCRemoteSwiftPackageReference "Gifu" */,
+			);
 			productRefGroup = 9851D36C253A461C0009D709 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -309,6 +334,8 @@
 				9851D378253A46200009D709 /* Assets.xcassets in Resources */,
 				9851212925789E7100F11004 /* AlertViewController.storyboard in Resources */,
 				986471B32586A1690080F976 /* LightConditionsController.storyboard in Resources */,
+				989F45AE258BD685005B1D4B /* rotate-woman.gif in Resources */,
+				989F45A2258BCB14005B1D4B /* RotateInstructionsController.storyboard in Resources */,
 				98512162258130C800F11004 /* SceneMapping.json in Resources */,
 				986471C22589CABD0080F976 /* StandupController.storyboard in Resources */,
 				989F4598258A71CF005B1D4B /* PhoneOrientationController.storyboard in Resources */,
@@ -344,6 +371,7 @@
 				9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */,
 				9816BAC12570BE0400FF90C6 /* InstructViewController.swift in Sources */,
 				985F8B72256C80F800EAA558 /* PreviewMetalView.swift in Sources */,
+				989F459D258BCAF9005B1D4B /* RotateInstructionsController.swift in Sources */,
 				986921EA253CD9E700C98065 /* PreviewView.swift in Sources */,
 				984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */,
 				98B171072543360700D464BF /* ImageViewController.swift in Sources */,
@@ -691,6 +719,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		989F45A6258BD2B2005B1D4B /* XCRemoteSwiftPackageReference "Gifu" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kaishin/Gifu.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		989F45A7258BD2B2005B1D4B /* Gifu */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 989F45A6258BD2B2005B1D4B /* XCRemoteSwiftPackageReference "Gifu" */;
+			productName = Gifu;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9851D363253A461C0009D709 /* Project object */;
 }
