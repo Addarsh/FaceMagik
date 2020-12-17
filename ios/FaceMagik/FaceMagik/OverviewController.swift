@@ -46,6 +46,7 @@ class OverviewController: UIViewController {
             textView.textColor = .black
             textView.font = UIFont(name: "Helvetica", size: 26)
             textView.textAlignment = .center
+            textView.isEditable = false
             textView.text = textList[i]
             page.addSubview(textView)
             

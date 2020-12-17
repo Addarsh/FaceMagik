@@ -56,7 +56,7 @@
                                     <constraint firstAttribute="height" constant="50" id="z7N-84-gqW"/>
                                 </constraints>
                             </stackView>
-                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" text="Hold your phone vertically as if you are taking a selfie." textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="Wwq-cg-qI2">
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" text="Hold your phone vertically as if you are taking a selfie." textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="Wwq-cg-qI2">
                                 <rect key="frame" x="20" y="124" width="374" height="100"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="100" id="tKc-cb-BJK"/>

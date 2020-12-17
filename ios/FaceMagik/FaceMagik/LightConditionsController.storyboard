@@ -25,7 +25,7 @@
                                 <fontDescription key="fontDescription" name=".AppleSystemUIFont" family=".AppleSystemUIFont" pointSize="26"/>
                                 <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
                             </textView>
-                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" text="Use your camera to test if lighting conditions are appropriate in your surroundings. " textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="dFy-uv-guU">
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" text="Use your camera to test if lighting conditions are appropriate in your surroundings. " textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="dFy-uv-guU">
                                 <rect key="frame" x="20" y="164" width="374" height="100"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="100" id="JXb-QL-NGk"/>
@@ -55,7 +55,7 @@
                             <stackView opaque="NO" contentMode="scaleToFill" spacing="20" translatesAutoresizingMaskIntoConstraints="NO" id="7qq-xN-cVo" userLabel="Daylight Stack View">
                                 <rect key="frame" x="20" y="434" width="374" height="100"/>
                                 <subviews>
-                                    <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" text="Make sure there is adequate daylight in your room." translatesAutoresizingMaskIntoConstraints="NO" id="rwR-pC-iI2">
+                                    <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" text="Make sure there is adequate daylight in your room." translatesAutoresizingMaskIntoConstraints="NO" id="rwR-pC-iI2">
                                         <rect key="frame" x="0.0" y="0.0" width="224.5" height="100"/>
                                         <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <fontDescription key="fontDescription" type="system" pointSize="19"/>
@@ -73,7 +73,7 @@
                             <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ULn-8w-RVY" userLabel="Lights Off Stack View">
                                 <rect key="frame" x="20" y="574" width="374" height="100"/>
                                 <subviews>
-                                    <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" text="Turn off all artificial light sources." textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="0WC-eT-e7H">
+                                    <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" text="Turn off all artificial light sources." textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="0WC-eT-e7H">
                                         <rect key="frame" x="0.0" y="0.0" width="243" height="100"/>
                                         <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <fontDescription key="fontDescription" type="system" pointSize="20"/>

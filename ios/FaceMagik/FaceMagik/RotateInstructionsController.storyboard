@@ -43,7 +43,7 @@
                                     <constraint firstAttribute="height" constant="50" id="lXh-3k-KAs"/>
                                 </constraints>
                             </stackView>
-                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="bCI-z1-ZGI">
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="bCI-z1-ZGI">
                                 <rect key="frame" x="20" y="124" width="374" height="200"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="200" id="L3o-R0-lW2"/>
