@@ -11,6 +11,7 @@
         <!--Assess Light Controller-->
         <scene sceneID="b29-FL-Lsj">
             <objects>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="sXU-nd-Pgd" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
                 <viewController id="qH9-Px-HGy" customClass="AssessLightController" customModule="FaceMagik" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="7kn-UC-wRC">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
@@ -50,6 +51,12 @@
                                 <rect key="frame" x="50" y="704" width="314" height="4"/>
                                 <color key="progressTintColor" systemColor="systemIndigoColor"/>
                             </progressView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="V4N-s2-dkF">
+                                <rect key="frame" x="20" y="718" width="0.0" height="0.0"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="18"/>
+                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="QVT-uf-O1Q"/>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
@@ -60,6 +67,8 @@
                             <constraint firstItem="G6p-4r-rdG" firstAttribute="leading" secondItem="QVT-uf-O1Q" secondAttribute="leading" constant="50" id="94j-1d-xG5"/>
                             <constraint firstItem="oUp-fr-Vkm" firstAttribute="leading" secondItem="QVT-uf-O1Q" secondAttribute="leading" constant="20" id="Bhr-uK-ULV"/>
                             <constraint firstItem="QVT-uf-O1Q" firstAttribute="trailing" secondItem="Llt-jg-jKY" secondAttribute="trailing" id="DVg-Yg-Udn"/>
+                            <constraint firstItem="V4N-s2-dkF" firstAttribute="leading" secondItem="QVT-uf-O1Q" secondAttribute="leading" constant="20" id="DwM-Ha-fRF"/>
+                            <constraint firstItem="V4N-s2-dkF" firstAttribute="top" secondItem="G6p-4r-rdG" secondAttribute="bottom" constant="10" id="FF2-Rk-Sga"/>
                             <constraint firstItem="QVT-uf-O1Q" firstAttribute="trailing" secondItem="oUp-fr-Vkm" secondAttribute="trailing" constant="20" id="He7-Yi-sz8"/>
                             <constraint firstItem="TwN-8w-3xQ" firstAttribute="bottom" secondItem="QVT-uf-O1Q" secondAttribute="bottom" id="TYC-Fj-ref"/>
                             <constraint firstItem="Llt-jg-jKY" firstAttribute="leading" secondItem="QVT-uf-O1Q" secondAttribute="leading" id="XSG-PU-Jyj"/>
@@ -72,11 +81,11 @@
                         <outlet property="instructions" destination="oUp-fr-Vkm" id="GYq-rl-f5B"/>
                         <outlet property="previewLayer" destination="Llt-jg-jKY" id="SK7-bZ-tTv"/>
                         <outlet property="progressView" destination="G6p-4r-rdG" id="pci-MH-6ZC"/>
+                        <outlet property="sceneLabel" destination="V4N-s2-dkF" id="dqV-IC-Dhe"/>
                     </connections>
                 </viewController>
-                <placeholder placeholderIdentifier="IBFirstResponder" id="sXU-nd-Pgd" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="-254" y="121"/>
+            <point key="canvasLocation" x="-255.07246376811597" y="120.53571428571428"/>
         </scene>
     </scenes>
     <resources>

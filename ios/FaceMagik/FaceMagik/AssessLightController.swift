@@ -26,6 +26,7 @@ class AssessLightController: UIViewController {
     @IBOutlet private var instructions: UITextView!
     @IBOutlet private var previewLayer: PreviewView!
     @IBOutlet private var progressView: UIProgressView!
+    @IBOutlet var sceneLabel: UILabel!
     
     private var exposureObservation: NSKeyValueObservation?
     private var tempObservation: NSKeyValueObservation?
@@ -36,17 +37,19 @@ class AssessLightController: UIViewController {
     private var currSceneType: SceneType = .Indoors
     private var sensorMap: [Int: SensorValues] = [:]
     private let serialQueue = DispatchQueue(label: "Serial Queue", qos: .userInteractive, attributes: [], autoreleaseFrequency: .inherit, target: nil)
+    private let notifCenter = NotificationCenter.default
     
     // Core Motion variables.
     private let motionManager = CMMotionManager()
     private var motionQueue = OperationQueue()
     static private let motionFrequency = 1.0/30.0
-    static private let totalHeadingVals = 300
+    static private let totalHeadingVals = 250
     
     // AVCaptureSession variables.
     @objc var cameraDevice: AVCaptureDevice!
     private var sessionQueue: DispatchQueue!
     private var captureSession =  AVCaptureSession()
+    private let captureSessionQueue = DispatchQueue(label: "vision request queue", qos: .userInteractive, attributes: [], autoreleaseFrequency: .inherit, target: nil)
     private let videoOutput = AVCaptureVideoDataOutput()
     private let videoOutputQueue = DispatchQueue(label: "com.example.FaceMagik.videoOutputQueue")
     private var visionRequests: [VNCoreMLRequest] = []
@@ -68,28 +71,29 @@ class AssessLightController: UIViewController {
         
         self.instructions.text = "Rotate slowly until the progress bar completes"
         
-        let notifCenter = NotificationCenter.default
-        notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
-        notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        self.notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        self.notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         
-        guard let mappings = self.readSceneMappings() else {
-            print ("Error! Could not read scene mappings")
-            return
+        self.captureSessionQueue.async {
+            self.prepareVisionRequest()
         }
-        self.sceneMappings = mappings
-
+        
         self.setupVideoCaptureSession()
-        
         self.previewLayer.videoPreviewLayer.session = self.captureSession
-        
         self.observeDevice()
         
-        self.prepareVisionRequest()
-        
+        self.captureSessionQueue.async {
+            self.captureSession.startRunning()
+            self.startMotionUpdates()
+        }
     }
     
     // back allows user to go back to previous veiwcontroller.
     @IBAction func back() {
+        self.notifCenter.removeObserver(self)
+        self.motionManager.stopDeviceMotionUpdates()
+        self.previewLayer.videoPreviewLayer.session = nil
+        self.captureSession.stopRunning()
         self.dismiss(animated: true)
     }
     
@@ -107,39 +111,32 @@ class AssessLightController: UIViewController {
         return nil
     }
     
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        self.flipCaptureSessionState()
-        self.startMotionUpdates()
-    }
-    
     @objc func appMovedToBackground() {
-        self.flipCaptureSessionState()
-        self.motionManager.stopDeviceMotionUpdates()
+        if self.motionManager.isDeviceMotionActive {
+            self.motionManager.stopDeviceMotionUpdates()
+        }
+        self.previewLayer.videoPreviewLayer.session = nil
     }
     
     @objc func appMovedToForeground() {
-        self.flipCaptureSessionState()
-        self.startMotionUpdates()
-    }
-    
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        self.flipCaptureSessionState()
-        self.motionManager.stopDeviceMotionUpdates()
-    }
-    
-    // flipCaptureSessionState starts a capture session if not running and stops it otherwise.
-    func flipCaptureSessionState() {
         if !self.captureSession.isRunning {
+            self.previewLayer.videoPreviewLayer.session = self.captureSession
             self.captureSession.startRunning()
-        } else {
-            self.captureSession.stopRunning()
+        }
+            
+        if !self.motionManager.isDeviceMotionActive {
+            self.startMotionUpdates()
         }
     }
     
     // prepareVisionRequest prepares a vision request using already existing CoreML mode.
     func prepareVisionRequest() {
+        guard let mappings = self.readSceneMappings() else {
+            print ("Error! Could not read scene mappings")
+            return
+        }
+        self.sceneMappings = mappings
+        
         guard let model = try? VNCoreMLModel(for: GoogLeNetPlaces(configuration: MLModelConfiguration.init()).model) else {
             print ("Failed to intialize Core ML Model")
             return
@@ -261,8 +258,26 @@ class AssessLightController: UIViewController {
                 DispatchQueue.main.async {
                     self.progressView.setProgress(Float(kCount)/Float(AssessLightController.totalHeadingVals), animated: true)
                 }
+                if kCount == AssessLightController.totalHeadingVals {
+                    self.validateEnv()
+                }
             }
         })
+    }
+    
+    // validateEnv validates if environment is suitable for pictures using existing sensor values.
+    func validateEnv() {
+        // Check indoor/outdoor label ratio.
+        var numIndoors = 0
+        for (_, readouts) in self.sensorMap {
+            if readouts.sceneType == .Indoors {
+                numIndoors += 1
+            }
+        }
+        DispatchQueue.main.async {
+            self.sceneLabel.text = String(Int((Float(numIndoors)/Float(self.sensorMap.keys.count))*100.0))
+        }
+        
     }
 }
 
