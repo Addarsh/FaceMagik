@@ -37,6 +37,9 @@
                                         <state key="normal" title="Take pictures!">
                                             <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         </state>
+                                        <connections>
+                                            <action selector="done" destination="xSb-EP-Tqc" eventType="touchDown" id="zBC-ju-OCN"/>
+                                        </connections>
                                     </button>
                                 </subviews>
                                 <constraints>

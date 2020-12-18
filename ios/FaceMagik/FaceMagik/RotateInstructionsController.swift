@@ -27,4 +27,13 @@ class RotateInstructionsController: UIViewController {
     @IBAction func back() {
         self.dismiss(animated: true)
     }
+    
+    // done allows user to progress to next view controller.
+    @IBAction func done() {
+        guard let vc = AssessLightController.storyboardInstance() else {
+            return
+        }
+        vc.modalPresentationStyle = .fullScreen
+        self.present(vc, animated: true)
+    }
 }

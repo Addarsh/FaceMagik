@@ -8,28 +8,62 @@
 import UIKit
 import Photos
 import Vision
+import CoreMotion
 
 enum SceneType: Int, Codable {
     case Indoors = 1
     case Outdoors = 2
 }
 
-class SceneViewController: UIViewController {
+struct SensorValues {
+    var iso: Int
+    var exposure: Int
+    var temp: Int
+    var sceneType: SceneType
+}
+
+class AssessLightController: UIViewController {
+    @IBOutlet private var instructions: UITextView!
     @IBOutlet private var previewLayer: PreviewView!
-    @IBOutlet private var sceneLabel: UILabel!
-    @IBOutlet private var confidenceLabel: UILabel!
+    @IBOutlet private var progressView: UIProgressView!
+    
+    private var exposureObservation: NSKeyValueObservation?
+    private var tempObservation: NSKeyValueObservation?
+    private var isoObservation: NSKeyValueObservation?
+    private var currTemp: Int = 0
+    private var currISO: Int = 0
+    private var currExposure: Int = 0
+    private var currSceneType: SceneType = .Indoors
+    private var sensorMap: [Int: SensorValues] = [:]
+    private let serialQueue = DispatchQueue(label: "Serial Queue", qos: .userInteractive, attributes: [], autoreleaseFrequency: .inherit, target: nil)
+    
+    // Core Motion variables.
+    private let motionManager = CMMotionManager()
+    private var motionQueue = OperationQueue()
+    private let motionFrequency = 1.0/30.0
     
     // AVCaptureSession variables.
     @objc var cameraDevice: AVCaptureDevice!
-    var sessionQueue: DispatchQueue!
-    var captureSession =  AVCaptureSession()
-    let videoOutput = AVCaptureVideoDataOutput()
+    private var sessionQueue: DispatchQueue!
+    private var captureSession =  AVCaptureSession()
+    private let videoOutput = AVCaptureVideoDataOutput()
     private let videoOutputQueue = DispatchQueue(label: "com.example.FaceMagik.videoOutputQueue")
-    var visionRequests: [VNCoreMLRequest] = []
-    var sceneMappings: [String: SceneType] = [:]
+    private var visionRequests: [VNCoreMLRequest] = []
+    private var sceneMappings: [String: SceneType] = [:]
+    
+    static func storyboardInstance() -> AssessLightController? {
+        let className = String(describing: AssessLightController.self)
+        let storyboard = UIStoryboard(name: className, bundle: nil)
+        return storyboard.instantiateInitialViewController() as? AssessLightController
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        if !self.motionManager.isDeviceMotionAvailable {
+            print ("Device motion unavaible! Error!")
+            return
+        }
         
         let notifCenter = NotificationCenter.default
         notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
@@ -46,8 +80,15 @@ class SceneViewController: UIViewController {
         
         self.previewLayer.videoPreviewLayer.session = self.captureSession
         
+        self.observeDevice()
+        
         self.prepareVisionRequest()
         
+    }
+    
+    // back allows user to go back to previous veiwcontroller.
+    @IBAction func back() {
+        self.dismiss(animated: true)
     }
     
     // readSceneMappings reads scene mappings data from JSON file.
@@ -66,32 +107,31 @@ class SceneViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if !self.captureSession.isRunning {
-            DispatchQueue.main.async {
-                self.captureSession.startRunning()
-            }
-        }
+        self.flipCaptureSessionState()
+        self.startMotionUpdates()
     }
     
     @objc func appMovedToBackground() {
-        if self.captureSession.isRunning {
-            DispatchQueue.main.async {
-                self.captureSession.stopRunning()
-            }
-        }
+        self.flipCaptureSessionState()
+        self.motionManager.stopDeviceMotionUpdates()
     }
     
     @objc func appMovedToForeground() {
-        if !self.captureSession.isRunning {
-            DispatchQueue.main.async {
-                self.captureSession.startRunning()
-            }
-        }
+        self.flipCaptureSessionState()
+        self.startMotionUpdates()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        if self.captureSession.isRunning {
+        self.flipCaptureSessionState()
+        self.motionManager.stopDeviceMotionUpdates()
+    }
+    
+    // flipCaptureSessionState starts a capture session if not running and stops it otherwise.
+    func flipCaptureSessionState() {
+        if !self.captureSession.isRunning {
+            self.captureSession.startRunning()
+        } else {
             self.captureSession.stopRunning()
         }
     }
@@ -109,15 +149,46 @@ class SceneViewController: UIViewController {
                 return
             }
             let res = results.first!
-            if res.confidence > 0  && self.sceneMappings[res.identifier] != nil {
-                DispatchQueue.main.async {
-                    self.sceneLabel.text = String(describing: self.sceneMappings[res.identifier]!)
-                    self.confidenceLabel.text = String(Int(res.confidence * 100))
-                }
+            if let sceneType = self.sceneMappings[res.identifier] {
+                self.currSceneType = sceneType
             }
         }
         
         self.visionRequests = [vRequest]
+    }
+    
+    // observeDevice observes the exposure duration and color temperature of current device.
+    func observeDevice() {
+        // Start observing camera device exposureDuration.
+        self.exposureObservation = observe(\.self.cameraDevice.exposureDuration, options: .new){
+            object, change in
+            guard let newVal = change.newValue else {
+                return
+            }
+            self.serialQueue.async {
+                self.currExposure = Int(1/(newVal.seconds))
+            }
+        }
+        
+        // Start observing camera device white balance gains.
+        self.tempObservation = observe(\.self.cameraDevice.deviceWhiteBalanceGains, options: .new){
+            obj, chng in
+            let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
+            self.serialQueue.async {
+                self.currTemp = Int(temp)
+            }
+        }
+        
+        // Start observing camera device white balance gains.
+        self.isoObservation = observe(\.self.cameraDevice.iso, options: .new){
+            obj, change in
+            guard let newVal = change.newValue else {
+                return
+            }
+            self.serialQueue.async {
+                self.currISO = Int(newVal)
+            }
+        }
     }
     
     // setupVideoCaptureSession sets up a capture session to capture video.
@@ -165,9 +236,26 @@ class SceneViewController: UIViewController {
         
         self.captureSession.commitConfiguration()
     }
+    
+    // startMotionUpdates starts to receive motion updates from motion manager.
+    func startMotionUpdates() {
+        self.motionManager.deviceMotionUpdateInterval = self.motionFrequency
+        self.motionManager.startDeviceMotionUpdates(using: .xMagneticNorthZVertical, to: self.motionQueue, withHandler: { (data, error) in
+            guard let validData = data else {
+                return
+            }
+            let heading = Int(validData.heading)
+            self.serialQueue.async {
+                if self.sensorMap[heading] != nil {
+                    return
+                }
+                self.sensorMap[heading] = SensorValues(iso: self.currISO, exposure: self.currExposure, temp: self.currTemp, sceneType: self.currSceneType)
+            }
+        })
+    }
 }
 
-extension SceneViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
+extension AssessLightController: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -177,6 +265,7 @@ extension SceneViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
         
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
         let handler = VNImageRequestHandler(ciImage: ciImage)
+        
         do {
             try handler.perform(self.visionRequests)
         } catch let error as NSError {

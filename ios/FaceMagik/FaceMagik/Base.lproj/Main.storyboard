@@ -198,57 +198,6 @@
             </objects>
             <point key="canvasLocation" x="-3216" y="84"/>
         </scene>
-        <!--Scene View Controller-->
-        <scene sceneID="fWx-RQ-Ytx">
-            <objects>
-                <viewController id="tzK-C5-hRg" customClass="SceneViewController" customModule="FaceMagik" customModuleProvider="target" sceneMemberID="viewController">
-                    <view key="view" contentMode="scaleToFill" id="guv-Hr-lPu">
-                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
-                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                        <subviews>
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="zpd-ah-7Y1" customClass="PreviewView" customModule="FaceMagik" customModuleProvider="target">
-                                <rect key="frame" x="20" y="94" width="374" height="600"/>
-                                <constraints>
-                                    <constraint firstAttribute="height" constant="600" id="XdW-4i-hoc"/>
-                                </constraints>
-                            </view>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Scene" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Z9g-TH-Ud7">
-                                <rect key="frame" x="20" y="734" width="60" height="78"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="22"/>
-                                <color key="textColor" systemColor="systemBlueColor"/>
-                                <nil key="highlightedColor"/>
-                            </label>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Con" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="GXw-QI-Gix">
-                                <rect key="frame" x="110" y="734" width="39.5" height="78"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="22"/>
-                                <color key="textColor" systemColor="systemBlueColor"/>
-                                <nil key="highlightedColor"/>
-                            </label>
-                        </subviews>
-                        <viewLayoutGuide key="safeArea" id="IqF-0A-jwo"/>
-                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                        <constraints>
-                            <constraint firstItem="zpd-ah-7Y1" firstAttribute="top" secondItem="IqF-0A-jwo" secondAttribute="top" constant="50" id="NS0-nR-cY2"/>
-                            <constraint firstItem="GXw-QI-Gix" firstAttribute="leading" secondItem="Z9g-TH-Ud7" secondAttribute="trailing" constant="30" id="Uq1-oP-dQd"/>
-                            <constraint firstItem="IqF-0A-jwo" firstAttribute="bottom" secondItem="GXw-QI-Gix" secondAttribute="bottom" constant="50" id="Wke-jK-4Xo"/>
-                            <constraint firstItem="Z9g-TH-Ud7" firstAttribute="top" secondItem="zpd-ah-7Y1" secondAttribute="bottom" constant="40" id="X0k-mp-FlU"/>
-                            <constraint firstItem="GXw-QI-Gix" firstAttribute="top" secondItem="zpd-ah-7Y1" secondAttribute="bottom" constant="40" id="aRc-A4-Ws7"/>
-                            <constraint firstItem="Z9g-TH-Ud7" firstAttribute="leading" secondItem="IqF-0A-jwo" secondAttribute="leading" constant="20" id="ez0-yg-htC"/>
-                            <constraint firstItem="IqF-0A-jwo" firstAttribute="trailing" secondItem="zpd-ah-7Y1" secondAttribute="trailing" constant="20" id="gdL-hl-O3w"/>
-                            <constraint firstItem="IqF-0A-jwo" firstAttribute="bottom" secondItem="Z9g-TH-Ud7" secondAttribute="bottom" constant="50" id="pZs-Ub-ffW"/>
-                            <constraint firstItem="zpd-ah-7Y1" firstAttribute="leading" secondItem="IqF-0A-jwo" secondAttribute="leading" constant="20" id="ypN-zh-HyY"/>
-                        </constraints>
-                    </view>
-                    <connections>
-                        <outlet property="confidenceLabel" destination="GXw-QI-Gix" id="uTs-g1-G2j"/>
-                        <outlet property="previewLayer" destination="zpd-ah-7Y1" id="Z6p-oo-42c"/>
-                        <outlet property="sceneLabel" destination="Z9g-TH-Ud7" id="q23-NK-iqf"/>
-                    </connections>
-                </viewController>
-                <placeholder placeholderIdentifier="IBFirstResponder" id="T59-vs-7sB" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
-            </objects>
-            <point key="canvasLocation" x="-3281.1594202898555" y="762.72321428571422"/>
-        </scene>
         <!--Instruct View Controller-->
         <scene sceneID="T2W-o6-Ptc">
             <objects>
@@ -498,9 +447,6 @@ Hold up your phone straight in portrait orientation as if you are taking a selfi
         <image name="standing-girl" width="492.5" height="494.5"/>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-        </systemColor>
-        <systemColor name="systemBlueColor">
-            <color red="0.0" green="0.47843137254901963" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
         <systemColor name="systemGray2Color">
             <color red="0.68235294117647061" green="0.68235294117647061" blue="0.69803921568627447" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
