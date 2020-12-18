@@ -40,7 +40,8 @@ class AssessLightController: UIViewController {
     // Core Motion variables.
     private let motionManager = CMMotionManager()
     private var motionQueue = OperationQueue()
-    private let motionFrequency = 1.0/30.0
+    static private let motionFrequency = 1.0/30.0
+    static private let totalHeadingVals = 300
     
     // AVCaptureSession variables.
     @objc var cameraDevice: AVCaptureDevice!
@@ -65,6 +66,8 @@ class AssessLightController: UIViewController {
             return
         }
         
+        self.instructions.text = "Rotate slowly until the progress bar completes"
+        
         let notifCenter = NotificationCenter.default
         notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -74,8 +77,7 @@ class AssessLightController: UIViewController {
             return
         }
         self.sceneMappings = mappings
-            
-        // Setup video capture session.
+
         self.setupVideoCaptureSession()
         
         self.previewLayer.videoPreviewLayer.session = self.captureSession
@@ -239,17 +241,26 @@ class AssessLightController: UIViewController {
     
     // startMotionUpdates starts to receive motion updates from motion manager.
     func startMotionUpdates() {
-        self.motionManager.deviceMotionUpdateInterval = self.motionFrequency
+        self.motionManager.deviceMotionUpdateInterval = AssessLightController.motionFrequency
         self.motionManager.startDeviceMotionUpdates(using: .xMagneticNorthZVertical, to: self.motionQueue, withHandler: { (data, error) in
             guard let validData = data else {
                 return
             }
             let heading = Int(validData.heading)
             self.serialQueue.async {
+                if self.sensorMap.keys.count >= AssessLightController.totalHeadingVals {
+                    // Completed sensor data collection.
+                    return
+                }
                 if self.sensorMap[heading] != nil {
                     return
                 }
                 self.sensorMap[heading] = SensorValues(iso: self.currISO, exposure: self.currExposure, temp: self.currTemp, sceneType: self.currSceneType)
+                
+                let kCount = self.sensorMap.keys.count
+                DispatchQueue.main.async {
+                    self.progressView.setProgress(Float(kCount)/Float(AssessLightController.totalHeadingVals), animated: true)
+                }
             }
         })
     }

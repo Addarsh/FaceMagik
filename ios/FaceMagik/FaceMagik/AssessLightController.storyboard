@@ -31,23 +31,23 @@
                                 </connections>
                             </button>
                             <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" text="Instructions" textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="oUp-fr-Vkm">
-                                <rect key="frame" x="20" y="94" width="374" height="50"/>
+                                <rect key="frame" x="20" y="74" width="374" height="80"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" constant="50" id="zDU-aZ-uC6"/>
+                                    <constraint firstAttribute="height" constant="80" id="zDU-aZ-uC6"/>
                                 </constraints>
                                 <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="22"/>
                                 <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
                             </textView>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Llt-jg-jKY" userLabel="Video View" customClass="PreviewView" customModule="FaceMagik" customModuleProvider="target">
-                                <rect key="frame" x="0.0" y="144" width="414" height="500"/>
+                                <rect key="frame" x="0.0" y="154" width="414" height="500"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="500" id="eWr-uJ-uye"/>
                                 </constraints>
                             </view>
-                            <progressView opaque="NO" contentMode="scaleToFill" verticalHuggingPriority="750" progress="0.5" translatesAutoresizingMaskIntoConstraints="NO" id="G6p-4r-rdG">
-                                <rect key="frame" x="50" y="694" width="314" height="4"/>
+                            <progressView opaque="NO" contentMode="scaleToFill" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="G6p-4r-rdG">
+                                <rect key="frame" x="50" y="704" width="314" height="4"/>
                                 <color key="progressTintColor" systemColor="systemIndigoColor"/>
                             </progressView>
                         </subviews>
@@ -64,7 +64,7 @@
                             <constraint firstItem="TwN-8w-3xQ" firstAttribute="bottom" secondItem="QVT-uf-O1Q" secondAttribute="bottom" id="TYC-Fj-ref"/>
                             <constraint firstItem="Llt-jg-jKY" firstAttribute="leading" secondItem="QVT-uf-O1Q" secondAttribute="leading" id="XSG-PU-Jyj"/>
                             <constraint firstItem="G6p-4r-rdG" firstAttribute="top" secondItem="Llt-jg-jKY" secondAttribute="bottom" constant="50" id="ajR-5X-LRp"/>
-                            <constraint firstItem="oUp-fr-Vkm" firstAttribute="top" secondItem="QVT-uf-O1Q" secondAttribute="top" constant="50" id="cHS-Ul-pBK"/>
+                            <constraint firstItem="oUp-fr-Vkm" firstAttribute="top" secondItem="QVT-uf-O1Q" secondAttribute="top" constant="30" id="cHS-Ul-pBK"/>
                             <constraint firstItem="Llt-jg-jKY" firstAttribute="top" secondItem="oUp-fr-Vkm" secondAttribute="bottom" id="dNl-Mf-AUR"/>
                         </constraints>
                     </view>
