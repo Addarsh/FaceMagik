@@ -26,7 +26,13 @@ class AssessLightController: UIViewController {
     @IBOutlet private var instructions: UITextView!
     @IBOutlet private var previewLayer: PreviewView!
     @IBOutlet private var progressView: UIProgressView!
-    @IBOutlet var sceneLabel: UILabel!
+    @IBOutlet var scenePercentLabel: UILabel!
+    @IBOutlet var tempPercentLabel: UILabel!
+    @IBOutlet var isoPercentLabel: UILabel!
+    @IBOutlet var expPercentLabel: UILabel!
+    @IBOutlet var colorLabel: UILabel!
+    @IBOutlet var isoLabel: UILabel!
+    @IBOutlet var exposureLabel: UILabel!
     
     private var exposureObservation: NSKeyValueObservation?
     private var tempObservation: NSKeyValueObservation?
@@ -38,6 +44,7 @@ class AssessLightController: UIViewController {
     private var sensorMap: [Int: SensorValues] = [:]
     private let serialQueue = DispatchQueue(label: "Serial Queue", qos: .userInteractive, attributes: [], autoreleaseFrequency: .inherit, target: nil)
     private let notifCenter = NotificationCenter.default
+    static private let indoorRatioThreshold = 0.7
     
     // Core Motion variables.
     private let motionManager = CMMotionManager()
@@ -167,6 +174,9 @@ class AssessLightController: UIViewController {
             self.serialQueue.async {
                 self.currExposure = Int(1/(newVal.seconds))
             }
+            DispatchQueue.main.async {
+                self.exposureLabel.text = "E:" + String(Int(1/(newVal.seconds)))
+            }
         }
         
         // Start observing camera device white balance gains.
@@ -175,6 +185,9 @@ class AssessLightController: UIViewController {
             let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
             self.serialQueue.async {
                 self.currTemp = Int(temp)
+            }
+            DispatchQueue.main.async {
+                self.colorLabel.text = String(Int(temp))
             }
         }
         
@@ -186,6 +199,9 @@ class AssessLightController: UIViewController {
             }
             self.serialQueue.async {
                 self.currISO = Int(newVal)
+            }
+            DispatchQueue.main.async {
+                self.isoLabel.text = String(Int(newVal))
             }
         }
     }
@@ -269,15 +285,30 @@ class AssessLightController: UIViewController {
     func validateEnv() {
         // Check indoor/outdoor label ratio.
         var numIndoors = 0
+        var numVisibleColorTemp = 0
+        var numGoodISO = 0
+        var numGoodExposure = 0
         for (_, readouts) in self.sensorMap {
             if readouts.sceneType == .Indoors {
                 numIndoors += 1
             }
+            if readouts.temp >= 4000 {
+                numVisibleColorTemp += 1
+            }
+            if readouts.iso < 400 {
+                numGoodISO += 1
+            }
+            if readouts.exposure <= 50 {
+                numGoodExposure += 1
+            }
         }
+
         DispatchQueue.main.async {
-            self.sceneLabel.text = String(Int((Float(numIndoors)/Float(self.sensorMap.keys.count))*100.0))
+            self.scenePercentLabel.text = String(Int((Float(numIndoors)/Float(self.sensorMap.keys.count))*100.0)) + "%"
+            self.tempPercentLabel.text = String(Int((Float(numVisibleColorTemp)/Float(self.sensorMap.keys.count))*100.0)) + "%"
+            self.isoPercentLabel.text = String(Int((Float(numGoodISO)/Float(self.sensorMap.keys.count))*100.0)) + "%"
+            self.expPercentLabel.text =  String(Int((Float(numGoodExposure)/Float(self.sensorMap.keys.count))*100.0)) + "%"
         }
-        
     }
 }
 
