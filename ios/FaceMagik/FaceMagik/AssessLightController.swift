@@ -44,13 +44,16 @@ class AssessLightController: UIViewController {
     private var sensorMap: [Int: SensorValues] = [:]
     private let serialQueue = DispatchQueue(label: "Serial Queue", qos: .userInteractive, attributes: [], autoreleaseFrequency: .inherit, target: nil)
     private let notifCenter = NotificationCenter.default
-    static private let indoorRatioThreshold = 0.7
+    static private let indoorPercentThreshold = 70
+    static private let expPercentThreshold = 60
+    static private let isoPerentThreshold = 70
+    static private let colorTempThreshold = 70
     
     // Core Motion variables.
     private let motionManager = CMMotionManager()
     private var motionQueue = OperationQueue()
     static private let motionFrequency = 1.0/30.0
-    static private let totalHeadingVals = 250
+    static private let totalHeadingVals = 320
     
     // AVCaptureSession variables.
     @objc var cameraDevice: AVCaptureDevice!
@@ -282,6 +285,7 @@ class AssessLightController: UIViewController {
     }
     
     // validateEnv validates if environment is suitable for pictures using existing sensor values.
+    // Returns true/false values for if env is indoors, in daylight and well lit respectively.
     func validateEnv() {
         // Check indoor/outdoor label ratio.
         var numIndoors = 0
@@ -302,14 +306,35 @@ class AssessLightController: UIViewController {
                 numGoodExposure += 1
             }
         }
-
+        
+        let indoorPercent = Int((Float(numIndoors)/Float(self.sensorMap.keys.count))*100.0)
+        let colorTempPercent = Int((Float(numVisibleColorTemp)/Float(self.sensorMap.keys.count))*100.0)
+        let isoPercent = Int((Float(numGoodISO)/Float(self.sensorMap.keys.count))*100.0)
+        let expPercent = Int((Float(numGoodExposure)/Float(self.sensorMap.keys.count))*100.0)
+        
         DispatchQueue.main.async {
-            self.scenePercentLabel.text = String(Int((Float(numIndoors)/Float(self.sensorMap.keys.count))*100.0)) + "%"
-            self.tempPercentLabel.text = String(Int((Float(numVisibleColorTemp)/Float(self.sensorMap.keys.count))*100.0)) + "%"
-            self.isoPercentLabel.text = String(Int((Float(numGoodISO)/Float(self.sensorMap.keys.count))*100.0)) + "%"
-            self.expPercentLabel.text =  String(Int((Float(numGoodExposure)/Float(self.sensorMap.keys.count))*100.0)) + "%"
+            self.scenePercentLabel.text = String(indoorPercent) + "%"
+            self.tempPercentLabel.text = String(colorTempPercent) + "%"
+            self.isoPercentLabel.text = String(isoPercent) + "%"
+            self.expPercentLabel.text =  String(expPercent) + "%"
+            self.goToNextController(isIndoors: indoorPercent >= AssessLightController.indoorPercentThreshold ? true : false, isDayLight: colorTempPercent >= AssessLightController.colorTempThreshold ? true : false, isGoodISO: isoPercent >= AssessLightController.isoPerentThreshold ? true : false, isGoodExposure: expPercent >= AssessLightController.expPercentThreshold ? true : false)
         }
+        
     }
+    
+    // goToNextController goes to next view controller.
+    private func goToNextController(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {
+        guard let vc = LightingResultsController.storyboardInstance() else {
+            return
+        }
+        vc.isIndoors = isIndoors
+        vc.isDayLight = isDayLight
+        vc.isGoodISO = isGoodISO
+        vc.isGoodExposure = isGoodExposure
+        vc.modalPresentationStyle = .fullScreen
+        self.present(vc, animated: true)
+    }
+    
 }
 
 extension AssessLightController: AVCaptureVideoDataOutputSampleBufferDelegate {
