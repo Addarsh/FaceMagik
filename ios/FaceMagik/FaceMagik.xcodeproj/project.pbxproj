@@ -9,8 +9,6 @@
 /* Begin PBXBuildFile section */
 		9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */; };
 		9816BAB4256EEF7700FF90C6 /* LightingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */; };
-		9816BAC12570BE0400FF90C6 /* InstructViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAC02570BE0400FF90C6 /* InstructViewController.swift */; };
-		9816BAC62572D46600FF90C6 /* PortraitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAC52572D46600FF90C6 /* PortraitViewController.swift */; };
 		984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984B11C2256218B1005809C3 /* ThresholdKernel.swift */; };
 		985121242575EDB300F11004 /* CircularProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985121232575EDB300F11004 /* CircularProgressView.swift */; };
 		9851212925789E7100F11004 /* AlertViewController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9851212825789E7100F11004 /* AlertViewController.storyboard */; };
@@ -66,8 +64,6 @@
 /* Begin PBXFileReference section */
 		9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PassThrough.metal; sourceTree = "<group>"; };
 		9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightingViewController.swift; sourceTree = "<group>"; };
-		9816BAC02570BE0400FF90C6 /* InstructViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructViewController.swift; sourceTree = "<group>"; };
-		9816BAC52572D46600FF90C6 /* PortraitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortraitViewController.swift; sourceTree = "<group>"; };
 		984B11C2256218B1005809C3 /* ThresholdKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdKernel.swift; sourceTree = "<group>"; };
 		985121232575EDB300F11004 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
 		9851212825789E7100F11004 /* AlertViewController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = AlertViewController.storyboard; sourceTree = "<group>"; };
@@ -186,14 +182,12 @@
 				9851213D257AA0CA00F11004 /* OverviewController.swift */,
 				9851212825789E7100F11004 /* AlertViewController.storyboard */,
 				985121352578B1A400F11004 /* AlertViewController.swift */,
-				9816BAC52572D46600FF90C6 /* PortraitViewController.swift */,
 				98512153257E96FA00F11004 /* AssessLightController.swift */,
 				989F45C2258F1758005B1D4B /* LightingResultsController.swift */,
 				989F45C7258F1780005B1D4B /* LightingResultsController.storyboard */,
 				98512161258130C800F11004 /* SceneMapping.json */,
 				98512158257F25CC00F11004 /* GoogLeNetPlaces.mlmodel */,
 				985121232575EDB300F11004 /* CircularProgressView.swift */,
-				9816BAC02570BE0400FF90C6 /* InstructViewController.swift */,
 				9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */,
 				98B171062543360700D464BF /* ImageViewController.swift */,
 				9851D377253A46200009D709 /* Assets.xcassets */,
@@ -378,10 +372,8 @@
 				98512159257F25CC00F11004 /* GoogLeNetPlaces.mlmodel in Sources */,
 				9851D373253A461C0009D709 /* ViewController.swift in Sources */,
 				98512154257E96FA00F11004 /* AssessLightController.swift in Sources */,
-				9816BAC62572D46600FF90C6 /* PortraitViewController.swift in Sources */,
 				9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */,
 				989F45C3258F1758005B1D4B /* LightingResultsController.swift in Sources */,
-				9816BAC12570BE0400FF90C6 /* InstructViewController.swift in Sources */,
 				985F8B72256C80F800EAA558 /* PreviewMetalView.swift in Sources */,
 				989F459D258BCAF9005B1D4B /* RotateInstructionsController.swift in Sources */,
 				986921EA253CD9E700C98065 /* PreviewView.swift in Sources */,
