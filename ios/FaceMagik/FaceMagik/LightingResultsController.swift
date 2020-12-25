@@ -23,15 +23,16 @@ class LightingResultsController: UIViewController {
     private static let brightLightErrorMsg: String = "There is too much light in your surroundings. For best results, please move away a few steps from the strongest direction of light and try again."
     private static let resultsErrorMsg: String = "Lighting conditions are not appropriate."
     private static let resultsGoodMsg: String = "Lighting conditions are good!"
-    private static let unwindSegueIdentifier: String = "startLightingTest"
+    private static let unwindSegueIdentifier: String = "StandupController"
     private static let continueButtonTitle = "Continue"
     private static let tryAgainTitle = "Try Again"
+    private static let greenCheckBoxImage: String = "green-checkmark.png"
     
     public var isIndoors: Bool = false
     public var isDayLight: Bool = false
     public var isGoodISO: Bool = false
     public var isGoodExposure: Bool = false
-    private static let greenCheckBoxImage: String = "green-checkmark.png"
+    private var isGoodLighting: Bool = false
     
     static func storyboardInstance() -> LightingResultsController? {
         let className = String(describing: LightingResultsController.self)
@@ -61,14 +62,24 @@ class LightingResultsController: UIViewController {
         if self.isIndoors && self.isDayLight && self.isGoodISO && self.isGoodExposure {
             self.titleMsg.text = LightingResultsController.resultsGoodMsg
             self.button.setTitle(LightingResultsController.continueButtonTitle, for: .normal)
+            self.isGoodLighting = true
         } else {
             self.titleMsg.text = LightingResultsController.resultsErrorMsg
             self.button.setTitle(LightingResultsController.tryAgainTitle, for: .normal)
+            self.isGoodLighting = false
         }
     }
     
-    // tryAgain allows user to go to the start of light conditions testing.
-    @IBAction func tryAgain() {
-        self.performSegue(withIdentifier: LightingResultsController.unwindSegueIdentifier, sender: self)
+    // next allows user to go to next view controller depending on lighting conditions.
+    @IBAction func next() {
+        if testMode || self.isGoodLighting {
+            guard let vc = RemindPhoneOrientationController.storyboardInstance() else {
+                return
+            }
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
+        } else {
+            self.performSegue(withIdentifier: LightingResultsController.unwindSegueIdentifier, sender: self)
+        }
     }
 }

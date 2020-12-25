@@ -27,7 +27,7 @@
                                     <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 </state>
                                 <connections>
-                                    <action selector="tryAgain" destination="7h3-J2-6q9" eventType="touchDown" id="pnB-zc-8Pp"/>
+                                    <action selector="next" destination="7h3-J2-6q9" eventType="touchDown" id="0qy-2T-pwC"/>
                                 </connections>
                             </button>
                             <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" text="Lighting conditions are not appropriate." textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="0Wy-dg-T6L" userLabel="Title Text View">
@@ -159,7 +159,7 @@
                         <outlet property="titleMsg" destination="0Wy-dg-T6L" id="NJv-I7-MXj"/>
                         <outlet property="wellLitErrorView" destination="RKX-Xr-HUb" id="m2D-wx-dgy"/>
                         <outlet property="wellLitImage" destination="Z76-N9-ddT" id="brH-ht-sst"/>
-                        <segue destination="d56-Zb-fsu" kind="unwind" identifier="startLightingTest" unwindAction="unwindToStandupControllerWithSegue:" id="NIf-Qh-fgP"/>
+                        <segue destination="d56-Zb-fsu" kind="unwind" identifier="StandupController" unwindAction="unwindToStandupControllerWithSegue:" id="NIf-Qh-fgP"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="12Y-OB-ptx" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>

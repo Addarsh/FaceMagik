@@ -7,6 +7,9 @@
 
 import UIKit
 
+// Set to true during debug mode/testing.
+let testMode: Bool = true
+
 class OverviewController: UIViewController {
     private let pageControl = UIPageControl()
     private let scrollView = UIScrollView()
@@ -70,7 +73,13 @@ class OverviewController: UIViewController {
     
     // getStarted starts user journey in the app.
     @IBAction func getStarted() {
-        DispatchQueue.main.async {
+        if testMode {
+            guard let vc = AssessLightController.storyboardInstance() else {
+                return
+            }
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
+        } else {
             guard let vc = LightConditionsController.storyboardInstance() else {
                 return
             }
@@ -78,6 +87,8 @@ class OverviewController: UIViewController {
             self.present(vc, animated: true)
         }
     }
+    
+    @IBAction func unwindToRootViewController(segue: UIStoryboardSegue) {}
 }
 
 extension OverviewController: UIScrollViewDelegate {

@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="a1B-8W-OJj">
+    <device id="retina6_1" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17505"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--Remind Phone Orientation Controller-->
+        <scene sceneID="gQy-br-MAW">
+            <objects>
+                <viewController id="a1B-8W-OJj" customClass="RemindPhoneOrientationController" customModule="FaceMagik" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="a6d-Ft-rAa">
+                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="48" translatesAutoresizingMaskIntoConstraints="NO" id="z6m-wA-Egc" userLabel="Button Stack View">
+                                <rect key="frame" x="20" y="812" width="374" height="50"/>
+                                <subviews>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="MDo-LE-UWb">
+                                        <rect key="frame" x="0.0" y="0.0" width="163" height="50"/>
+                                        <color key="backgroundColor" systemColor="systemRedColor"/>
+                                        <fontDescription key="fontDescription" name=".AppleSystemUIFont" family=".AppleSystemUIFont" pointSize="18"/>
+                                        <state key="normal" title="Cancel">
+                                            <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        </state>
+                                        <userDefinedRuntimeAttributes>
+                                            <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                                <integer key="value" value="10"/>
+                                            </userDefinedRuntimeAttribute>
+                                        </userDefinedRuntimeAttributes>
+                                        <connections>
+                                            <action selector="cancel" destination="a1B-8W-OJj" eventType="touchDown" id="tGO-7X-VJU"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Cta-tN-ACf">
+                                        <rect key="frame" x="211" y="0.0" width="163" height="50"/>
+                                        <color key="backgroundColor" systemColor="systemIndigoColor"/>
+                                        <fontDescription key="fontDescription" type="system" pointSize="18"/>
+                                        <state key="normal" title="Done">
+                                            <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        </state>
+                                        <userDefinedRuntimeAttributes>
+                                            <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                                <integer key="value" value="10"/>
+                                            </userDefinedRuntimeAttribute>
+                                        </userDefinedRuntimeAttributes>
+                                        <connections>
+                                            <action selector="done" destination="a1B-8W-OJj" eventType="touchDown" id="DHo-ya-LdN"/>
+                                        </connections>
+                                    </button>
+                                </subviews>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="50" id="xCb-HE-T9a"/>
+                                </constraints>
+                            </stackView>
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" text="Continue holding your phone vertically as if you are taking a selfie." textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="PEP-6o-LOA">
+                                <rect key="frame" x="20" y="124" width="374" height="100"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="100" id="6h2-T8-xuu"/>
+                                </constraints>
+                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="26"/>
+                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
+                            </textView>
+                            <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" translatesAutoresizingMaskIntoConstraints="NO" id="KzM-r4-w3d" userLabel="Human Stack View">
+                                <rect key="frame" x="20" y="244" width="374" height="200"/>
+                                <subviews>
+                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="no-bending" translatesAutoresizingMaskIntoConstraints="NO" id="HKV-wB-3vO">
+                                        <rect key="frame" x="0.0" y="0.0" width="187" height="200"/>
+                                    </imageView>
+                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="upright" translatesAutoresizingMaskIntoConstraints="NO" id="njM-Cm-ukz">
+                                        <rect key="frame" x="187" y="0.0" width="187" height="200"/>
+                                    </imageView>
+                                </subviews>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="200" id="q3o-y2-X6G"/>
+                                </constraints>
+                            </stackView>
+                            <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="uxe-39-kDg" userLabel="Phone Stack View">
+                                <rect key="frame" x="20" y="514" width="374" height="200"/>
+                                <subviews>
+                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="no-horizontal-selfie" translatesAutoresizingMaskIntoConstraints="NO" id="4uJ-Ul-5VN">
+                                        <rect key="frame" x="0.0" y="0.0" width="187" height="200"/>
+                                    </imageView>
+                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="vertical-selfie" translatesAutoresizingMaskIntoConstraints="NO" id="U2r-Y4-Dci">
+                                        <rect key="frame" x="187" y="0.0" width="187" height="200"/>
+                                    </imageView>
+                                </subviews>
+                                <constraints>
+                                    <constraint firstItem="4uJ-Ul-5VN" firstAttribute="width" secondItem="uxe-39-kDg" secondAttribute="width" multiplier="0.5" id="0t6-0F-ooZ"/>
+                                    <constraint firstAttribute="height" constant="200" id="zvY-bL-sk8"/>
+                                </constraints>
+                            </stackView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="zwb-0n-Bdv"/>
+                        <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <constraints>
+                            <constraint firstItem="KzM-r4-w3d" firstAttribute="leading" secondItem="zwb-0n-Bdv" secondAttribute="leading" constant="20" id="3Wh-Ld-fuW"/>
+                            <constraint firstItem="PEP-6o-LOA" firstAttribute="top" secondItem="zwb-0n-Bdv" secondAttribute="top" constant="80" id="JhQ-T5-DfH"/>
+                            <constraint firstItem="zwb-0n-Bdv" firstAttribute="trailing" secondItem="z6m-wA-Egc" secondAttribute="trailing" constant="20" id="KD6-GM-QL1"/>
+                            <constraint firstItem="zwb-0n-Bdv" firstAttribute="bottom" secondItem="z6m-wA-Egc" secondAttribute="bottom" id="Lj6-4c-490"/>
+                            <constraint firstItem="zwb-0n-Bdv" firstAttribute="trailing" secondItem="PEP-6o-LOA" secondAttribute="trailing" constant="20" id="Ord-GU-boj"/>
+                            <constraint firstItem="uxe-39-kDg" firstAttribute="leading" secondItem="zwb-0n-Bdv" secondAttribute="leading" constant="20" id="PNI-ck-Bxt"/>
+                            <constraint firstItem="zwb-0n-Bdv" firstAttribute="trailing" secondItem="uxe-39-kDg" secondAttribute="trailing" constant="20" id="fuq-UW-tax"/>
+                            <constraint firstItem="uxe-39-kDg" firstAttribute="top" secondItem="KzM-r4-w3d" secondAttribute="bottom" constant="70" id="og0-u5-bzF"/>
+                            <constraint firstItem="PEP-6o-LOA" firstAttribute="leading" secondItem="zwb-0n-Bdv" secondAttribute="leading" constant="20" id="q0D-Gw-FJ1"/>
+                            <constraint firstItem="zwb-0n-Bdv" firstAttribute="trailing" secondItem="KzM-r4-w3d" secondAttribute="trailing" constant="20" id="r4i-9j-MLb"/>
+                            <constraint firstItem="z6m-wA-Egc" firstAttribute="leading" secondItem="zwb-0n-Bdv" secondAttribute="leading" constant="20" id="wxB-wZ-K7Y"/>
+                            <constraint firstItem="KzM-r4-w3d" firstAttribute="top" secondItem="PEP-6o-LOA" secondAttribute="bottom" constant="20" id="xIR-8l-kxx"/>
+                        </constraints>
+                    </view>
+                    <connections>
+                        <segue destination="C64-Hx-iWf" kind="unwind" identifier="OverviewController" unwindAction="unwindToRootViewControllerWithSegue:" id="aKL-DL-xwF"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="ecx-AK-bMp" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+                <exit id="C64-Hx-iWf" userLabel="Exit" sceneMemberID="exit"/>
+            </objects>
+            <point key="canvasLocation" x="61" y="194"/>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="no-bending" width="199" height="203"/>
+        <image name="no-horizontal-selfie" width="250" height="210"/>
+        <image name="upright" width="200" height="286"/>
+        <image name="vertical-selfie" width="200" height="213"/>
+        <systemColor name="systemIndigoColor">
+            <color red="0.34509803921568627" green="0.33725490196078434" blue="0.83921568627450982" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="systemRedColor">
+            <color red="1" green="0.23137254901960785" blue="0.18823529411764706" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+    </resources>
+</document>

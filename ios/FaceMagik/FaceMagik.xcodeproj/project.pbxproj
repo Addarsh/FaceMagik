@@ -10,6 +10,8 @@
 		9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */; };
 		9816BAB4256EEF7700FF90C6 /* LightingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */; };
 		984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984B11C2256218B1005809C3 /* ThresholdKernel.swift */; };
+		985108B125966C700037E455 /* AssessFaceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985108B025966C700037E455 /* AssessFaceController.swift */; };
+		985108B625966C860037E455 /* AssessFaceController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 985108B525966C860037E455 /* AssessFaceController.storyboard */; };
 		985121242575EDB300F11004 /* CircularProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985121232575EDB300F11004 /* CircularProgressView.swift */; };
 		9851212925789E7100F11004 /* AlertViewController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9851212825789E7100F11004 /* AlertViewController.storyboard */; };
 		985121362578B1A400F11004 /* AlertViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985121352578B1A400F11004 /* AlertViewController.swift */; };
@@ -41,6 +43,8 @@
 		989F45B8258C0C5C005B1D4B /* AssessLightController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 989F45B7258C0C5C005B1D4B /* AssessLightController.storyboard */; };
 		989F45C3258F1758005B1D4B /* LightingResultsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 989F45C2258F1758005B1D4B /* LightingResultsController.swift */; };
 		989F45C8258F1780005B1D4B /* LightingResultsController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 989F45C7258F1780005B1D4B /* LightingResultsController.storyboard */; };
+		989F45D9259260C3005B1D4B /* RemindPhoneOrientationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 989F45D8259260C3005B1D4B /* RemindPhoneOrientationController.swift */; };
+		989F45DE259260DE005B1D4B /* RemindPhoneOrientationController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 989F45DD259260DE005B1D4B /* RemindPhoneOrientationController.storyboard */; };
 		98B171072543360700D464BF /* ImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B171062543360700D464BF /* ImageViewController.swift */; };
 /* End PBXBuildFile section */
 
@@ -65,6 +69,8 @@
 		9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PassThrough.metal; sourceTree = "<group>"; };
 		9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightingViewController.swift; sourceTree = "<group>"; };
 		984B11C2256218B1005809C3 /* ThresholdKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdKernel.swift; sourceTree = "<group>"; };
+		985108B025966C700037E455 /* AssessFaceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssessFaceController.swift; sourceTree = "<group>"; };
+		985108B525966C860037E455 /* AssessFaceController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = AssessFaceController.storyboard; sourceTree = "<group>"; };
 		985121232575EDB300F11004 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
 		9851212825789E7100F11004 /* AlertViewController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = AlertViewController.storyboard; sourceTree = "<group>"; };
 		985121352578B1A400F11004 /* AlertViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertViewController.swift; sourceTree = "<group>"; };
@@ -101,6 +107,8 @@
 		989F45B7258C0C5C005B1D4B /* AssessLightController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = AssessLightController.storyboard; sourceTree = "<group>"; };
 		989F45C2258F1758005B1D4B /* LightingResultsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightingResultsController.swift; sourceTree = "<group>"; };
 		989F45C7258F1780005B1D4B /* LightingResultsController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LightingResultsController.storyboard; sourceTree = "<group>"; };
+		989F45D8259260C3005B1D4B /* RemindPhoneOrientationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindPhoneOrientationController.swift; sourceTree = "<group>"; };
+		989F45DD259260DE005B1D4B /* RemindPhoneOrientationController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = RemindPhoneOrientationController.storyboard; sourceTree = "<group>"; };
 		98B171062543360700D464BF /* ImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -165,6 +173,8 @@
 				9851D36E253A461C0009D709 /* AppDelegate.swift */,
 				9851D370253A461C0009D709 /* SceneDelegate.swift */,
 				9851D372253A461C0009D709 /* ViewController.swift */,
+				989F45D8259260C3005B1D4B /* RemindPhoneOrientationController.swift */,
+				989F45DD259260DE005B1D4B /* RemindPhoneOrientationController.storyboard */,
 				985F8B71256C80F800EAA558 /* PreviewMetalView.swift */,
 				98984AD9254C52D9009E7AC7 /* PhotoProcessor.swift */,
 				984B11C2256218B1005809C3 /* ThresholdKernel.swift */,
@@ -178,6 +188,8 @@
 				989F459C258BCAF9005B1D4B /* RotateInstructionsController.swift */,
 				989F45A1258BCB14005B1D4B /* RotateInstructionsController.storyboard */,
 				989F45B7258C0C5C005B1D4B /* AssessLightController.storyboard */,
+				985108B025966C700037E455 /* AssessFaceController.swift */,
+				985108B525966C860037E455 /* AssessFaceController.storyboard */,
 				986471B72586A1A00080F976 /* LightConditionsController.swift */,
 				9851213D257AA0CA00F11004 /* OverviewController.swift */,
 				9851212825789E7100F11004 /* AlertViewController.storyboard */,
@@ -335,6 +347,7 @@
 			files = (
 				9851D37B253A46200009D709 /* LaunchScreen.storyboard in Resources */,
 				9851D378253A46200009D709 /* Assets.xcassets in Resources */,
+				989F45DE259260DE005B1D4B /* RemindPhoneOrientationController.storyboard in Resources */,
 				9851212925789E7100F11004 /* AlertViewController.storyboard in Resources */,
 				986471B32586A1690080F976 /* LightConditionsController.storyboard in Resources */,
 				989F45C8258F1780005B1D4B /* LightingResultsController.storyboard in Resources */,
@@ -345,6 +358,7 @@
 				989F4598258A71CF005B1D4B /* PhoneOrientationController.storyboard in Resources */,
 				9851D376253A461C0009D709 /* Main.storyboard in Resources */,
 				989F45B8258C0C5C005B1D4B /* AssessLightController.storyboard in Resources */,
+				985108B625966C860037E455 /* AssessFaceController.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,9 +383,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				989F45D9259260C3005B1D4B /* RemindPhoneOrientationController.swift in Sources */,
 				98512159257F25CC00F11004 /* GoogLeNetPlaces.mlmodel in Sources */,
 				9851D373253A461C0009D709 /* ViewController.swift in Sources */,
 				98512154257E96FA00F11004 /* AssessLightController.swift in Sources */,
+				985108B125966C700037E455 /* AssessFaceController.swift in Sources */,
 				9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */,
 				989F45C3258F1758005B1D4B /* LightingResultsController.swift in Sources */,
 				985F8B72256C80F800EAA558 /* PreviewMetalView.swift in Sources */,

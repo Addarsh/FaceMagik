@@ -33,7 +33,5 @@ class StandupController: UIViewController {
         self.present(vc, animated: true)
     }
     
-    @IBAction func unwindToStandupController(segue: UIStoryboardSegue) {
-        
-    }
+    @IBAction func unwindToStandupController(segue: UIStoryboardSegue) {}
 }
