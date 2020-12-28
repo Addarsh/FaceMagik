@@ -49,6 +49,25 @@ class ImageUtils:
     return gray, lab, img, hsv
 
   """
+  ResizeWithAspectRatio resizes given image maintaining aspect ratio.
+  """
+  @staticmethod
+  def ResizeWithAspectRatio(image, width=None, height=None, inter=cv2.INTER_AREA):
+    dim = None
+    (h, w) = image.shape[:2]
+
+    if width is None and height is None:
+        return image
+    if width is None:
+        r = height / float(h)
+        dim = (int(w * r), height)
+    else:
+        r = width / float(w)
+        dim = (width, int(h * r))
+
+    return cv2.resize(image, dim, interpolation=inter)
+
+  """
   Performs histogram equalization to adjust contrast in gray image.
   """
   @staticmethod
@@ -102,8 +121,9 @@ class ImageUtils:
   """
   Plots a histogram of the given image for given mask.
   """
-  def plot_histogram(img, mask, block=True, bins=40):
-    plt.hist(img[mask][:, 0], bins=bins, density=True)
+  def plot_histogram(img, mask, channel=0, block=True, bins=40, fig_num=1):
+    plt.figure(fig_num)
+    plt.hist(img[mask][:, channel], bins=bins, density=True, histtype="step")
     plt.xlim([0,256])
     plt.show(block=block)
 
@@ -1365,7 +1385,7 @@ if __name__ == "__main__":
   #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
   #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
-  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#D4AC90"), ImageUtils.HEX2RGB("#E1B8A0")))
+  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#bc8a6d"), ImageUtils.HEX2RGB("#ab7e62")))
   #print ("munsell: ", ImageUtils.sRGBtoMunsell(np.array([246, 191, 153])))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))
   #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#ae8269"), ImageUtils.HEX2RGB("#bc8d78")))

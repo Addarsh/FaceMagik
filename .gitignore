@@ -10,3 +10,4 @@ __pycache__/
 # Server data #
 ###################
 server/data/
+server/video/

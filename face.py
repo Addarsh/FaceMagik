@@ -149,9 +149,9 @@ class Face:
   show is an internal helper function to display given RGB image.
   """
   def show(self, image):
-    cv2.namedWindow(self.windowName, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(self.windowName, self.windowSize, self.windowSize)
-    cv2.imshow(self.windowName, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    #cv2.namedWindow(self.windowName, cv2.WINDOW_NORMAL)
+    #cv2.resizeWindow(self.windowName, (100, 100))
+    cv2.imshow(self.windowName, cv2.cvtColor(ImageUtils.ResizeWithAspectRatio(image, width=600), cv2.COLOR_RGB2BGR))
     return cv2.waitKey(0) & 0xFF
 
   """
@@ -642,6 +642,19 @@ class Face:
     return keypoints
 
   """
+  get_face_until_nose_end returns keypoints of the face until (and including) the nose end.
+  The idea is to not include points below the nose in case there is a beard.
+  """
+  def get_face_until_nose_end(self):
+    faceMask = self.get_face_mask()
+
+    noseMasks = self.get_attr_masks(NOSE)
+    assert len(noseMasks) == 1, "Want 1 mask for nose!"
+    noseRowMin, _, _, noseHeight = self.bbox(noseMasks[0])
+    faceMask[noseRowMin + noseHeight:, :] = False
+    return faceMask
+
+  """
   ratio get_ratio_range returns the range of ratio values on the face
   keypoints. It gives a sense of how bright/how dark an image is.
   """
@@ -696,8 +709,8 @@ class Face:
     col_min = max(np.nonzero(face_mask[row_min, :])[0][0], np.nonzero(face_mask[row_max, :])[0][0])
     col_max = min(nose_col_min, left_eye_col_min+left_eye_width)
     height = row_max - row_min + 1
-    row_min = row_min + int(height/4)
-    row_max = row_max - int(height/4)
+    row_min = row_min + int(height/2)
+    #row_max = row_max - int(height/4)
 
     keypoints = self.faceMask.copy()
     keypoints[:, col_max:] = False
@@ -726,8 +739,8 @@ class Face:
     col_min = max(nose_col_min + nose_width, right_eye_col_min)
     col_max = min(np.nonzero(face_mask[row_min, :])[0][-1], np.nonzero(face_mask[row_max, :])[0][-1])
     height = row_max - row_min + 1
-    row_min = row_min + int(height/4)
-    row_max = row_max - int(height/4)
+    row_min = row_min + int(height/2)
+    #row_max = row_max - int(height/5)
 
     keypoints = self.faceMask.copy()
     keypoints[:, :col_min] = False
