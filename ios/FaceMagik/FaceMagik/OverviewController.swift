@@ -74,10 +74,11 @@ class OverviewController: UIViewController {
     // getStarted starts user journey in the app.
     @IBAction func getStarted() {
         if testMode {
-            guard let vc = AssessLightController.storyboardInstance() else {
+            guard let vc = AssessFaceController.storyboardInstance() else {
                 return
             }
             vc.modalPresentationStyle = .fullScreen
+            vc.facePropertiesDelegate = FaceProperties()
             self.present(vc, animated: true)
         } else {
             guard let vc = LightConditionsController.storyboardInstance() else {

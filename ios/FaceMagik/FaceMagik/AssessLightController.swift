@@ -42,7 +42,7 @@ class AssessLightController: UIViewController {
     private var currExposure: Int = 0
     private var currSceneType: SceneType = .Indoors
     private var sensorMap: [Int: SensorValues] = [:]
-    private let serialQueue = DispatchQueue(label: "Serial Queue", qos: .userInteractive, attributes: [], autoreleaseFrequency: .inherit, target: nil)
+    private let serialQueue = DispatchQueue(label: "Serial Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
     private let notifCenter = NotificationCenter.default
     static private let indoorPercentThreshold = 70
     static private let expPercentThreshold = 60

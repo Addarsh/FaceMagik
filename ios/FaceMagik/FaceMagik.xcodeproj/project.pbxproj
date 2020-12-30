@@ -12,6 +12,7 @@
 		984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984B11C2256218B1005809C3 /* ThresholdKernel.swift */; };
 		985108B125966C700037E455 /* AssessFaceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985108B025966C700037E455 /* AssessFaceController.swift */; };
 		985108B625966C860037E455 /* AssessFaceController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 985108B525966C860037E455 /* AssessFaceController.storyboard */; };
+		985108C8259CE6470037E455 /* FaceProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985108BA259A4B8D0037E455 /* FaceProperties.swift */; };
 		985121242575EDB300F11004 /* CircularProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985121232575EDB300F11004 /* CircularProgressView.swift */; };
 		9851212925789E7100F11004 /* AlertViewController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9851212825789E7100F11004 /* AlertViewController.storyboard */; };
 		985121362578B1A400F11004 /* AlertViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985121352578B1A400F11004 /* AlertViewController.swift */; };
@@ -71,6 +72,7 @@
 		984B11C2256218B1005809C3 /* ThresholdKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdKernel.swift; sourceTree = "<group>"; };
 		985108B025966C700037E455 /* AssessFaceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssessFaceController.swift; sourceTree = "<group>"; };
 		985108B525966C860037E455 /* AssessFaceController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = AssessFaceController.storyboard; sourceTree = "<group>"; };
+		985108BA259A4B8D0037E455 /* FaceProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceProperties.swift; sourceTree = "<group>"; };
 		985121232575EDB300F11004 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
 		9851212825789E7100F11004 /* AlertViewController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = AlertViewController.storyboard; sourceTree = "<group>"; };
 		985121352578B1A400F11004 /* AlertViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertViewController.swift; sourceTree = "<group>"; };
@@ -189,6 +191,7 @@
 				989F45A1258BCB14005B1D4B /* RotateInstructionsController.storyboard */,
 				989F45B7258C0C5C005B1D4B /* AssessLightController.storyboard */,
 				985108B025966C700037E455 /* AssessFaceController.swift */,
+				985108BA259A4B8D0037E455 /* FaceProperties.swift */,
 				985108B525966C860037E455 /* AssessFaceController.storyboard */,
 				986471B72586A1A00080F976 /* LightConditionsController.swift */,
 				9851213D257AA0CA00F11004 /* OverviewController.swift */,
@@ -390,6 +393,7 @@
 				985108B125966C700037E455 /* AssessFaceController.swift in Sources */,
 				9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */,
 				989F45C3258F1758005B1D4B /* LightingResultsController.swift in Sources */,
+				985108C8259CE6470037E455 /* FaceProperties.swift in Sources */,
 				985F8B72256C80F800EAA558 /* PreviewMetalView.swift in Sources */,
 				989F459D258BCAF9005B1D4B /* RotateInstructionsController.swift in Sources */,
 				986921EA253CD9E700C98065 /* PreviewView.swift in Sources */,
