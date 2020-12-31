@@ -102,6 +102,11 @@ class FaceProperties: FaceProcessorDelegate {
         return self.numFacesFound
     }
     
+    // getFaceCenterDepth returns the depth of center of face.
+    func getFaceCenterDepth() -> Float? {
+        return self.depthOfFaceCenter
+    }
+    
     // createFaceBoundsMask creates a CIImage mask with given face bounds rect.
     private func createFaceBoundsMask(_ normRect: CGRect) -> CIImage? {
         guard let width = self.image?.extent.width else {

@@ -64,6 +64,12 @@
                                 <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <nil key="highlightedColor"/>
                             </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="eUi-jK-ECb">
+                                <rect key="frame" x="164" y="704" width="42" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="OBd-ui-Vph"/>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
@@ -74,10 +80,12 @@
                             <constraint firstItem="aAF-WD-cgR" firstAttribute="leading" secondItem="cJc-jb-57N" secondAttribute="trailing" constant="30" id="KWo-6p-vOu"/>
                             <constraint firstItem="7bc-mQ-YsQ" firstAttribute="top" secondItem="b5z-Em-8ib" secondAttribute="bottom" id="Vtw-SH-IXj"/>
                             <constraint firstItem="cJc-jb-57N" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="Y4T-6A-Rg1"/>
+                            <constraint firstItem="eUi-jK-ECb" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="agk-XE-PkM"/>
                             <constraint firstItem="aAF-WD-cgR" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="bV2-8v-1wz"/>
                             <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="RbQ-fV-u0b" secondAttribute="trailing" constant="30" id="iBO-BG-xj8"/>
                             <constraint firstItem="RbQ-fV-u0b" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="iE7-vS-wR3"/>
                             <constraint firstItem="jdw-df-nbZ" firstAttribute="bottom" secondItem="OBd-ui-Vph" secondAttribute="bottom" id="j0a-vL-1yI"/>
+                            <constraint firstItem="eUi-jK-ECb" firstAttribute="leading" secondItem="aAF-WD-cgR" secondAttribute="trailing" constant="30" id="lvx-lQ-HCx"/>
                             <constraint firstItem="7bc-mQ-YsQ" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" id="pou-Xx-eez"/>
                             <constraint firstItem="jdw-df-nbZ" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="rj0-Vi-Ye9"/>
                             <constraint firstItem="cJc-jb-57N" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="s0x-M1-XHo"/>
@@ -90,6 +98,7 @@
                         <outlet property="headingLabel" destination="RbQ-fV-u0b" id="64J-GC-3qA"/>
                         <outlet property="isoLabel" destination="cJc-jb-57N" id="6j9-UM-MbH"/>
                         <outlet property="previewView" destination="7bc-mQ-YsQ" id="Yf4-da-T6S"/>
+                        <outlet property="tempLabel" destination="eUi-jK-ECb" id="Oh8-fa-ftN"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="kVT-RW-JJH" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>

@@ -13,11 +13,13 @@ protocol FaceProcessorDelegate: AnyObject {
     func detectFace(image: CIImage, depthPixelBuffer: CVPixelBuffer)
     func getNumFaces() -> Int
     func getFaceMask() -> CIImage?
+    func getFaceCenterDepth() -> Float?
 }
 
 class AssessFaceController: UIViewController {
     @IBOutlet var headingLabel: UILabel!
     @IBOutlet var isoLabel: UILabel!
+    @IBOutlet var tempLabel: UILabel!
     @IBOutlet var exposureLabel: UILabel!
     
     // Core Motion variables.
@@ -40,7 +42,12 @@ class AssessFaceController: UIViewController {
     private let notifCenter = NotificationCenter.default
     private var exposureObservation: NSKeyValueObservation?
     private var isoObservation: NSKeyValueObservation?
+    private var tempObservation: NSKeyValueObservation?
     var facePropertiesDelegate: FaceProcessorDelegate?
+    
+    
+    // Phone too close related variables.
+    private var phoneTooCloseAlert: AlertViewController?
     
     static func storyboardInstance() -> AssessFaceController? {
         let className = String(describing: AssessFaceController.self)
@@ -195,6 +202,15 @@ class AssessFaceController: UIViewController {
                 self.isoLabel.text = String(Int(newVal))
             }
         }
+        
+        // Start observing camera device white balance gains.
+        self.tempObservation = observe(\.self.cameraDevice.deviceWhiteBalanceGains, options: .new){
+            obj, chng in
+            let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
+            DispatchQueue.main.async {
+                self.tempLabel.text = String(Int(temp)) + "K"
+            }
+        }
     }
     
    
@@ -252,7 +268,45 @@ extension AssessFaceController: AVCaptureDataOutputSynchronizerDelegate {
             // Expected 1 face.
             return
         }
+        guard let faceDepth = delegate.getFaceCenterDepth() else {
+            // Face depth value not found.
+            return
+        }
+        self.previewView.image = rgbImage
         
-        self.previewView.image = delegate.getFaceMask()
+        if isPhoneTooClose(faceDepth: faceDepth) {
+            // Wait for user to move phone further away.
+            return
+        }
+    }
+    
+    // isPhoneTooClose checks if phone is too close to the user and if so, alerts the user.
+    // If not, it dismisses any existing alerts.
+    private func isPhoneTooClose(faceDepth: Float) -> Bool {
+        if faceDepth < 0.25 {
+            // phone is too close.
+            DispatchQueue.main.async {
+                if self.phoneTooCloseAlert != nil {
+                    // Alert controller already presented.
+                    return
+                }
+                guard let vc = AlertViewController.storyboardInstance() else {
+                    return
+                }
+                //vc.modalPresentationStyle = .fullScreen
+                self.phoneTooCloseAlert = vc
+                self.present(vc, animated: true)
+            }
+            return true
+        }
+        DispatchQueue.main.async {
+            if self.phoneTooCloseAlert == nil {
+                // Alert controller already dismissed/
+                return
+            }
+            self.phoneTooCloseAlert?.dismiss(animated: true, completion: nil)
+            self.phoneTooCloseAlert = nil
+        }
+        return false
     }
 }
