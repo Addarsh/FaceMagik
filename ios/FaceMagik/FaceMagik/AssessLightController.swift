@@ -13,6 +13,7 @@ import CoreMotion
 enum SceneType: Int, Codable {
     case Indoors = 1
     case Outdoors = 2
+    case Unknown = 3
 }
 
 struct SensorValues {

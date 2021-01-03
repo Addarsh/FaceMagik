@@ -21,11 +21,13 @@ class AssessFaceController: UIViewController {
     @IBOutlet var isoLabel: UILabel!
     @IBOutlet var tempLabel: UILabel!
     @IBOutlet var exposureLabel: UILabel!
+    @IBOutlet private var progressView: UIProgressView!
     
     // Core Motion variables.
     private let motionManager = CMMotionManager()
     private var motionQueue = OperationQueue()
     static private let motionFrequency = 1.0/30.0
+    static private let totalHeadingVals = 320
     
     // AVCaptureSession variables.
     @IBOutlet weak private var previewView: PreviewMetalView!
@@ -38,11 +40,20 @@ class AssessFaceController: UIViewController {
     private var outputSynchronizer: AVCaptureDataOutputSynchronizer!
     private static let FRAME_RATE: Int32 = 20
     
-    // Other variables.
+    // Env variables.
     private let notifCenter = NotificationCenter.default
     private var exposureObservation: NSKeyValueObservation?
     private var isoObservation: NSKeyValueObservation?
     private var tempObservation: NSKeyValueObservation?
+    private var sensorMap: [Int: SensorValues] = [:]
+    private var currTemp: Int = 0
+    private var currISO: Int = 0
+    private var currExposure: Int = 0
+    private let envQueue = DispatchQueue(label: "Env Sensor Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
+    static private let expPercentThreshold = 70
+    static private let isoPerentThreshold = 70
+    static private let colorTempThreshold = 70
+    
     var facePropertiesDelegate: FaceProcessorDelegate?
     
     
@@ -187,6 +198,9 @@ class AssessFaceController: UIViewController {
             guard let newVal = change.newValue else {
                 return
             }
+            self.envQueue.async {
+                self.currExposure = Int(1/(newVal.seconds))
+            }
             DispatchQueue.main.async {
                 self.exposureLabel.text = "E:" + String(Int(1/(newVal.seconds)))
             }
@@ -198,8 +212,11 @@ class AssessFaceController: UIViewController {
             guard let newVal = change.newValue else {
                 return
             }
+            self.envQueue.async {
+                self.currISO = Int(newVal)
+            }
             DispatchQueue.main.async {
-                self.isoLabel.text = String(Int(newVal))
+                self.isoLabel.text = "ISO:" + String(Int(newVal))
             }
         }
         
@@ -207,6 +224,9 @@ class AssessFaceController: UIViewController {
         self.tempObservation = observe(\.self.cameraDevice.deviceWhiteBalanceGains, options: .new){
             obj, chng in
             let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
+            self.envQueue.async {
+                self.currTemp = Int(temp)
+            }
             DispatchQueue.main.async {
                 self.tempLabel.text = String(Int(temp)) + "K"
             }
@@ -224,7 +244,66 @@ class AssessFaceController: UIViewController {
             DispatchQueue.main.async {
                 self.headingLabel.text = String(Int(validData.heading))
             }
+            let heading = Int(validData.heading)
+            self.envQueue.async {
+                if self.sensorMap.keys.count >= AssessFaceController.totalHeadingVals {
+                    // Completed sensor data collection.
+                    return
+                }
+                if self.sensorMap[heading] != nil {
+                    return
+                }
+                self.sensorMap[heading] = SensorValues(iso: self.currISO, exposure: self.currExposure, temp: self.currTemp, sceneType: SceneType.Unknown)
+                
+                let kCount = self.sensorMap.keys.count
+                DispatchQueue.main.async {
+                    self.progressView.setProgress(Float(kCount)/Float(AssessFaceController.totalHeadingVals), animated: true)
+                }
+                if kCount == AssessFaceController.totalHeadingVals {
+                    self.validateEnv()
+                }
+            }
         })
+    }
+    
+    // validateEnv validates if environment is suitable for pictures using existing sensor values.
+    // Returns true/false values for if env is indoors, in daylight and well lit respectively.
+    private func validateEnv() {
+        var numVisibleColorTemp = 0
+        var numGoodISO = 0
+        var numGoodExposure = 0
+        for (_, readouts) in self.sensorMap {
+            if readouts.temp >= 4000 {
+                numVisibleColorTemp += 1
+            }
+            if readouts.iso < 400 {
+                numGoodISO += 1
+            }
+            if readouts.exposure <= 50 {
+                numGoodExposure += 1
+            }
+        }
+
+        let colorTempPercent = Int((Float(numVisibleColorTemp)/Float(self.sensorMap.keys.count))*100.0)
+        let isoPercent = Int((Float(numGoodISO)/Float(self.sensorMap.keys.count))*100.0)
+        let expPercent = Int((Float(numGoodExposure)/Float(self.sensorMap.keys.count))*100.0)
+        
+        DispatchQueue.main.async {
+            self.displayResults(isIndoors: true, isDayLight: colorTempPercent >= AssessFaceController.colorTempThreshold ? true : false, isGoodISO: isoPercent >= AssessFaceController.isoPerentThreshold ? true : false, isGoodExposure: expPercent >= AssessFaceController.expPercentThreshold ? true : false)
+        }
+    }
+    
+    // displayResults displays results of light testing.
+    private func displayResults(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {
+        guard let vc = LightingResultsController.storyboardInstance() else {
+            return
+        }
+        vc.isIndoors = isIndoors
+        vc.isDayLight = isDayLight
+        vc.isGoodISO = isGoodISO
+        vc.isGoodExposure = isGoodExposure
+        vc.modalPresentationStyle = .fullScreen
+        self.present(vc, animated: true)
     }
     
     

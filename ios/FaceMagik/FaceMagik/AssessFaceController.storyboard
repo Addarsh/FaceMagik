@@ -46,6 +46,10 @@
                                     <constraint firstAttribute="height" constant="500" id="drr-1r-slV"/>
                                 </constraints>
                             </view>
+                            <progressView opaque="NO" contentMode="scaleToFill" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="YkC-Eb-GgY">
+                                <rect key="frame" x="50" y="684" width="314" height="4"/>
+                                <color key="progressTintColor" systemColor="systemGreenColor"/>
+                            </progressView>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="RbQ-fV-u0b">
                                 <rect key="frame" x="384" y="704" width="0.0" height="0.0"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
@@ -75,13 +79,16 @@
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
                             <constraint firstItem="b5z-Em-8ib" firstAttribute="top" secondItem="OBd-ui-Vph" secondAttribute="top" constant="30" id="2yz-vJ-aHw"/>
+                            <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="YkC-Eb-GgY" secondAttribute="trailing" constant="50" id="3jW-5T-G0B"/>
                             <constraint firstItem="b5z-Em-8ib" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="6aq-5E-vvl"/>
                             <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="7bc-mQ-YsQ" secondAttribute="trailing" id="Ddg-EY-mkh"/>
+                            <constraint firstItem="YkC-Eb-GgY" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="50" id="EUv-2G-MzC"/>
                             <constraint firstItem="aAF-WD-cgR" firstAttribute="leading" secondItem="cJc-jb-57N" secondAttribute="trailing" constant="30" id="KWo-6p-vOu"/>
                             <constraint firstItem="7bc-mQ-YsQ" firstAttribute="top" secondItem="b5z-Em-8ib" secondAttribute="bottom" id="Vtw-SH-IXj"/>
                             <constraint firstItem="cJc-jb-57N" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="Y4T-6A-Rg1"/>
                             <constraint firstItem="eUi-jK-ECb" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="agk-XE-PkM"/>
                             <constraint firstItem="aAF-WD-cgR" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="bV2-8v-1wz"/>
+                            <constraint firstItem="YkC-Eb-GgY" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="30" id="hj2-Ie-BsD"/>
                             <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="RbQ-fV-u0b" secondAttribute="trailing" constant="30" id="iBO-BG-xj8"/>
                             <constraint firstItem="RbQ-fV-u0b" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="iE7-vS-wR3"/>
                             <constraint firstItem="jdw-df-nbZ" firstAttribute="bottom" secondItem="OBd-ui-Vph" secondAttribute="bottom" id="j0a-vL-1yI"/>
@@ -98,6 +105,7 @@
                         <outlet property="headingLabel" destination="RbQ-fV-u0b" id="64J-GC-3qA"/>
                         <outlet property="isoLabel" destination="cJc-jb-57N" id="6j9-UM-MbH"/>
                         <outlet property="previewView" destination="7bc-mQ-YsQ" id="Yf4-da-T6S"/>
+                        <outlet property="progressView" destination="YkC-Eb-GgY" id="GJe-z0-uL0"/>
                         <outlet property="tempLabel" destination="eUi-jK-ECb" id="Oh8-fa-ftN"/>
                     </connections>
                 </viewController>
@@ -109,6 +117,9 @@
     <resources>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+        <systemColor name="systemGreenColor">
+            <color red="0.20392156862745098" green="0.7803921568627451" blue="0.34901960784313724" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
         <systemColor name="systemRedColor">
             <color red="1" green="0.23137254901960785" blue="0.18823529411764706" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
