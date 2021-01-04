@@ -7,7 +7,6 @@
 
 import UIKit
 import Photos
-import CoreMotion
 
 protocol FaceProcessorDelegate: AnyObject {
     func detectFace(image: CIImage, depthPixelBuffer: CVPixelBuffer)
@@ -16,18 +15,25 @@ protocol FaceProcessorDelegate: AnyObject {
     func getFaceCenterDepth() -> Float?
 }
 
+protocol EnvObserver {
+    func observeLighting(device: AVCaptureDevice, vc: EnvObserverDelegate?)
+    func startMotionUpdates()
+    func stopMotionUpdates()
+}
+
+protocol EnvObserverDelegate {
+    func notifyISOUpdate(newISO: Int)
+    func notifyExposureUpdate(newExpsosure: Int)
+    func notifyTempUpdate(newTemp: Int)
+    func notifyProgress(progress: Float)
+    func notifyLightingTestResults(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool)
+}
+
 class AssessFaceController: UIViewController {
-    @IBOutlet var headingLabel: UILabel!
     @IBOutlet var isoLabel: UILabel!
     @IBOutlet var tempLabel: UILabel!
     @IBOutlet var exposureLabel: UILabel!
     @IBOutlet private var progressView: UIProgressView!
-    
-    // Core Motion variables.
-    private let motionManager = CMMotionManager()
-    private var motionQueue = OperationQueue()
-    static private let motionFrequency = 1.0/30.0
-    static private let totalHeadingVals = 320
     
     // AVCaptureSession variables.
     @IBOutlet weak private var previewView: PreviewMetalView!
@@ -40,24 +46,9 @@ class AssessFaceController: UIViewController {
     private var outputSynchronizer: AVCaptureDataOutputSynchronizer!
     private static let FRAME_RATE: Int32 = 20
     
-    // Env variables.
     private let notifCenter = NotificationCenter.default
-    private var exposureObservation: NSKeyValueObservation?
-    private var isoObservation: NSKeyValueObservation?
-    private var tempObservation: NSKeyValueObservation?
-    private var sensorMap: [Int: SensorValues] = [:]
-    private var currTemp: Int = 0
-    private var currISO: Int = 0
-    private var currExposure: Int = 0
-    private let envQueue = DispatchQueue(label: "Env Sensor Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
-    static private let expPercentThreshold = 70
-    static private let isoPerentThreshold = 70
-    static private let colorTempThreshold = 70
-    
     var facePropertiesDelegate: FaceProcessorDelegate?
-    
-    
-    // Phone too close related variables.
+    var envObserver: EnvObserver?
     private var phoneTooCloseAlert: AlertViewController?
     
     static func storyboardInstance() -> AssessFaceController? {
@@ -71,35 +62,26 @@ class AssessFaceController: UIViewController {
         
         self.previewView.rotation = .rotate180Degrees
         
-        if !self.motionManager.isDeviceMotionAvailable {
-            print ("Device motion unavaible! Error!")
-            return
-        }
-        
         self.notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         self.notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         
         self.setupVideoCaptureSession()
         
-        self.observeDevice()
+        self.envObserver?.observeLighting(device: self.cameraDevice, vc: self)
         
         self.captureSessionQueue.async {
             self.captureSession.startRunning()
-            self.startMotionUpdates()
+            self.envObserver?.startMotionUpdates()
         }
     }
     
     @objc private func appMovedToBackground() {
-        if self.motionManager.isDeviceMotionActive {
-            self.motionManager.stopDeviceMotionUpdates()
-        }
+        self.envObserver?.stopMotionUpdates()
         self.previewView.image = nil
     }
     
     @objc private func appMovedToForeground() {
-        if !self.motionManager.isDeviceMotionActive {
-            self.startMotionUpdates()
-        }
+        self.envObserver?.startMotionUpdates()
         if !self.captureSession.isRunning {
             self.captureSession.startRunning()
         }
@@ -190,130 +172,53 @@ class AssessFaceController: UIViewController {
         self.captureSession.commitConfiguration()
     }
     
-    // observeDevice observes the exposure duration and color temperature of current device.
-    private func observeDevice() {
-        // Start observing camera device exposureDuration.
-        self.exposureObservation = observe(\.self.cameraDevice.exposureDuration, options: .new){
-            object, change in
-            guard let newVal = change.newValue else {
-                return
-            }
-            self.envQueue.async {
-                self.currExposure = Int(1/(newVal.seconds))
-            }
-            DispatchQueue.main.async {
-                self.exposureLabel.text = "E:" + String(Int(1/(newVal.seconds)))
-            }
-        }
-        
-        // Start observing camera device white balance gains.
-        self.isoObservation = observe(\.self.cameraDevice.iso, options: .new){
-            obj, change in
-            guard let newVal = change.newValue else {
-                return
-            }
-            self.envQueue.async {
-                self.currISO = Int(newVal)
-            }
-            DispatchQueue.main.async {
-                self.isoLabel.text = "ISO:" + String(Int(newVal))
-            }
-        }
-        
-        // Start observing camera device white balance gains.
-        self.tempObservation = observe(\.self.cameraDevice.deviceWhiteBalanceGains, options: .new){
-            obj, chng in
-            let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
-            self.envQueue.async {
-                self.currTemp = Int(temp)
-            }
-            DispatchQueue.main.async {
-                self.tempLabel.text = String(Int(temp)) + "K"
-            }
-        }
-    }
-    
-   
-    // startMotionUpdates starts to receive motion updates from motion manager.
-    private func startMotionUpdates() {
-        self.motionManager.deviceMotionUpdateInterval = AssessFaceController.motionFrequency
-        self.motionManager.startDeviceMotionUpdates(using: .xMagneticNorthZVertical, to: self.motionQueue, withHandler: { (data, error) in
-            guard let validData = data else {
-                return
-            }
-            DispatchQueue.main.async {
-                self.headingLabel.text = String(Int(validData.heading))
-            }
-            let heading = Int(validData.heading)
-            self.envQueue.async {
-                if self.sensorMap.keys.count >= AssessFaceController.totalHeadingVals {
-                    // Completed sensor data collection.
-                    return
-                }
-                if self.sensorMap[heading] != nil {
-                    return
-                }
-                self.sensorMap[heading] = SensorValues(iso: self.currISO, exposure: self.currExposure, temp: self.currTemp, sceneType: SceneType.Unknown)
-                
-                let kCount = self.sensorMap.keys.count
-                DispatchQueue.main.async {
-                    self.progressView.setProgress(Float(kCount)/Float(AssessFaceController.totalHeadingVals), animated: true)
-                }
-                if kCount == AssessFaceController.totalHeadingVals {
-                    self.validateEnv()
-                }
-            }
-        })
-    }
-    
-    // validateEnv validates if environment is suitable for pictures using existing sensor values.
-    // Returns true/false values for if env is indoors, in daylight and well lit respectively.
-    private func validateEnv() {
-        var numVisibleColorTemp = 0
-        var numGoodISO = 0
-        var numGoodExposure = 0
-        for (_, readouts) in self.sensorMap {
-            if readouts.temp >= 4000 {
-                numVisibleColorTemp += 1
-            }
-            if readouts.iso < 400 {
-                numGoodISO += 1
-            }
-            if readouts.exposure <= 50 {
-                numGoodExposure += 1
-            }
-        }
-
-        let colorTempPercent = Int((Float(numVisibleColorTemp)/Float(self.sensorMap.keys.count))*100.0)
-        let isoPercent = Int((Float(numGoodISO)/Float(self.sensorMap.keys.count))*100.0)
-        let expPercent = Int((Float(numGoodExposure)/Float(self.sensorMap.keys.count))*100.0)
-        
-        DispatchQueue.main.async {
-            self.displayResults(isIndoors: true, isDayLight: colorTempPercent >= AssessFaceController.colorTempThreshold ? true : false, isGoodISO: isoPercent >= AssessFaceController.isoPerentThreshold ? true : false, isGoodExposure: expPercent >= AssessFaceController.expPercentThreshold ? true : false)
-        }
-    }
-    
-    // displayResults displays results of light testing.
-    private func displayResults(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {
-        guard let vc = LightingResultsController.storyboardInstance() else {
-            return
-        }
-        vc.isIndoors = isIndoors
-        vc.isDayLight = isDayLight
-        vc.isGoodISO = isGoodISO
-        vc.isGoodExposure = isGoodExposure
-        vc.modalPresentationStyle = .fullScreen
-        self.present(vc, animated: true)
-    }
-    
-    
     // back allowes user to go back to previous view controller.
     @IBAction func back() {
         self.notifCenter.removeObserver(self)
-        self.motionManager.stopDeviceMotionUpdates()
+        self.envObserver?.stopMotionUpdates()
         self.captureSession.stopRunning()
         self.previewView.image = nil
         self.dismiss(animated: true)
+    }
+}
+
+extension AssessFaceController: EnvObserverDelegate {
+    func notifyISOUpdate(newISO: Int) {
+        DispatchQueue.main.async {
+            self.isoLabel.text = "ISO:" + String(newISO)
+        }
+    }
+    
+    func notifyTempUpdate(newTemp: Int) {
+        DispatchQueue.main.async {
+            self.tempLabel.text = String(newTemp) + "K"
+        }
+    }
+    
+    func notifyExposureUpdate(newExpsosure: Int) {
+        DispatchQueue.main.async {
+            self.exposureLabel.text = "E:" + String(newExpsosure)
+        }
+    }
+    
+    func notifyProgress(progress: Float) {
+        DispatchQueue.main.async {
+            self.progressView.setProgress(progress, animated: true)
+        }
+    }
+    
+    func notifyLightingTestResults(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {
+        DispatchQueue.main.async {
+            guard let vc = LightingResultsController.storyboardInstance() else {
+                return
+            }
+            vc.isIndoors = isIndoors
+            vc.isDayLight = isDayLight
+            vc.isGoodISO = isGoodISO
+            vc.isGoodExposure = isGoodExposure
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
+        }
     }
 }
 

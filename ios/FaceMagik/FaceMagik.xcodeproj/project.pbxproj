@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */; };
 		9816BAB4256EEF7700FF90C6 /* LightingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */; };
+		98455F3D25A281F700827928 /* EnvConditions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98455F3C25A281F700827928 /* EnvConditions.swift */; };
 		984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984B11C2256218B1005809C3 /* ThresholdKernel.swift */; };
 		985108B125966C700037E455 /* AssessFaceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 985108B025966C700037E455 /* AssessFaceController.swift */; };
 		985108B625966C860037E455 /* AssessFaceController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 985108B525966C860037E455 /* AssessFaceController.storyboard */; };
@@ -69,6 +70,7 @@
 /* Begin PBXFileReference section */
 		9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PassThrough.metal; sourceTree = "<group>"; };
 		9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightingViewController.swift; sourceTree = "<group>"; };
+		98455F3C25A281F700827928 /* EnvConditions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvConditions.swift; sourceTree = "<group>"; };
 		984B11C2256218B1005809C3 /* ThresholdKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdKernel.swift; sourceTree = "<group>"; };
 		985108B025966C700037E455 /* AssessFaceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssessFaceController.swift; sourceTree = "<group>"; };
 		985108B525966C860037E455 /* AssessFaceController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = AssessFaceController.storyboard; sourceTree = "<group>"; };
@@ -193,6 +195,7 @@
 				985108B025966C700037E455 /* AssessFaceController.swift */,
 				985108BA259A4B8D0037E455 /* FaceProperties.swift */,
 				985108B525966C860037E455 /* AssessFaceController.storyboard */,
+				98455F3C25A281F700827928 /* EnvConditions.swift */,
 				986471B72586A1A00080F976 /* LightConditionsController.swift */,
 				9851213D257AA0CA00F11004 /* OverviewController.swift */,
 				9851212825789E7100F11004 /* AlertViewController.storyboard */,
@@ -403,6 +406,7 @@
 				986471B82586A1A00080F976 /* LightConditionsController.swift in Sources */,
 				9816BAB4256EEF7700FF90C6 /* LightingViewController.swift in Sources */,
 				9851D36F253A461C0009D709 /* AppDelegate.swift in Sources */,
+				98455F3D25A281F700827928 /* EnvConditions.swift in Sources */,
 				985121242575EDB300F11004 /* CircularProgressView.swift in Sources */,
 				9851D371253A461C0009D709 /* SceneDelegate.swift in Sources */,
 				985121362578B1A400F11004 /* AlertViewController.swift in Sources */,

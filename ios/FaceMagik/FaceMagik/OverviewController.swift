@@ -79,6 +79,7 @@ class OverviewController: UIViewController {
             }
             vc.modalPresentationStyle = .fullScreen
             vc.facePropertiesDelegate = FaceProperties()
+            vc.envObserver = EnvConditions()
             self.present(vc, animated: true)
         } else {
             guard let vc = LightConditionsController.storyboardInstance() else {

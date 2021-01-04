@@ -39,23 +39,10 @@
                                 <fontDescription key="fontDescription" type="system" pointSize="22"/>
                                 <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
                             </textView>
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="7bc-mQ-YsQ" userLabel="Video View" customClass="PreviewMetalView" customModule="FaceMagik" customModuleProvider="target">
-                                <rect key="frame" x="0.0" y="154" width="414" height="500"/>
-                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                                <constraints>
-                                    <constraint firstAttribute="height" constant="500" id="drr-1r-slV"/>
-                                </constraints>
-                            </view>
                             <progressView opaque="NO" contentMode="scaleToFill" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="YkC-Eb-GgY">
                                 <rect key="frame" x="50" y="684" width="314" height="4"/>
                                 <color key="progressTintColor" systemColor="systemGreenColor"/>
                             </progressView>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="RbQ-fV-u0b">
-                                <rect key="frame" x="384" y="704" width="0.0" height="0.0"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
-                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                <nil key="highlightedColor"/>
-                            </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="cJc-jb-57N">
                                 <rect key="frame" x="20" y="704" width="42" height="21"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
@@ -74,6 +61,13 @@
                                 <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <nil key="highlightedColor"/>
                             </label>
+                            <view contentMode="scaleToFill" misplaced="YES" translatesAutoresizingMaskIntoConstraints="NO" id="7bc-mQ-YsQ" userLabel="Video View" customClass="PreviewMetalView" customModule="FaceMagik" customModuleProvider="target">
+                                <rect key="frame" x="0.0" y="162" width="414" height="500"/>
+                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="500" id="drr-1r-slV"/>
+                                </constraints>
+                            </view>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="OBd-ui-Vph"/>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
@@ -89,8 +83,6 @@
                             <constraint firstItem="eUi-jK-ECb" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="agk-XE-PkM"/>
                             <constraint firstItem="aAF-WD-cgR" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="bV2-8v-1wz"/>
                             <constraint firstItem="YkC-Eb-GgY" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="30" id="hj2-Ie-BsD"/>
-                            <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="RbQ-fV-u0b" secondAttribute="trailing" constant="30" id="iBO-BG-xj8"/>
-                            <constraint firstItem="RbQ-fV-u0b" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="iE7-vS-wR3"/>
                             <constraint firstItem="jdw-df-nbZ" firstAttribute="bottom" secondItem="OBd-ui-Vph" secondAttribute="bottom" id="j0a-vL-1yI"/>
                             <constraint firstItem="eUi-jK-ECb" firstAttribute="leading" secondItem="aAF-WD-cgR" secondAttribute="trailing" constant="30" id="lvx-lQ-HCx"/>
                             <constraint firstItem="7bc-mQ-YsQ" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" id="pou-Xx-eez"/>
@@ -102,7 +94,6 @@
                     </view>
                     <connections>
                         <outlet property="exposureLabel" destination="aAF-WD-cgR" id="wop-9P-Mdb"/>
-                        <outlet property="headingLabel" destination="RbQ-fV-u0b" id="64J-GC-3qA"/>
                         <outlet property="isoLabel" destination="cJc-jb-57N" id="6j9-UM-MbH"/>
                         <outlet property="previewView" destination="7bc-mQ-YsQ" id="Yf4-da-T6S"/>
                         <outlet property="progressView" destination="YkC-Eb-GgY" id="GJe-z0-uL0"/>
