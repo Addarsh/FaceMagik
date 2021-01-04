@@ -27,13 +27,22 @@ protocol EnvObserverDelegate {
     func notifyTempUpdate(newTemp: Int)
     func notifyProgress(progress: Float)
     func notifyLightingTestResults(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool)
+    func daylightUpdated(isDaylight: Bool)
 }
 
 class AssessFaceController: UIViewController {
-    @IBOutlet var isoLabel: UILabel!
-    @IBOutlet var tempLabel: UILabel!
-    @IBOutlet var exposureLabel: UILabel!
+    enum State {
+        case Unknown
+        case StartTurnAround
+        case IsInDaylight
+        case NotInDaylight
+    }
+    
+    @IBOutlet private var isoLabel: UILabel!
+    @IBOutlet private var tempLabel: UILabel!
+    @IBOutlet private var exposureLabel: UILabel!
     @IBOutlet private var progressView: UIProgressView!
+    @IBOutlet private var instructions: UILabel!
     
     // AVCaptureSession variables.
     @IBOutlet weak private var previewView: PreviewMetalView!
@@ -51,6 +60,13 @@ class AssessFaceController: UIViewController {
     var envObserver: EnvObserver?
     private var phoneTooCloseAlert: AlertViewController?
     
+    private var state: State = .Unknown
+    private let stateQueue = DispatchQueue(label: "State Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
+    private let unknownPrompt = "Waiting to detect face"
+    private let turnAroundPrompt = "Turn Around 180 degrees"
+    private let notInDaylightPrompt = "You are not in daylight! Please turn off all artificial lights."
+    private let isInDaylightPrompt = "Nice! You are in daylight."
+    
     static func storyboardInstance() -> AssessFaceController? {
         let className = String(describing: AssessFaceController.self)
         let storyboard = UIStoryboard(name: className, bundle: nil)
@@ -62,16 +78,16 @@ class AssessFaceController: UIViewController {
         
         self.previewView.rotation = .rotate180Degrees
         
+        self.instructions.text = self.unknownPrompt
+        self.instructions.textColor = UIColor.systemRed
+        
         self.notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         self.notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         
         self.setupVideoCaptureSession()
         
-        self.envObserver?.observeLighting(device: self.cameraDevice, vc: self)
-        
         self.captureSessionQueue.async {
             self.captureSession.startRunning()
-            self.envObserver?.startMotionUpdates()
         }
     }
     
@@ -183,6 +199,33 @@ class AssessFaceController: UIViewController {
 }
 
 extension AssessFaceController: EnvObserverDelegate {
+    func daylightUpdated(isDaylight: Bool) {
+        self.handleDayLightUpdate(isDaylight: isDaylight)
+    }
+    
+    private func handleDayLightUpdate(isDaylight: Bool) {
+        self.stateQueue.async {
+            if self.state == .Unknown {
+                return
+            }
+            if isDaylight {
+                self.state = .IsInDaylight
+            } else {
+                self.state = .NotInDaylight
+            }
+            
+            DispatchQueue.main.async {
+                if isDaylight {
+                    self.instructions.text = self.isInDaylightPrompt
+                    self.instructions.textColor = UIColor.systemGreen
+                } else {
+                    self.instructions.text = self.notInDaylightPrompt
+                    self.instructions.textColor = UIColor.systemRed
+                }
+            }
+        }
+    }
+    
     func notifyISOUpdate(newISO: Int) {
         DispatchQueue.main.async {
             self.isoLabel.text = "ISO:" + String(newISO)
@@ -256,11 +299,30 @@ extension AssessFaceController: AVCaptureDataOutputSynchronizerDelegate {
             // Face depth value not found.
             return
         }
+        
+        handleFaceFound()
         self.previewView.image = rgbImage
         
         if isPhoneTooClose(faceDepth: faceDepth) {
             // Wait for user to move phone further away.
             return
+        }
+    }
+    
+    // handleFaceFound starts turn around process once face is found for the first time.
+    private func handleFaceFound() {
+        if self.previewView.image != nil {
+            return
+        }
+        self.stateQueue.async {
+            self.state = .StartTurnAround
+            self.envObserver?.observeLighting(device: self.cameraDevice, vc: self)
+            self.envObserver?.startMotionUpdates()
+        }
+        DispatchQueue.main.async {
+            self.instructions.text = self.turnAroundPrompt
+            self.instructions.textColor = UIColor.systemIndigo
+            self.instructions.blink()
         }
     }
     
@@ -292,5 +354,20 @@ extension AssessFaceController: AVCaptureDataOutputSynchronizerDelegate {
             self.phoneTooCloseAlert = nil
         }
         return false
+    }
+}
+
+extension UILabel {
+    func blink() {
+        UIView.animate(withDuration: 0.8,
+          delay:0.0,
+          options:[.allowUserInteraction, .curveEaseInOut, .autoreverse, .repeat],
+          animations: { self.alpha = 0 },
+          completion: nil)
+    }
+    
+    func stopBlink() {
+        self.layer.removeAllAnimations()
+        self.alpha = 1
     }
 }

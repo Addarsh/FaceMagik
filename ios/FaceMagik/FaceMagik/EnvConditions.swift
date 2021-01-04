@@ -8,7 +8,7 @@
 import Photos
 import CoreMotion
 
-class EnvConditions: NSObject, EnvObserver {
+class EnvConditions: NSObject, EnvObserver {    
     private var delegate: EnvObserverDelegate?
     @objc private var cameraDevice: AVCaptureDevice!
     private var exposureObservation: NSKeyValueObservation?
@@ -17,10 +17,15 @@ class EnvConditions: NSObject, EnvObserver {
     private var currTemp: Int = 0
     private var currISO: Int = 0
     private var currExposure: Int = 0
-    private let envQueue = DispatchQueue(label: "Env Sensor Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
+    private let envQueue = DispatchQueue(label: "Env Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
     static private let expPercentThreshold = 70
     static private let isoPerentThreshold = 70
     static private let colorTempThreshold = 70
+    
+    private static let dayLightTempThreshold = 4000
+    private var badTempCount: Int = 0
+    private var goodTempCount: Int = 0
+    private let tempCountThreshold: Int = 10
     
     // Core Motion variables.
     private let motionManager = CMMotionManager()
@@ -61,10 +66,27 @@ class EnvConditions: NSObject, EnvObserver {
         self.tempObservation = observe(\.self.cameraDevice.deviceWhiteBalanceGains, options: .new){
             obj, chng in
             let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
-            self.envQueue.async {
-                self.currTemp = Int(temp)
+            self.handleTempChange(temp: Int(temp))
+        }
+    }
+    
+    private func handleTempChange(temp: Int) {
+        self.envQueue.async {
+            self.currTemp = temp
+            
+            if self.currTemp < EnvConditions.dayLightTempThreshold {
+                self.goodTempCount = 0
+                self.badTempCount = self.badTempCount + 1
+            } else {
+                self.badTempCount = 0
+                self.goodTempCount = self.goodTempCount + 1
             }
-            self.delegate?.notifyTempUpdate(newTemp: Int(temp))
+            
+            if self.badTempCount >= self.tempCountThreshold || self.goodTempCount >= self.tempCountThreshold {
+                self.delegate?.daylightUpdated(isDaylight: self.goodTempCount > 0 ? true : false)
+            }
+            
+            self.delegate?.notifyTempUpdate(newTemp: temp)
         }
     }
     
