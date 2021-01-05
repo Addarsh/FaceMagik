@@ -1,5 +1,5 @@
 //
-//  FaceProperties.swift
+//  FaceDetector.swift
 //  FaceMagik
 //
 //  Created by Addarsh Chandrasekar on 12/28/20.
@@ -7,8 +7,22 @@
 
 import UIKit
 import Vision
+import Photos
 
-class FaceProperties: FaceProcessorDelegate {
+class FaceDetector: NSObject, FaceProcessor {
+    // AVCaptureSession variables.
+    private let captureSessionQueue = DispatchQueue(label: "vision request queue", qos: .userInteractive, attributes: [], autoreleaseFrequency: .inherit, target: nil)
+    private var captureSession =  AVCaptureSession()
+    @objc private var cameraDevice: AVCaptureDevice!
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let depthDataOutput = AVCaptureDepthDataOutput()
+    private let dataOutputQueue = DispatchQueue(label: "synchronized data output queue")
+    private var outputSynchronizer: AVCaptureDataOutputSynchronizer!
+    private static let FRAME_RATE: Int32 = 20
+    private var delegate: FaceProcessorDelegate?
+    private var firstFrame: Bool = true
+    
+    // Face properties.
     private var image: CIImage?
     private var numFacesFound: Int = 0
     private var faceBoundsMask: CIImage?
@@ -31,9 +45,107 @@ class FaceProperties: FaceProcessorDelegate {
         points.compactMap({ return CGPoint(x: $0.x, y: imageHeight - $0.y) })
     }
     
-    // detectFace calls Vision to detect face for given CIImage.
-    func detectFace(image: CIImage, depthPixelBuffer: CVPixelBuffer) {
-        self.image = image
+    func startDetection(vc: FaceProcessorDelegate?) {
+        self.delegate = vc
+        
+        self.setupVideoCaptureSession()
+        
+        self.captureSessionQueue.async {
+            self.captureSession.startRunning()
+        }
+    }
+    
+    // setupVideoCaptureSession sets up a capture session to capture video.
+    private func setupVideoCaptureSession() {
+        self.captureSession.beginConfiguration()
+        
+        // Add capture session input.
+        guard let dev = AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front) else {
+            return
+        }
+        self.cameraDevice = dev
+        
+        // Add capture session input.
+        guard let captureInput = try? AVCaptureDeviceInput(device: self.cameraDevice), self.captureSession.canAddInput(captureInput) else {
+            return
+        }
+        self.captureSession.addInput(captureInput)
+        
+        // Add capture session output.
+        self.videoOutput.alwaysDiscardsLateVideoFrames = true
+        guard self.captureSession.canAddOutput(self.videoOutput) else {
+            return
+        }
+        
+        // Set sRGB as default color space.
+        self.captureSession.automaticallyConfiguresCaptureDeviceForWideColor = false
+        self.captureSession.sessionPreset = .hd1280x720
+        self.captureSession.addOutput(self.videoOutput)
+            
+        if let videoConnection = self.videoOutput.connection(with: .video) {
+            videoConnection.videoOrientation = .portrait
+            videoConnection.isEnabled = true
+        }
+        
+        // Set sRGB as default color space.
+        do {
+            try self.cameraDevice.lockForConfiguration()
+            self.cameraDevice.activeColorSpace = .sRGB
+            self.cameraDevice.unlockForConfiguration()
+        } catch {
+            print("Error! Could not lock device for configuration: \(error)")
+            return
+        }
+        
+        // Add depth data output.
+        //self.depthDataOutput.alwaysDiscardsLateDepthData = true
+        self.depthDataOutput.isFilteringEnabled = true
+        self.captureSession.addOutput(self.depthDataOutput)
+        
+        if let depthConnection = self.depthDataOutput.connection(with: .depthData) {
+            depthConnection.videoOrientation = .portrait
+            depthConnection.isEnabled = true
+        }
+        
+        // Search for highest resolution with floating-point depth values
+        let depthFormats = self.cameraDevice.activeFormat.supportedDepthDataFormats
+        let depth32formats = depthFormats.filter({
+            CMFormatDescriptionGetMediaSubType($0.formatDescription) == kCVPixelFormatType_DepthFloat32
+        })
+        if depth32formats.isEmpty {
+            print("Error! Device does not support Float32 depth format")
+            return
+        }
+        
+        let selectedFormat = depth32formats.max(by: { first, second in
+            CMVideoFormatDescriptionGetDimensions(first.formatDescription).width <
+                CMVideoFormatDescriptionGetDimensions(second.formatDescription).width })
+        
+        do {
+            try self.cameraDevice.lockForConfiguration()
+            self.cameraDevice.activeDepthDataFormat = selectedFormat
+            self.cameraDevice.activeVideoMinFrameDuration = CMTimeMake(value: 1, timescale: FaceDetector.FRAME_RATE)
+            self.cameraDevice.activeVideoMaxFrameDuration = CMTimeMake(value: 1, timescale: FaceDetector.FRAME_RATE)
+            self.cameraDevice.unlockForConfiguration()
+        } catch {
+            print("Error! Could not lock device for configuration: \(error)")
+            return
+        }
+        
+        // Use an AVCaptureDataOutputSynchronizer to synchronize the video data and depth data outputs.
+        // The first output in the dataOutputs array, in this case the AVCaptureVideoDataOutput, is the "master" output.
+        self.outputSynchronizer = AVCaptureDataOutputSynchronizer(dataOutputs: [self.videoOutput, self.depthDataOutput])
+        self.outputSynchronizer.setDelegate(self, queue: self.dataOutputQueue)
+        
+        self.captureSession.commitConfiguration()
+    }
+    
+    // detectFace calls Vision to detect face.
+    private func detectFace(depthPixelBuffer: CVPixelBuffer) {
+        guard let image = self.image else {
+            return
+        }
+        
         let imageRequestHandler = VNImageRequestHandler(ciImage: image,
                                                         orientation: .up,
                                                         options: [:])
@@ -97,16 +209,6 @@ class FaceProperties: FaceProcessorDelegate {
         }
     }
     
-    // getNumFaces returns the number of faces detected in image.
-    func getNumFaces() -> Int {
-        return self.numFacesFound
-    }
-    
-    // getFaceCenterDepth returns the depth of center of face.
-    func getFaceCenterDepth() -> Float? {
-        return self.depthOfFaceCenter
-    }
-    
     // createFaceBoundsMask creates a CIImage mask with given face bounds rect.
     private func createFaceBoundsMask(_ normRect: CGRect) -> CIImage? {
         guard let width = self.image?.extent.width else {
@@ -146,7 +248,7 @@ class FaceProperties: FaceProcessorDelegate {
         
         // Convert normalized points to image coordinate space.
         var landmarkPoints = landmark.pointsInImage(imageSize: CGSize(width: width, height: height))
-        landmarkPoints = FaceProperties.toCGCoordinates(landmarkPoints, height)
+        landmarkPoints = FaceDetector.toCGCoordinates(landmarkPoints, height)
         
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -175,7 +277,7 @@ class FaceProperties: FaceProcessorDelegate {
         
         // Convert normalized points to image coordinate space.
         var faceContourPoints = faceContour.pointsInImage(imageSize: CGSize(width: width, height: height))
-        faceContourPoints = FaceProperties.toCGCoordinates(faceContourPoints, height)
+        faceContourPoints = FaceDetector.toCGCoordinates(faceContourPoints, height)
         
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -301,5 +403,62 @@ class FaceProperties: FaceProcessorDelegate {
         self.faceMask = out
         
         return out
+    }
+    
+    // getDevice returns camera device instance.
+    func getDevice() -> AVCaptureDevice {
+        return self.cameraDevice
+    }
+    
+    func stop() {
+        self.captureSession.stopRunning()
+        self.image = nil
+        self.firstFrame = true
+    }
+    
+    func resume() {
+        if !self.captureSession.isRunning {
+            self.captureSession.startRunning()
+        }
+    }
+}
+
+extension FaceDetector: AVCaptureDataOutputSynchronizerDelegate {
+    func dataOutputSynchronizer(_ synchronizer: AVCaptureDataOutputSynchronizer, didOutput synchronizedDataCollection: AVCaptureSynchronizedDataCollection) {
+        
+        // Check video frame.
+        guard let syncedVideoData = synchronizedDataCollection.synchronizedData(for: self.videoOutput) as? AVCaptureSynchronizedSampleBufferData else {
+            return
+        }
+        // Check depth data frame.
+        guard let syncedDepthData = synchronizedDataCollection.synchronizedData(for: self.depthDataOutput) as? AVCaptureSynchronizedDepthData else {
+            return
+        }
+        if syncedVideoData.sampleBufferWasDropped || syncedDepthData.depthDataWasDropped {
+            return
+        }
+        guard let videoPixelBuffer = CMSampleBufferGetImageBuffer(syncedVideoData.sampleBuffer) else {
+            print ("Could not convert video sample buffer to cvpixelbuffer")
+            return
+        }
+        let rgbImage = CIImage(cvPixelBuffer: videoPixelBuffer)
+        self.image = rgbImage
+        
+        self.detectFace(depthPixelBuffer: syncedDepthData.depthData.depthDataMap)
+        if self.numFacesFound != 1 {
+            // Expected 1 face.
+            return
+        }
+        guard let faceDepth = self.depthOfFaceCenter else {
+            // Face depth value not found.
+            return
+        }
+        
+        if self.firstFrame {
+            self.delegate?.firstFrame()
+            self.firstFrame = false
+        }
+        self.image = rgbImage
+        self.delegate?.frameUpdated(rgbImage: rgbImage, faceDepth: faceDepth)
     }
 }

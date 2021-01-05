@@ -33,7 +33,8 @@ class RotateInstructionsController: UIViewController {
         guard let vc = AssessFaceController.storyboardInstance() else {
             return
         }
-        vc.facePropertiesDelegate = FaceProperties()
+        vc.faceDetector = FaceDetector()
+        vc.envObserver = EnvConditions()
         vc.modalPresentationStyle = .fullScreen
         self.present(vc, animated: true)
     }

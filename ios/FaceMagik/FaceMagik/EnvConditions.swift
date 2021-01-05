@@ -34,8 +34,11 @@ class EnvConditions: NSObject, EnvObserver {
     static private let totalHeadingVals = 320
     private var sensorMap: [Int: SensorValues] = [:]
     
-    func observeLighting(device: AVCaptureDevice, vc: EnvObserverDelegate?) {
-        self.cameraDevice = device
+    func observeLighting(device: AVCaptureDevice?, vc: EnvObserverDelegate?) {
+        guard let dev = device else {
+            return
+        }
+        self.cameraDevice = dev
         self.delegate = vc
         
         // Start observing camera device exposureDuration.

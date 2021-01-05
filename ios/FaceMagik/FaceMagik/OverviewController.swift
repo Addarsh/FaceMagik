@@ -78,7 +78,7 @@ class OverviewController: UIViewController {
                 return
             }
             vc.modalPresentationStyle = .fullScreen
-            vc.facePropertiesDelegate = FaceProperties()
+            vc.faceDetector = FaceDetector()
             vc.envObserver = EnvConditions()
             self.present(vc, animated: true)
         } else {

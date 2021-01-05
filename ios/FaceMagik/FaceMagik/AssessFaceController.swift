@@ -8,15 +8,21 @@
 import UIKit
 import Photos
 
-protocol FaceProcessorDelegate: AnyObject {
-    func detectFace(image: CIImage, depthPixelBuffer: CVPixelBuffer)
-    func getNumFaces() -> Int
+protocol FaceProcessor {
+    func startDetection(vc: FaceProcessorDelegate?)
+    func getDevice() -> AVCaptureDevice
     func getFaceMask() -> CIImage?
-    func getFaceCenterDepth() -> Float?
+    func stop()
+    func resume()
+}
+
+protocol FaceProcessorDelegate {
+    func firstFrame()
+    func frameUpdated(rgbImage: CIImage, faceDepth: Float)
 }
 
 protocol EnvObserver {
-    func observeLighting(device: AVCaptureDevice, vc: EnvObserverDelegate?)
+    func observeLighting(device: AVCaptureDevice?, vc: EnvObserverDelegate?)
     func startMotionUpdates()
     func stopMotionUpdates()
 }
@@ -43,20 +49,10 @@ class AssessFaceController: UIViewController {
     @IBOutlet private var exposureLabel: UILabel!
     @IBOutlet private var progressView: UIProgressView!
     @IBOutlet private var instructions: UILabel!
-    
-    // AVCaptureSession variables.
     @IBOutlet weak private var previewView: PreviewMetalView!
-    private let captureSessionQueue = DispatchQueue(label: "vision request queue", qos: .userInteractive, attributes: [], autoreleaseFrequency: .inherit, target: nil)
-    private var captureSession =  AVCaptureSession()
-    @objc private var cameraDevice: AVCaptureDevice!
-    private let videoOutput = AVCaptureVideoDataOutput()
-    private let depthDataOutput = AVCaptureDepthDataOutput()
-    private let dataOutputQueue = DispatchQueue(label: "synchronized data output queue")
-    private var outputSynchronizer: AVCaptureDataOutputSynchronizer!
-    private static let FRAME_RATE: Int32 = 20
     
     private let notifCenter = NotificationCenter.default
-    var facePropertiesDelegate: FaceProcessorDelegate?
+    var faceDetector: FaceProcessor?
     var envObserver: EnvObserver?
     private var phoneTooCloseAlert: AlertViewController?
     
@@ -77,122 +73,39 @@ class AssessFaceController: UIViewController {
         super.viewDidLoad()
         
         self.previewView.rotation = .rotate180Degrees
-        
-        self.instructions.text = self.unknownPrompt
-        self.instructions.textColor = UIColor.systemRed
+    
+        self.resetState()
         
         self.notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         self.notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         
-        self.setupVideoCaptureSession()
-        
-        self.captureSessionQueue.async {
-            self.captureSession.startRunning()
-        }
+        self.faceDetector?.startDetection(vc: self)
     }
     
     @objc private func appMovedToBackground() {
         self.envObserver?.stopMotionUpdates()
+        self.faceDetector?.stop()
         self.previewView.image = nil
     }
     
     @objc private func appMovedToForeground() {
+        self.resetState()
         self.envObserver?.startMotionUpdates()
-        if !self.captureSession.isRunning {
-            self.captureSession.startRunning()
-        }
+        self.faceDetector?.resume()
     }
     
-    // setupVideoCaptureSession sets up a capture session to capture video.
-    private func setupVideoCaptureSession() {
-        self.captureSession.beginConfiguration()
-        
-        // Add capture session input.
-        guard let dev = AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front) else {
-            return
-        }
-        self.cameraDevice = dev
-        
-        // Add capture session input.
-        guard let captureInput = try? AVCaptureDeviceInput(device: self.cameraDevice), self.captureSession.canAddInput(captureInput) else {
-            return
-        }
-        self.captureSession.addInput(captureInput)
-        
-        // Add capture session output.
-        self.videoOutput.alwaysDiscardsLateVideoFrames = true
-        guard self.captureSession.canAddOutput(self.videoOutput) else {
-            return
-        }
-        
-        // Set sRGB as default color space.
-        self.captureSession.automaticallyConfiguresCaptureDeviceForWideColor = false
-        self.captureSession.sessionPreset = .hd1280x720
-        self.captureSession.addOutput(self.videoOutput)
-            
-        if let videoConnection = self.videoOutput.connection(with: .video) {
-            videoConnection.videoOrientation = .portrait
-            videoConnection.isEnabled = true
-        }
-        
-        // Set sRGB as default color space.
-        do {
-            try self.cameraDevice.lockForConfiguration()
-            self.cameraDevice.activeColorSpace = .sRGB
-            self.cameraDevice.unlockForConfiguration()
-        } catch {
-            print("Error! Could not lock device for configuration: \(error)")
-            return
-        }
-        
-        // Add depth data output.
-        //self.depthDataOutput.alwaysDiscardsLateDepthData = true
-        self.depthDataOutput.isFilteringEnabled = true
-        self.captureSession.addOutput(self.depthDataOutput)
-        
-        if let depthConnection = self.depthDataOutput.connection(with: .depthData) {
-            depthConnection.videoOrientation = .portrait
-            depthConnection.isEnabled = true
-        }
-        
-        // Search for highest resolution with floating-point depth values
-        let depthFormats = self.cameraDevice.activeFormat.supportedDepthDataFormats
-        let depth32formats = depthFormats.filter({
-            CMFormatDescriptionGetMediaSubType($0.formatDescription) == kCVPixelFormatType_DepthFloat32
-        })
-        if depth32formats.isEmpty {
-            print("Error! Device does not support Float32 depth format")
-            return
-        }
-        
-        let selectedFormat = depth32formats.max(by: { first, second in
-            CMVideoFormatDescriptionGetDimensions(first.formatDescription).width <
-                CMVideoFormatDescriptionGetDimensions(second.formatDescription).width })
-        
-        do {
-            try self.cameraDevice.lockForConfiguration()
-            self.cameraDevice.activeDepthDataFormat = selectedFormat
-            self.cameraDevice.activeVideoMinFrameDuration = CMTimeMake(value: 1, timescale: AssessFaceController.FRAME_RATE)
-            self.cameraDevice.activeVideoMaxFrameDuration = CMTimeMake(value: 1, timescale: AssessFaceController.FRAME_RATE)
-            self.cameraDevice.unlockForConfiguration()
-        } catch {
-            print("Error! Could not lock device for configuration: \(error)")
-            return
-        }
-        
-        // Use an AVCaptureDataOutputSynchronizer to synchronize the video data and depth data outputs.
-        // The first output in the dataOutputs array, in this case the AVCaptureVideoDataOutput, is the "master" output.
-        self.outputSynchronizer = AVCaptureDataOutputSynchronizer(dataOutputs: [self.videoOutput, self.depthDataOutput])
-        self.outputSynchronizer.setDelegate(self, queue: self.dataOutputQueue)
-        
-        self.captureSession.commitConfiguration()
+    private func resetState() {
+        self.instructions.stopBlink()
+        self.state = .Unknown
+        self.instructions.text = self.unknownPrompt
+        self.instructions.textColor = UIColor.systemRed
     }
     
     // back allowes user to go back to previous view controller.
     @IBAction func back() {
         self.notifCenter.removeObserver(self)
         self.envObserver?.stopMotionUpdates()
-        self.captureSession.stopRunning()
+        self.faceDetector?.stop()
         self.previewView.image = nil
         self.dismiss(animated: true)
     }
@@ -265,64 +178,41 @@ extension AssessFaceController: EnvObserverDelegate {
     }
 }
 
-extension AssessFaceController: AVCaptureDataOutputSynchronizerDelegate {
-    func dataOutputSynchronizer(_ synchronizer: AVCaptureDataOutputSynchronizer, didOutput synchronizedDataCollection: AVCaptureSynchronizedDataCollection) {
-        
-        guard let delegate = self.facePropertiesDelegate else {
-            // No additional processing needed.
-            return
-        }
-        
-        // Check video frame.
-        guard let syncedVideoData = synchronizedDataCollection.synchronizedData(for: self.videoOutput) as? AVCaptureSynchronizedSampleBufferData else {
-            return
-        }
-        // Check depth data frame.
-        guard let syncedDepthData = synchronizedDataCollection.synchronizedData(for: self.depthDataOutput) as? AVCaptureSynchronizedDepthData else {
-            return
-        }
-        if syncedVideoData.sampleBufferWasDropped || syncedDepthData.depthDataWasDropped {
-            return
-        }
-        guard let videoPixelBuffer = CMSampleBufferGetImageBuffer(syncedVideoData.sampleBuffer) else {
-            print ("Could not convert video sample buffer to cvpixelbuffer")
-            return
-        }
-        let rgbImage = CIImage(cvPixelBuffer: videoPixelBuffer)
-        
-        delegate.detectFace(image: rgbImage, depthPixelBuffer: syncedDepthData.depthData.depthDataMap)
-        if delegate.getNumFaces() != 1 {
-            // Expected 1 face.
-            return
-        }
-        guard let faceDepth = delegate.getFaceCenterDepth() else {
-            // Face depth value not found.
-            return
-        }
-        
-        handleFaceFound()
-        self.previewView.image = rgbImage
-        
-        if isPhoneTooClose(faceDepth: faceDepth) {
-            // Wait for user to move phone further away.
-            return
-        }
+extension UILabel {
+    func blink() {
+        UIView.animate(withDuration: 0.8,
+          delay:0.0,
+          options:[.allowUserInteraction, .curveEaseInOut, .autoreverse, .repeat],
+          animations: { self.alpha = 0 },
+          completion: nil)
     }
     
-    // handleFaceFound starts turn around process once face is found for the first time.
-    private func handleFaceFound() {
-        if self.previewView.image != nil {
-            return
-        }
+    func stopBlink() {
+        self.layer.removeAllAnimations()
+        self.alpha = 1
+    }
+}
+
+extension AssessFaceController: FaceProcessorDelegate {
+    func firstFrame() {
         self.stateQueue.async {
             self.state = .StartTurnAround
-            self.envObserver?.observeLighting(device: self.cameraDevice, vc: self)
+            self.envObserver?.observeLighting(device: self.faceDetector?.getDevice(), vc: self)
             self.envObserver?.startMotionUpdates()
         }
         DispatchQueue.main.async {
             self.instructions.text = self.turnAroundPrompt
             self.instructions.textColor = UIColor.systemIndigo
             self.instructions.blink()
+        }
+    }
+    
+    func frameUpdated(rgbImage: CIImage, faceDepth: Float) {
+        self.previewView.image = rgbImage
+        
+        if isPhoneTooClose(faceDepth: faceDepth) {
+            // Wait for user to move phone further away.
+            return
         }
     }
     
@@ -354,20 +244,5 @@ extension AssessFaceController: AVCaptureDataOutputSynchronizerDelegate {
             self.phoneTooCloseAlert = nil
         }
         return false
-    }
-}
-
-extension UILabel {
-    func blink() {
-        UIView.animate(withDuration: 0.8,
-          delay:0.0,
-          options:[.allowUserInteraction, .curveEaseInOut, .autoreverse, .repeat],
-          animations: { self.alpha = 0 },
-          completion: nil)
-    }
-    
-    func stopBlink() {
-        self.layer.removeAllAnimations()
-        self.alpha = 1
     }
 }
