@@ -23,7 +23,7 @@ protocol FaceProcessorDelegate {
 
 protocol EnvObserver {
     func observeLighting(device: AVCaptureDevice?, vc: EnvObserverDelegate?)
-    func startMotionUpdates()
+    func startMotionUpdates(range: Int)
     func stopMotionUpdates()
 }
 
@@ -31,25 +31,25 @@ protocol EnvObserverDelegate {
     func notifyISOUpdate(newISO: Int)
     func notifyExposureUpdate(newExpsosure: Int)
     func notifyTempUpdate(newTemp: Int)
-    func notifyProgress(progress: Float)
-    func notifyLightingTestResults(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool)
-    func daylightUpdated(isDaylight: Bool)
+    func motionUpdating()
+    func motionUpdateComplete()
+    func badColorTemperature()
+    func possiblyOutdoors()
 }
 
 class AssessFaceController: UIViewController {
     enum State {
         case Unknown
         case StartTurnAround
-        case IsInDaylight
-        case NotInDaylight
+        case TurnAroundComplete
     }
     
     @IBOutlet private var isoLabel: UILabel!
     @IBOutlet private var tempLabel: UILabel!
     @IBOutlet private var exposureLabel: UILabel!
-    @IBOutlet private var progressView: UIProgressView!
     @IBOutlet private var instructions: UILabel!
     @IBOutlet weak private var previewView: PreviewMetalView!
+    @IBOutlet private var resultLabel: UILabel!
     
     private let notifCenter = NotificationCenter.default
     var faceDetector: FaceProcessor?
@@ -60,8 +60,8 @@ class AssessFaceController: UIViewController {
     private let stateQueue = DispatchQueue(label: "State Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
     private let unknownPrompt = "Waiting to detect face"
     private let turnAroundPrompt = "Turn Around 180 degrees"
-    private let notInDaylightPrompt = "You are not in daylight! Please turn off all artificial lights."
-    private let isInDaylightPrompt = "Nice! You are in daylight."
+    private let keepTurningPrompt = "Keep Turning..."
+    private let stopPrompt = "Stop"
     
     static func storyboardInstance() -> AssessFaceController? {
         let className = String(describing: AssessFaceController.self)
@@ -90,7 +90,6 @@ class AssessFaceController: UIViewController {
     
     @objc private func appMovedToForeground() {
         self.resetState()
-        self.envObserver?.startMotionUpdates()
         self.faceDetector?.resume()
     }
     
@@ -112,32 +111,6 @@ class AssessFaceController: UIViewController {
 }
 
 extension AssessFaceController: EnvObserverDelegate {
-    func daylightUpdated(isDaylight: Bool) {
-        self.handleDayLightUpdate(isDaylight: isDaylight)
-    }
-    
-    private func handleDayLightUpdate(isDaylight: Bool) {
-        self.stateQueue.async {
-            if self.state == .Unknown {
-                return
-            }
-            if isDaylight {
-                self.state = .IsInDaylight
-            } else {
-                self.state = .NotInDaylight
-            }
-            
-            DispatchQueue.main.async {
-                if isDaylight {
-                    self.instructions.text = self.isInDaylightPrompt
-                    self.instructions.textColor = UIColor.systemGreen
-                } else {
-                    self.instructions.text = self.notInDaylightPrompt
-                    self.instructions.textColor = UIColor.systemRed
-                }
-            }
-        }
-    }
     
     func notifyISOUpdate(newISO: Int) {
         DispatchQueue.main.async {
@@ -157,13 +130,36 @@ extension AssessFaceController: EnvObserverDelegate {
         }
     }
     
-    func notifyProgress(progress: Float) {
+    func motionUpdating() {
         DispatchQueue.main.async {
-            self.progressView.setProgress(progress, animated: true)
+            self.instructions.text = self.keepTurningPrompt
+            self.instructions.textColor = UIColor.systemIndigo
         }
     }
     
-    func notifyLightingTestResults(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {
+    func motionUpdateComplete() {
+        self.envObserver?.stopMotionUpdates()
+        DispatchQueue.main.async {
+            self.instructions.stopBlink()
+            self.instructions.text = self.stopPrompt
+            self.instructions.textColor = UIColor.systemRed
+        }
+        
+    }
+    
+    func badColorTemperature() {
+        DispatchQueue.main.async {
+            self.resultLabel.text = "Bad color"
+        }
+    }
+    
+    func possiblyOutdoors() {
+        DispatchQueue.main.async {
+            self.resultLabel.text = "Outdoors"
+        }
+    }
+    
+    func displayError(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {
         DispatchQueue.main.async {
             guard let vc = LightingResultsController.storyboardInstance() else {
                 return
@@ -172,7 +168,6 @@ extension AssessFaceController: EnvObserverDelegate {
             vc.isDayLight = isDayLight
             vc.isGoodISO = isGoodISO
             vc.isGoodExposure = isGoodExposure
-            vc.modalPresentationStyle = .fullScreen
             self.present(vc, animated: true)
         }
     }
@@ -198,7 +193,7 @@ extension AssessFaceController: FaceProcessorDelegate {
         self.stateQueue.async {
             self.state = .StartTurnAround
             self.envObserver?.observeLighting(device: self.faceDetector?.getDevice(), vc: self)
-            self.envObserver?.startMotionUpdates()
+            self.envObserver?.startMotionUpdates(range: 180)
         }
         DispatchQueue.main.async {
             self.instructions.text = self.turnAroundPrompt

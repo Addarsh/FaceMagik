@@ -18,21 +18,17 @@ class EnvConditions: NSObject, EnvObserver {
     private var currISO: Int = 0
     private var currExposure: Int = 0
     private let envQueue = DispatchQueue(label: "Env Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
-    static private let expPercentThreshold = 70
-    static private let isoPerentThreshold = 70
-    static private let colorTempThreshold = 70
-    
-    private static let dayLightTempThreshold = 4000
-    private var badTempCount: Int = 0
-    private var goodTempCount: Int = 0
-    private let tempCountThreshold: Int = 10
     
     // Core Motion variables.
     private let motionManager = CMMotionManager()
     private var motionQueue = OperationQueue()
-    static private let motionFrequency = 1.0/30.0
-    static private let totalHeadingVals = 320
+    private static let motionFrequency = 1.0/30.0
     private var sensorMap: [Int: SensorValues] = [:]
+    
+    // returns smallest absolute difference (a-b) in degrees taking into account roll over from 360 to 0.
+    private static func smallestDegreeDiff(_ a: Int, _ b: Int) -> Int {
+        return abs(a-b) < 360 - abs(a-b) ? abs(a-b)  : 360 - abs(a-b)
+    }
     
     func observeLighting(device: AVCaptureDevice?, vc: EnvObserverDelegate?) {
         guard let dev = device else {
@@ -40,6 +36,16 @@ class EnvConditions: NSObject, EnvObserver {
         }
         self.cameraDevice = dev
         self.delegate = vc
+        
+        // Set initial values.
+        self.envQueue.async {
+            self.currExposure = Int(1/self.cameraDevice.exposureDuration.seconds)
+            self.currISO = Int(self.cameraDevice.iso)
+            self.currTemp = Int(self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature)
+        }
+        self.delegate?.notifyExposureUpdate(newExpsosure: Int(1/self.cameraDevice.exposureDuration.seconds))
+        self.delegate?.notifyISOUpdate(newISO: Int(self.cameraDevice.iso))
+        self.delegate?.notifyTempUpdate(newTemp: Int(self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature))
         
         // Start observing camera device exposureDuration.
         self.exposureObservation = observe(\.self.cameraDevice.exposureDuration, options: .new){
@@ -69,31 +75,14 @@ class EnvConditions: NSObject, EnvObserver {
         self.tempObservation = observe(\.self.cameraDevice.deviceWhiteBalanceGains, options: .new){
             obj, chng in
             let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
-            self.handleTempChange(temp: Int(temp))
+            self.envQueue.async {
+                self.currTemp = Int(temp)
+            }
+            self.delegate?.notifyTempUpdate(newTemp: Int(temp))
         }
     }
     
-    private func handleTempChange(temp: Int) {
-        self.envQueue.async {
-            self.currTemp = temp
-            
-            if self.currTemp < EnvConditions.dayLightTempThreshold {
-                self.goodTempCount = 0
-                self.badTempCount = self.badTempCount + 1
-            } else {
-                self.badTempCount = 0
-                self.goodTempCount = self.goodTempCount + 1
-            }
-            
-            if self.badTempCount >= self.tempCountThreshold || self.goodTempCount >= self.tempCountThreshold {
-                self.delegate?.daylightUpdated(isDaylight: self.goodTempCount > 0 ? true : false)
-            }
-            
-            self.delegate?.notifyTempUpdate(newTemp: temp)
-        }
-    }
-    
-    func startMotionUpdates() {
+    func startMotionUpdates(range: Int) {
         if !self.motionManager.isDeviceMotionAvailable {
             print ("Device motion unavaible! Error!")
             return
@@ -102,6 +91,10 @@ class EnvConditions: NSObject, EnvObserver {
             return
         }
         
+        var firstDegree: Int? = nil
+        var secondDegree: Int? = nil
+        var lastDegree: Int? = nil
+        var collectionComplete: Bool = false
         self.motionManager.deviceMotionUpdateInterval = EnvConditions.motionFrequency
         self.motionManager.startDeviceMotionUpdates(using: .xMagneticNorthZVertical, to: self.motionQueue, withHandler: { (data, error) in
             guard let validData = data else {
@@ -109,20 +102,28 @@ class EnvConditions: NSObject, EnvObserver {
             }
             let heading = Int(validData.heading)
             self.envQueue.async {
-                if self.sensorMap.keys.count >= EnvConditions.totalHeadingVals {
+                if collectionComplete {
                     // Completed sensor data collection.
                     return
+                }
+                if firstDegree == nil {
+                    firstDegree = heading
+                    lastDegree = heading + 180 < 360 ? heading + 180 : heading - 180
+                }
+                if secondDegree == nil && EnvConditions.smallestDegreeDiff(heading, firstDegree!) >= 5 {
+                    secondDegree = heading
+                    self.delegate?.motionUpdating()
                 }
                 if self.sensorMap[heading] != nil {
                     return
                 }
                 self.sensorMap[heading] = SensorValues(iso: self.currISO, exposure: self.currExposure, temp: self.currTemp, sceneType: SceneType.Unknown)
                 
-                let kCount = self.sensorMap.keys.count
-                
-                self.delegate?.notifyProgress(progress: Float(kCount)/Float(EnvConditions.totalHeadingVals))
-                if kCount == EnvConditions.totalHeadingVals {
-                    self.testLighting()
+                if abs(lastDegree! - heading) <= 5 {
+                    collectionComplete = true
+                    
+                    self.delegate?.motionUpdateComplete()
+                    self.processLighting()
                 }
             }
         })
@@ -138,26 +139,28 @@ class EnvConditions: NSObject, EnvObserver {
         }
     }
     
-    private func testLighting() {
-        var numVisibleColorTemp = 0
-        var numGoodISO = 0
-        var numGoodExposure = 0
+    // processLighting will process environment lighting using values in sensor map.
+    private func processLighting() {
+        var avgTemp: Float = 0
+        var avgISO: Float = 0
+        var avgExposure: Float = 0
         for (_, readouts) in self.sensorMap {
-            if readouts.temp >= 4000 {
-                numVisibleColorTemp += 1
-            }
-            if readouts.iso < 400 {
-                numGoodISO += 1
-            }
-            if readouts.exposure <= 50 {
-                numGoodExposure += 1
-            }
+            avgTemp += Float(readouts.temp)
+            avgISO += Float(readouts.iso)
+            avgExposure += Float(readouts.exposure)
         }
-
-        let colorTempPercent = Int((Float(numVisibleColorTemp)/Float(self.sensorMap.keys.count))*100.0)
-        let isoPercent = Int((Float(numGoodISO)/Float(self.sensorMap.keys.count))*100.0)
-        let expPercent = Int((Float(numGoodExposure)/Float(self.sensorMap.keys.count))*100.0)
         
-        self.delegate?.notifyLightingTestResults(isIndoors: true, isDayLight: colorTempPercent >= EnvConditions.colorTempThreshold ? true : false, isGoodISO: isoPercent >= EnvConditions.isoPerentThreshold ? true : false, isGoodExposure: expPercent >= EnvConditions.expPercentThreshold ? true : false)
+        let kCount = Float(self.sensorMap.count)
+        avgTemp /= kCount
+        avgISO /= kCount
+        avgExposure /= kCount
+        
+        if avgTemp < 4000 {
+            self.delegate?.badColorTemperature()
+            return
+        }
+        if avgExposure >= 45 {
+            self.delegate?.possiblyOutdoors()
+        }
     }
 }
