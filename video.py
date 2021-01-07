@@ -57,8 +57,6 @@ def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
   #mypts = f.get_face_keypoints()
   mypts = f.get_face_until_nose_end()
 
-  print ("Percent 240: ", (np.count_nonzero(np.bitwise_and(mypts, f.brightImage[:, :, 2] >= 240))/np.count_nonzero(mypts))*100.0)
-
   axisCount = 0
 
   medoids, allMasks, allIndices = best_clusters(f, mypts, delta_tol)
@@ -98,6 +96,7 @@ def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
       axisCount += 1
     f.show_mask(m)
   print ("Total time taken: ", time.time() - startTime)
+  print ("Percent 240: ", (np.count_nonzero(np.bitwise_and(mypts, f.brightImage[:, :, 2] >= 240))/np.count_nonzero(mypts))*100.0)
   #plt.show(block=False)
   f.show_orig_image()
 
