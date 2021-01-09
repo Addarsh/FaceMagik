@@ -30,135 +30,29 @@
                                     <action selector="next" destination="7h3-J2-6q9" eventType="touchDown" id="0qy-2T-pwC"/>
                                 </connections>
                             </button>
-                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" text="Lighting conditions are not appropriate." textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="0Wy-dg-T6L" userLabel="Title Text View">
-                                <rect key="frame" x="20" y="74" width="374" height="100"/>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="You don't seem to be in daylight" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="E21-Ia-Ttb">
+                                <rect key="frame" x="20" y="114" width="374" height="70"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" constant="100" id="uor-Yq-u54"/>
+                                    <constraint firstAttribute="height" constant="70" id="7sc-Gi-814"/>
                                 </constraints>
-                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="22"/>
-                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
-                            </textView>
-                            <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="SfT-x4-KN2" userLabel="Indoors Stack View">
-                                <rect key="frame" x="50" y="194" width="344" height="75"/>
-                                <subviews>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="You are indoors" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="o1L-fW-ALd">
-                                        <rect key="frame" x="0.0" y="0.0" width="206.5" height="75"/>
-                                        <fontDescription key="fontDescription" type="system" pointSize="22"/>
-                                        <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                        <nil key="highlightedColor"/>
-                                    </label>
-                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="red-cancel" translatesAutoresizingMaskIntoConstraints="NO" id="izC-w5-32y">
-                                        <rect key="frame" x="206.5" y="0.0" width="137.5" height="75"/>
-                                    </imageView>
-                                </subviews>
-                                <constraints>
-                                    <constraint firstItem="o1L-fW-ALd" firstAttribute="width" secondItem="SfT-x4-KN2" secondAttribute="width" multiplier="0.6" id="rgt-6h-6zP"/>
-                                    <constraint firstAttribute="height" constant="75" id="yaX-nX-EaG"/>
-                                </constraints>
-                            </stackView>
-                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="Zvy-2v-f7q" userLabel="Indoor detailed error View">
-                                <rect key="frame" x="45" y="269" width="349" height="100"/>
-                                <constraints>
-                                    <constraint firstAttribute="height" constant="100" id="lO3-Ct-fH5"/>
-                                </constraints>
                                 <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
-                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
-                            </textView>
-                            <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="EbI-42-Izk" userLabel="Visible Light Stack View">
-                                <rect key="frame" x="50" y="369" width="344" height="75"/>
-                                <subviews>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="You are in daylight" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="1eT-sQ-6K8">
-                                        <rect key="frame" x="0.0" y="0.0" width="206.5" height="75"/>
-                                        <fontDescription key="fontDescription" type="system" pointSize="22"/>
-                                        <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                        <nil key="highlightedColor"/>
-                                    </label>
-                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="red-cancel" translatesAutoresizingMaskIntoConstraints="NO" id="rpm-mI-RtA">
-                                        <rect key="frame" x="206.5" y="0.0" width="137.5" height="75"/>
-                                    </imageView>
-                                </subviews>
-                                <constraints>
-                                    <constraint firstAttribute="height" constant="75" id="LIg-Xk-VAG"/>
-                                    <constraint firstItem="1eT-sQ-6K8" firstAttribute="width" secondItem="EbI-42-Izk" secondAttribute="width" multiplier="0.6" id="Zxx-rD-PmH"/>
-                                </constraints>
-                            </stackView>
-                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="oP9-xM-z54" userLabel="Daylight detailed error View">
-                                <rect key="frame" x="45" y="444" width="349" height="100"/>
-                                <constraints>
-                                    <constraint firstAttribute="height" constant="100" id="LTo-l2-ke8"/>
-                                </constraints>
-                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
-                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
-                            </textView>
-                            <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="SxZ-jS-wIp" userLabel="Well Lit Stack View">
-                                <rect key="frame" x="50" y="544" width="344" height="75"/>
-                                <subviews>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Room is well lit" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="hOF-GM-Io3">
-                                        <rect key="frame" x="0.0" y="0.0" width="210" height="75"/>
-                                        <fontDescription key="fontDescription" type="system" pointSize="22"/>
-                                        <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                        <nil key="highlightedColor"/>
-                                    </label>
-                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="red-cancel" translatesAutoresizingMaskIntoConstraints="NO" id="Z76-N9-ddT">
-                                        <rect key="frame" x="210" y="0.0" width="134" height="75"/>
-                                    </imageView>
-                                </subviews>
-                                <constraints>
-                                    <constraint firstAttribute="height" constant="75" id="Fvy-EF-7XB"/>
-                                    <constraint firstItem="hOF-GM-Io3" firstAttribute="width" secondItem="SxZ-jS-wIp" secondAttribute="width" multiplier="0.61" id="X2g-IE-Db1"/>
-                                </constraints>
-                            </stackView>
-                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" translatesAutoresizingMaskIntoConstraints="NO" id="RKX-Xr-HUb">
-                                <rect key="frame" x="45" y="619" width="349" height="100"/>
-                                <constraints>
-                                    <constraint firstAttribute="height" constant="100" id="Jpp-6e-OSC"/>
-                                </constraints>
-                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
-                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
-                            </textView>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="aVe-0C-1f9"/>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
-                            <constraint firstItem="aVe-0C-1f9" firstAttribute="trailing" secondItem="EbI-42-Izk" secondAttribute="trailing" constant="20" id="41O-7r-aZq"/>
                             <constraint firstItem="1Ct-ml-Usz" firstAttribute="bottom" secondItem="aVe-0C-1f9" secondAttribute="bottom" id="9b7-ZW-uru"/>
-                            <constraint firstItem="aVe-0C-1f9" firstAttribute="trailing" secondItem="SxZ-jS-wIp" secondAttribute="trailing" constant="20" id="9m5-aS-0do"/>
+                            <constraint firstItem="aVe-0C-1f9" firstAttribute="trailing" secondItem="E21-Ia-Ttb" secondAttribute="trailing" constant="20" id="AB0-Dx-wBW"/>
                             <constraint firstItem="aVe-0C-1f9" firstAttribute="trailing" secondItem="1Ct-ml-Usz" secondAttribute="trailing" constant="20" id="Aev-pi-wRn"/>
-                            <constraint firstItem="EbI-42-Izk" firstAttribute="leading" secondItem="aVe-0C-1f9" secondAttribute="leading" constant="50" id="BtV-aB-sT2"/>
-                            <constraint firstItem="RKX-Xr-HUb" firstAttribute="leading" secondItem="aVe-0C-1f9" secondAttribute="leading" constant="45" id="HFL-a1-zVR"/>
-                            <constraint firstItem="aVe-0C-1f9" firstAttribute="trailing" secondItem="0Wy-dg-T6L" secondAttribute="trailing" constant="20" id="JN3-gu-Vi7"/>
-                            <constraint firstItem="aVe-0C-1f9" firstAttribute="trailing" secondItem="Zvy-2v-f7q" secondAttribute="trailing" constant="20" id="KEa-Ui-Hgy"/>
-                            <constraint firstItem="aVe-0C-1f9" firstAttribute="trailing" secondItem="oP9-xM-z54" secondAttribute="trailing" constant="20" id="Ki4-jP-oCp"/>
-                            <constraint firstItem="aVe-0C-1f9" firstAttribute="trailing" secondItem="SfT-x4-KN2" secondAttribute="trailing" constant="20" id="WOJ-AP-QGn"/>
-                            <constraint firstItem="0Wy-dg-T6L" firstAttribute="top" secondItem="aVe-0C-1f9" secondAttribute="top" constant="30" id="XOY-Gi-ehf"/>
-                            <constraint firstItem="EbI-42-Izk" firstAttribute="top" secondItem="Zvy-2v-f7q" secondAttribute="bottom" id="YQX-Xj-kFc"/>
-                            <constraint firstItem="Zvy-2v-f7q" firstAttribute="leading" secondItem="aVe-0C-1f9" secondAttribute="leading" constant="45" id="bX9-Bp-Y4A"/>
-                            <constraint firstItem="SfT-x4-KN2" firstAttribute="leading" secondItem="aVe-0C-1f9" secondAttribute="leading" constant="50" id="ehL-e1-6ke"/>
-                            <constraint firstItem="oP9-xM-z54" firstAttribute="leading" secondItem="aVe-0C-1f9" secondAttribute="leading" constant="45" id="ejU-Vu-MtQ"/>
-                            <constraint firstItem="SfT-x4-KN2" firstAttribute="top" secondItem="0Wy-dg-T6L" secondAttribute="bottom" constant="20" id="k0o-3V-p5B"/>
+                            <constraint firstItem="E21-Ia-Ttb" firstAttribute="top" secondItem="aVe-0C-1f9" secondAttribute="top" constant="70" id="ZOg-zl-7Wb"/>
                             <constraint firstItem="1Ct-ml-Usz" firstAttribute="leading" secondItem="aVe-0C-1f9" secondAttribute="leading" constant="20" id="ldC-He-7YR"/>
-                            <constraint firstItem="0Wy-dg-T6L" firstAttribute="leading" secondItem="aVe-0C-1f9" secondAttribute="leading" constant="20" id="nKi-Ab-2oT"/>
-                            <constraint firstItem="aVe-0C-1f9" firstAttribute="trailing" secondItem="RKX-Xr-HUb" secondAttribute="trailing" constant="20" id="pcx-Db-ib9"/>
-                            <constraint firstItem="RKX-Xr-HUb" firstAttribute="top" secondItem="SxZ-jS-wIp" secondAttribute="bottom" id="sNf-WU-Nh3"/>
-                            <constraint firstItem="oP9-xM-z54" firstAttribute="top" secondItem="EbI-42-Izk" secondAttribute="bottom" id="szl-eJ-umZ"/>
-                            <constraint firstItem="SxZ-jS-wIp" firstAttribute="leading" secondItem="aVe-0C-1f9" secondAttribute="leading" constant="50" id="yJ2-CF-FIb"/>
-                            <constraint firstItem="SxZ-jS-wIp" firstAttribute="top" secondItem="oP9-xM-z54" secondAttribute="bottom" id="yMW-ng-Sia"/>
-                            <constraint firstItem="Zvy-2v-f7q" firstAttribute="top" secondItem="SfT-x4-KN2" secondAttribute="bottom" id="yvH-P1-pVK"/>
+                            <constraint firstItem="E21-Ia-Ttb" firstAttribute="leading" secondItem="aVe-0C-1f9" secondAttribute="leading" constant="20" id="wbM-8I-YxZ"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="button" destination="1Ct-ml-Usz" id="T3W-3E-y0P"/>
-                        <outlet property="dayLightErrorView" destination="oP9-xM-z54" id="cSO-pM-oDp"/>
-                        <outlet property="daylightImage" destination="rpm-mI-RtA" id="xrX-CZ-yAN"/>
-                        <outlet property="indoorErrorView" destination="Zvy-2v-f7q" id="jp6-QE-Yrr"/>
-                        <outlet property="indoorsImage" destination="izC-w5-32y" id="Uu7-ND-sv0"/>
-                        <outlet property="titleMsg" destination="0Wy-dg-T6L" id="NJv-I7-MXj"/>
-                        <outlet property="wellLitErrorView" destination="RKX-Xr-HUb" id="m2D-wx-dgy"/>
-                        <outlet property="wellLitImage" destination="Z76-N9-ddT" id="brH-ht-sst"/>
                         <segue destination="d56-Zb-fsu" kind="unwind" identifier="StandupController" unwindAction="unwindToStandupControllerWithSegue:" id="NIf-Qh-fgP"/>
                     </connections>
                 </viewController>
@@ -169,7 +63,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="red-cancel" width="175" height="175"/>
         <systemColor name="systemIndigoColor">
             <color red="0.34509803921568627" green="0.33725490196078434" blue="0.83921568627450982" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>

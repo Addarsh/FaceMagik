@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9807909625A624F80029DCD4 /* BadColorTemperature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9807909525A624F80029DCD4 /* BadColorTemperature.swift */; };
+		9807909B25A6250E0029DCD4 /* BadColorTemperature.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9807909A25A6250E0029DCD4 /* BadColorTemperature.storyboard */; };
 		9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */; };
 		9816BAB4256EEF7700FF90C6 /* LightingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */; };
 		98455F3D25A281F700827928 /* EnvConditions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98455F3C25A281F700827928 /* EnvConditions.swift */; };
@@ -68,6 +70,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		9807909525A624F80029DCD4 /* BadColorTemperature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadColorTemperature.swift; sourceTree = "<group>"; };
+		9807909A25A6250E0029DCD4 /* BadColorTemperature.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = BadColorTemperature.storyboard; sourceTree = "<group>"; };
 		9816BAAE256CAF8E00FF90C6 /* PassThrough.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PassThrough.metal; sourceTree = "<group>"; };
 		9816BAB3256EEF7700FF90C6 /* LightingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightingViewController.swift; sourceTree = "<group>"; };
 		98455F3C25A281F700827928 /* EnvConditions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvConditions.swift; sourceTree = "<group>"; };
@@ -193,6 +197,8 @@
 				989F45A1258BCB14005B1D4B /* RotateInstructionsController.storyboard */,
 				989F45B7258C0C5C005B1D4B /* AssessLightController.storyboard */,
 				985108B025966C700037E455 /* AssessFaceController.swift */,
+				9807909525A624F80029DCD4 /* BadColorTemperature.swift */,
+				9807909A25A6250E0029DCD4 /* BadColorTemperature.storyboard */,
 				985108BA259A4B8D0037E455 /* FaceDetector.swift */,
 				985108B525966C860037E455 /* AssessFaceController.storyboard */,
 				98455F3C25A281F700827928 /* EnvConditions.swift */,
@@ -357,6 +363,7 @@
 				9851212925789E7100F11004 /* AlertViewController.storyboard in Resources */,
 				986471B32586A1690080F976 /* LightConditionsController.storyboard in Resources */,
 				989F45C8258F1780005B1D4B /* LightingResultsController.storyboard in Resources */,
+				9807909B25A6250E0029DCD4 /* BadColorTemperature.storyboard in Resources */,
 				989F45AE258BD685005B1D4B /* rotate-woman.gif in Resources */,
 				989F45A2258BCB14005B1D4B /* RotateInstructionsController.storyboard in Resources */,
 				98512162258130C800F11004 /* SceneMapping.json in Resources */,
@@ -400,6 +407,7 @@
 				985F8B72256C80F800EAA558 /* PreviewMetalView.swift in Sources */,
 				989F459D258BCAF9005B1D4B /* RotateInstructionsController.swift in Sources */,
 				986921EA253CD9E700C98065 /* PreviewView.swift in Sources */,
+				9807909625A624F80029DCD4 /* BadColorTemperature.swift in Sources */,
 				984B11C3256218B1005809C3 /* ThresholdKernel.swift in Sources */,
 				98B171072543360700D464BF /* ImageViewController.swift in Sources */,
 				986471BD2589CA6C0080F976 /* StandupController.swift in Sources */,

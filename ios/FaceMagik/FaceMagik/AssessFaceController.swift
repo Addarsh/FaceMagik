@@ -151,6 +151,12 @@ extension AssessFaceController: EnvObserverDelegate {
         DispatchQueue.main.async {
             self.resultLabel.text = "Bad color"
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            guard let vc = BadColorTemperature.storyboardInstance() else {
+                return
+            }
+            self.present(vc, animated: true)
+        }
     }
     
     func possiblyOutdoors() {
