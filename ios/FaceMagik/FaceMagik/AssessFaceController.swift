@@ -163,6 +163,12 @@ extension AssessFaceController: EnvObserverDelegate {
         DispatchQueue.main.async {
             self.resultLabel.text = "Outdoors"
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            guard let vc = PossiblyOutsideError.storyboardInstance() else {
+                return
+            }
+            self.present(vc, animated: true)
+        }
     }
     
     func displayError(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {

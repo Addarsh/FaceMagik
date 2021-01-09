@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="41V-NH-wkH">
+    <device id="retina6_1" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17505"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--Possibly Outside Error-->
+        <scene sceneID="xUM-eH-51s">
+            <objects>
+                <viewController id="41V-NH-wkH" customClass="PossiblyOutsideError" customModule="FaceMagik" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="9ll-3s-2BP">
+                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="oaC-C3-xNM">
+                                <rect key="frame" x="20" y="812" width="374" height="50"/>
+                                <color key="backgroundColor" systemColor="systemIndigoColor"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="50" id="vmg-it-u5d"/>
+                                </constraints>
+                                <fontDescription key="fontDescription" type="system" pointSize="18"/>
+                                <state key="normal" title="Try Again Later">
+                                    <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                </state>
+                                <connections>
+                                    <action selector="tryAgain" destination="41V-NH-wkH" eventType="touchDown" id="92I-5M-nYN"/>
+                                </connections>
+                            </button>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Looks like you might be outdoors" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="eVE-of-6AQ">
+                                <rect key="frame" x="20" y="114" width="374" height="70"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="70" id="zEk-O3-MlO"/>
+                                </constraints>
+                                <fontDescription key="fontDescription" type="system" pointSize="22"/>
+                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="mpV-Jj-rfi">
+                                <rect key="frame" x="20" y="284" width="374" height="200"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="200" id="7Yj-jg-0to"/>
+                                </constraints>
+                                <string key="text">There is too much light in your surroundings.
+
+
+For best results, please try again when you are indoors.</string>
+                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="20"/>
+                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
+                            </textView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="EkF-Xx-Rn5"/>
+                        <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <constraints>
+                            <constraint firstItem="oaC-C3-xNM" firstAttribute="bottom" secondItem="EkF-Xx-Rn5" secondAttribute="bottom" id="BC9-hF-jVf"/>
+                            <constraint firstItem="EkF-Xx-Rn5" firstAttribute="trailing" secondItem="mpV-Jj-rfi" secondAttribute="trailing" constant="20" id="Ejp-yG-lfJ"/>
+                            <constraint firstItem="EkF-Xx-Rn5" firstAttribute="trailing" secondItem="eVE-of-6AQ" secondAttribute="trailing" constant="20" id="IR8-Xt-blG"/>
+                            <constraint firstItem="mpV-Jj-rfi" firstAttribute="top" secondItem="eVE-of-6AQ" secondAttribute="bottom" constant="100" id="Jf3-UH-XZB"/>
+                            <constraint firstItem="EkF-Xx-Rn5" firstAttribute="trailing" secondItem="oaC-C3-xNM" secondAttribute="trailing" constant="20" id="Ogd-b3-45e"/>
+                            <constraint firstItem="eVE-of-6AQ" firstAttribute="top" secondItem="EkF-Xx-Rn5" secondAttribute="top" constant="70" id="gSN-Vu-DNr"/>
+                            <constraint firstItem="mpV-Jj-rfi" firstAttribute="leading" secondItem="EkF-Xx-Rn5" secondAttribute="leading" constant="20" id="hAv-oq-ciM"/>
+                            <constraint firstItem="eVE-of-6AQ" firstAttribute="leading" secondItem="EkF-Xx-Rn5" secondAttribute="leading" constant="20" id="jJz-Re-MJQ"/>
+                            <constraint firstItem="oaC-C3-xNM" firstAttribute="leading" secondItem="EkF-Xx-Rn5" secondAttribute="leading" constant="20" id="n1h-G9-OuX"/>
+                        </constraints>
+                    </view>
+                    <connections>
+                        <segue destination="W0I-7N-TjW" kind="unwind" identifier="StandupController" unwindAction="unwindToStandupControllerWithSegue:" id="FPh-3b-1fZ"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="Q2t-Hh-QYx" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+                <exit id="W0I-7N-TjW" userLabel="Exit" sceneMemberID="exit"/>
+            </objects>
+            <point key="canvasLocation" x="386" y="210"/>
+        </scene>
+    </scenes>
+    <resources>
+        <systemColor name="systemIndigoColor">
+            <color red="0.34509803921568627" green="0.33725490196078434" blue="0.83921568627450982" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+    </resources>
+</document>

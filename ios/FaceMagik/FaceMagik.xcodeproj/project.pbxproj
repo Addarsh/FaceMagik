@@ -50,6 +50,8 @@
 		989F45D9259260C3005B1D4B /* RemindPhoneOrientationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 989F45D8259260C3005B1D4B /* RemindPhoneOrientationController.swift */; };
 		989F45DE259260DE005B1D4B /* RemindPhoneOrientationController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 989F45DD259260DE005B1D4B /* RemindPhoneOrientationController.storyboard */; };
 		98B171072543360700D464BF /* ImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B171062543360700D464BF /* ImageViewController.swift */; };
+		98C7C09925AA33EA0032A0CA /* PossiblyOutsideError.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 98C7C09825AA33EA0032A0CA /* PossiblyOutsideError.storyboard */; };
+		98C7C09E25AA34050032A0CA /* PossiblyOutsideError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C7C09D25AA34050032A0CA /* PossiblyOutsideError.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -118,6 +120,8 @@
 		989F45D8259260C3005B1D4B /* RemindPhoneOrientationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindPhoneOrientationController.swift; sourceTree = "<group>"; };
 		989F45DD259260DE005B1D4B /* RemindPhoneOrientationController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = RemindPhoneOrientationController.storyboard; sourceTree = "<group>"; };
 		98B171062543360700D464BF /* ImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewController.swift; sourceTree = "<group>"; };
+		98C7C09825AA33EA0032A0CA /* PossiblyOutsideError.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = PossiblyOutsideError.storyboard; sourceTree = "<group>"; };
+		98C7C09D25AA34050032A0CA /* PossiblyOutsideError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PossiblyOutsideError.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -199,6 +203,8 @@
 				985108B025966C700037E455 /* AssessFaceController.swift */,
 				9807909525A624F80029DCD4 /* BadColorTemperature.swift */,
 				9807909A25A6250E0029DCD4 /* BadColorTemperature.storyboard */,
+				98C7C09825AA33EA0032A0CA /* PossiblyOutsideError.storyboard */,
+				98C7C09D25AA34050032A0CA /* PossiblyOutsideError.swift */,
 				985108BA259A4B8D0037E455 /* FaceDetector.swift */,
 				985108B525966C860037E455 /* AssessFaceController.storyboard */,
 				98455F3C25A281F700827928 /* EnvConditions.swift */,
@@ -359,6 +365,7 @@
 			files = (
 				9851D37B253A46200009D709 /* LaunchScreen.storyboard in Resources */,
 				9851D378253A46200009D709 /* Assets.xcassets in Resources */,
+				98C7C09925AA33EA0032A0CA /* PossiblyOutsideError.storyboard in Resources */,
 				989F45DE259260DE005B1D4B /* RemindPhoneOrientationController.storyboard in Resources */,
 				9851212925789E7100F11004 /* AlertViewController.storyboard in Resources */,
 				986471B32586A1690080F976 /* LightConditionsController.storyboard in Resources */,
@@ -417,6 +424,7 @@
 				98455F3D25A281F700827928 /* EnvConditions.swift in Sources */,
 				985121242575EDB300F11004 /* CircularProgressView.swift in Sources */,
 				9851D371253A461C0009D709 /* SceneDelegate.swift in Sources */,
+				98C7C09E25AA34050032A0CA /* PossiblyOutsideError.swift in Sources */,
 				985121362578B1A400F11004 /* AlertViewController.swift in Sources */,
 				9851213E257AA0CA00F11004 /* OverviewController.swift in Sources */,
 				989F4593258A71A7005B1D4B /* PhoneOrientationController.swift in Sources */,
