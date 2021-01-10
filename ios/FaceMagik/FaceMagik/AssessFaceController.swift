@@ -11,14 +11,13 @@ import Photos
 protocol FaceProcessor {
     func startDetection(vc: FaceProcessorDelegate?)
     func getDevice() -> AVCaptureDevice
-    func getFaceMask() -> CIImage?
     func stop()
     func resume()
 }
 
 protocol FaceProcessorDelegate {
     func firstFrame()
-    func frameUpdated(rgbImage: CIImage, faceDepth: Float)
+    func frameUpdated(rgbImage: CIImage, faceDepth: Float, fullFaceMask: CIImage)
 }
 
 protocol EnvObserver {
@@ -31,19 +30,20 @@ protocol EnvObserverDelegate {
     func notifyISOUpdate(newISO: Int)
     func notifyExposureUpdate(newExpsosure: Int)
     func notifyTempUpdate(newTemp: Int)
+    func notifyHeading(heading: Int)
     func motionUpdating()
     func motionUpdateComplete()
     func badColorTemperature()
     func possiblyOutdoors()
+    func tooBright()
+}
+
+protocol AssessFaceControllerDelegate {
+    func handleUpdatedHeading(heading: Int)
+    func handleUpdatedImage(image: CIImage?, fullFaceMask: CIImage?)
 }
 
 class AssessFaceController: UIViewController {
-    enum State {
-        case Unknown
-        case StartTurnAround
-        case TurnAroundComplete
-    }
-    
     @IBOutlet private var isoLabel: UILabel!
     @IBOutlet private var tempLabel: UILabel!
     @IBOutlet private var exposureLabel: UILabel!
@@ -54,10 +54,10 @@ class AssessFaceController: UIViewController {
     private let notifCenter = NotificationCenter.default
     var faceDetector: FaceProcessor?
     var envObserver: EnvObserver?
+    var skinAnalyzerDelegate: AssessFaceControllerDelegate?
+    var stateMgr: StateManager?
     private var phoneTooCloseAlert: AlertViewController?
-    
-    private var state: State = .Unknown
-    private let stateQueue = DispatchQueue(label: "State Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
+
     private let unknownPrompt = "Waiting to detect face"
     private let turnAroundPrompt = "Turn Around 180 degrees"
     private let keepTurningPrompt = "Keep Turning..."
@@ -71,6 +71,9 @@ class AssessFaceController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        self.skinAnalyzerDelegate = SkinToneAnalyzer()
+        self.stateMgr = StateManager()
         
         self.previewView.rotation = .rotate180Degrees
     
@@ -95,7 +98,7 @@ class AssessFaceController: UIViewController {
     
     private func resetState() {
         self.instructions.stopBlink()
-        self.state = .Unknown
+        self.stateMgr?.updateState(state: StateManager.State.Unknown)
         self.instructions.text = self.unknownPrompt
         self.instructions.textColor = UIColor.systemRed
     }
@@ -130,6 +133,12 @@ extension AssessFaceController: EnvObserverDelegate {
         }
     }
     
+    func notifyHeading(heading: Int) {
+        if self.stateMgr?.getState() == StateManager.State.StartTurnAround {
+            self.skinAnalyzerDelegate?.handleUpdatedHeading(heading: heading)
+        }
+    }
+    
     func motionUpdating() {
         DispatchQueue.main.async {
             self.instructions.text = self.keepTurningPrompt
@@ -139,6 +148,7 @@ extension AssessFaceController: EnvObserverDelegate {
     
     func motionUpdateComplete() {
         self.envObserver?.stopMotionUpdates()
+        self.stateMgr?.updateState(state: StateManager.State.TurnAroundComplete)
         DispatchQueue.main.async {
             self.instructions.stopBlink()
             self.instructions.text = self.stopPrompt
@@ -169,6 +179,11 @@ extension AssessFaceController: EnvObserverDelegate {
             }
             self.present(vc, animated: true)
         }
+    }
+    
+    func tooBright() {
+        // Delay.
+        // Start movement towards direction of light.
     }
     
     func displayError(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {
@@ -202,11 +217,10 @@ extension UILabel {
 
 extension AssessFaceController: FaceProcessorDelegate {
     func firstFrame() {
-        self.stateQueue.async {
-            self.state = .StartTurnAround
-            self.envObserver?.observeLighting(device: self.faceDetector?.getDevice(), vc: self)
-            self.envObserver?.startMotionUpdates(range: 180)
-        }
+        self.stateMgr?.updateState(state: StateManager.State.StartTurnAround)
+        self.envObserver?.observeLighting(device: self.faceDetector?.getDevice(), vc: self)
+        self.envObserver?.startMotionUpdates(range: 180)
+        
         DispatchQueue.main.async {
             self.instructions.text = self.turnAroundPrompt
             self.instructions.textColor = UIColor.systemIndigo
@@ -214,8 +228,12 @@ extension AssessFaceController: FaceProcessorDelegate {
         }
     }
     
-    func frameUpdated(rgbImage: CIImage, faceDepth: Float) {
+    func frameUpdated(rgbImage: CIImage, faceDepth: Float, fullFaceMask: CIImage) {
         self.previewView.image = rgbImage
+        
+        if self.stateMgr?.getState() == StateManager.State.StartTurnAround {
+            self.skinAnalyzerDelegate?.handleUpdatedImage(image: rgbImage, fullFaceMask: fullFaceMask)
+        }
         
         if isPhoneTooClose(faceDepth: faceDepth) {
             // Wait for user to move phone further away.
@@ -236,7 +254,6 @@ extension AssessFaceController: FaceProcessorDelegate {
                 guard let vc = AlertViewController.storyboardInstance() else {
                     return
                 }
-                //vc.modalPresentationStyle = .fullScreen
                 self.phoneTooCloseAlert = vc
                 self.present(vc, animated: true)
             }

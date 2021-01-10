@@ -8,6 +8,19 @@
 import Photos
 import CoreMotion
 
+enum SceneType: Int, Codable {
+    case Indoors = 1
+    case Outdoors = 2
+    case Unknown = 3
+}
+
+struct SensorValues {
+    var iso: Int
+    var exposure: Int
+    var temp: Int
+    var sceneType: SceneType
+}
+
 class EnvConditions: NSObject, EnvObserver {    
     private var delegate: EnvObserverDelegate?
     @objc private var cameraDevice: AVCaptureDevice!
@@ -106,6 +119,7 @@ class EnvConditions: NSObject, EnvObserver {
                     // Completed sensor data collection.
                     return
                 }
+                self.delegate?.notifyHeading(heading: heading)
                 if firstDegree == nil {
                     firstDegree = heading
                     lastDegree = heading + 180 < 360 ? heading + 180 : heading - 180
@@ -161,6 +175,10 @@ class EnvConditions: NSObject, EnvObserver {
         }
         if avgExposure >= 45 {
             self.delegate?.possiblyOutdoors()
+            return
+        }
+        if avgISO < 200 {
+            self.delegate?.tooBright()
         }
     }
 }

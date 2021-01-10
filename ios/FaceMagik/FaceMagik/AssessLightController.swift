@@ -10,19 +10,6 @@ import Photos
 import Vision
 import CoreMotion
 
-enum SceneType: Int, Codable {
-    case Indoors = 1
-    case Outdoors = 2
-    case Unknown = 3
-}
-
-struct SensorValues {
-    var iso: Int
-    var exposure: Int
-    var temp: Int
-    var sceneType: SceneType
-}
-
 class AssessLightController: UIViewController {
     @IBOutlet private var instructions: UITextView!
     @IBOutlet private var previewLayer: PreviewView!

@@ -37,7 +37,7 @@ class FaceDetector: NSObject, FaceProcessor {
     private var faceBoundsRect: CGRect?
     private var depthOfFaceCenter: Float?
     private var depthMaskCIImage: CIImage?
-    private var faceMask: CIImage?
+    private var fullFaceMask: CIImage?
     
     // toCGCoordinates maps given points from UIImage coordinate system (left bottom origin)
     // to the CGImage coordinate system (left top origion).
@@ -203,6 +203,7 @@ class FaceDetector: NSObject, FaceProcessor {
                 self.faceContourMask = self.createFaceContourMask(faceContour)
                 self.depthOfFaceCenter = self.computeDepthOfFace(depthPixelBuffer)
                 self.depthMaskCIImage = self.createDepthMask(depthPixelBuffer)
+                self.fullFaceMask = self.getFaceMask()
             })])
         } catch let error as NSError {
             print ("Failed to perform Face detection with error: \(error)")
@@ -361,8 +362,7 @@ class FaceDetector: NSObject, FaceProcessor {
     }
     
     // getFaceMask returns mask of face points excluding eyes, eyebrows, lips and teeth.
-    func getFaceMask() -> CIImage? {
-        
+    private func getFaceMask() -> CIImage? {
         // blend depthmask and face contour mask.
         var comp = CIFilter.minimumCompositing()
         comp.inputImage = self.depthMaskCIImage
@@ -399,8 +399,6 @@ class FaceDetector: NSObject, FaceProcessor {
         comp.backgroundImage = out
         comp.inputImage = self.outerLipsMask
         out = comp.outputImage
-        
-        self.faceMask = out
         
         return out
     }
@@ -441,16 +439,16 @@ extension FaceDetector: AVCaptureDataOutputSynchronizerDelegate {
             print ("Could not convert video sample buffer to cvpixelbuffer")
             return
         }
-        let rgbImage = CIImage(cvPixelBuffer: videoPixelBuffer)
+        let rgbImage = CIImage(cvPixelBuffer: videoPixelBuffer.copy())
         self.image = rgbImage
         
-        self.detectFace(depthPixelBuffer: syncedDepthData.depthData.depthDataMap)
+        self.detectFace(depthPixelBuffer: syncedDepthData.depthData.depthDataMap.copy())
         if self.numFacesFound != 1 {
             // Expected 1 face.
             return
         }
         guard let faceDepth = self.depthOfFaceCenter else {
-            // Face depth value not found.
+            print ("face depth value not found")
             return
         }
         
@@ -458,7 +456,45 @@ extension FaceDetector: AVCaptureDataOutputSynchronizerDelegate {
             self.delegate?.firstFrame()
             self.firstFrame = false
         }
+        
         self.image = rgbImage
-        self.delegate?.frameUpdated(rgbImage: rgbImage, faceDepth: faceDepth)
+        guard let fullFaceMask = self.fullFaceMask else {
+            print ("full face mask missing")
+            return
+        }
+        
+        self.delegate?.frameUpdated(rgbImage: rgbImage, faceDepth: faceDepth, fullFaceMask: fullFaceMask)
+    }
+}
+
+extension CVPixelBuffer {
+    func copy() -> CVPixelBuffer {
+        precondition(CFGetTypeID(self) == CVPixelBufferGetTypeID(), "copy() cannot be called on a non-CVPixelBuffer")
+
+        var _copy : CVPixelBuffer?
+        CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            CVPixelBufferGetWidth(self),
+            CVPixelBufferGetHeight(self),
+            CVPixelBufferGetPixelFormatType(self),
+            nil,
+            &_copy)
+
+        guard let copy = _copy else { fatalError() }
+
+        CVPixelBufferLockBaseAddress(self, CVPixelBufferLockFlags.readOnly)
+        CVPixelBufferLockBaseAddress(copy, CVPixelBufferLockFlags(rawValue: 0))
+
+
+        let copyBaseAddress = CVPixelBufferGetBaseAddress(copy)
+        let currBaseAddress = CVPixelBufferGetBaseAddress(self)
+
+        memcpy(copyBaseAddress, currBaseAddress, CVPixelBufferGetDataSize(copy))
+
+        CVPixelBufferUnlockBaseAddress(copy, CVPixelBufferLockFlags(rawValue: 0))
+        CVPixelBufferUnlockBaseAddress(self, CVPixelBufferLockFlags.readOnly)
+
+
+        return copy
     }
 }
