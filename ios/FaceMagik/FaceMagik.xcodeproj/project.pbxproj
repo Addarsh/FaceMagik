@@ -54,6 +54,7 @@
 		98C7C09925AA33EA0032A0CA /* PossiblyOutsideError.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 98C7C09825AA33EA0032A0CA /* PossiblyOutsideError.storyboard */; };
 		98C7C09E25AA34050032A0CA /* PossiblyOutsideError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C7C09D25AA34050032A0CA /* PossiblyOutsideError.swift */; };
 		98C7C0A325AA5EA00032A0CA /* SkinToneAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C7C0A225AA5EA00032A0CA /* SkinToneAnalyzer.swift */; };
+		98E7F0E525AD6F5900FBF99E /* CIImageHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E7F0E425AD6F5900FBF99E /* CIImageHelper.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -126,6 +127,7 @@
 		98C7C09825AA33EA0032A0CA /* PossiblyOutsideError.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = PossiblyOutsideError.storyboard; sourceTree = "<group>"; };
 		98C7C09D25AA34050032A0CA /* PossiblyOutsideError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PossiblyOutsideError.swift; sourceTree = "<group>"; };
 		98C7C0A225AA5EA00032A0CA /* SkinToneAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinToneAnalyzer.swift; sourceTree = "<group>"; };
+		98E7F0E425AD6F5900FBF99E /* CIImageHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CIImageHelper.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -211,6 +213,7 @@
 				98C7C09825AA33EA0032A0CA /* PossiblyOutsideError.storyboard */,
 				98C7C09D25AA34050032A0CA /* PossiblyOutsideError.swift */,
 				985108BA259A4B8D0037E455 /* FaceDetector.swift */,
+				98E7F0E425AD6F5900FBF99E /* CIImageHelper.swift */,
 				98C7C0A225AA5EA00032A0CA /* SkinToneAnalyzer.swift */,
 				985108B525966C860037E455 /* AssessFaceController.storyboard */,
 				98455F3C25A281F700827928 /* EnvConditions.swift */,
@@ -412,6 +415,7 @@
 				989F45D9259260C3005B1D4B /* RemindPhoneOrientationController.swift in Sources */,
 				98512159257F25CC00F11004 /* GoogLeNetPlaces.mlmodel in Sources */,
 				9851D373253A461C0009D709 /* ViewController.swift in Sources */,
+				98E7F0E525AD6F5900FBF99E /* CIImageHelper.swift in Sources */,
 				98512154257E96FA00F11004 /* AssessLightController.swift in Sources */,
 				98C7C0A325AA5EA00032A0CA /* SkinToneAnalyzer.swift in Sources */,
 				985108B125966C700037E455 /* AssessFaceController.swift in Sources */,

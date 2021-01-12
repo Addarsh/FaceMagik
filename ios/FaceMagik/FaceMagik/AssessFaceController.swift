@@ -17,7 +17,7 @@ protocol FaceProcessor {
 
 protocol FaceProcessorDelegate {
     func firstFrame()
-    func frameUpdated(rgbImage: CIImage, faceDepth: Float, fullFaceMask: CIImage)
+    func frameUpdated(faceProperties: FaceProperties)
 }
 
 protocol EnvObserver {
@@ -40,7 +40,7 @@ protocol EnvObserverDelegate {
 
 protocol AssessFaceControllerDelegate {
     func handleUpdatedHeading(heading: Int)
-    func handleUpdatedImage(image: CIImage?, fullFaceMask: CIImage?)
+    func handleUpdatedImage(faceProperties: FaceProperties)
 }
 
 class AssessFaceController: UIViewController {
@@ -228,14 +228,14 @@ extension AssessFaceController: FaceProcessorDelegate {
         }
     }
     
-    func frameUpdated(rgbImage: CIImage, faceDepth: Float, fullFaceMask: CIImage) {
-        self.previewView.image = rgbImage
+    func frameUpdated(faceProperties: FaceProperties) {
+        self.previewView.image = CIImageHelper.overlayMask(image: faceProperties.image, mask: faceProperties.fullFaceMask)
         
         if self.stateMgr?.getState() == StateManager.State.StartTurnAround {
-            self.skinAnalyzerDelegate?.handleUpdatedImage(image: rgbImage, fullFaceMask: fullFaceMask)
+            self.skinAnalyzerDelegate?.handleUpdatedImage(faceProperties: faceProperties)
         }
         
-        if isPhoneTooClose(faceDepth: faceDepth) {
+        if isPhoneTooClose(faceDepth: faceProperties.faceDepth) {
             // Wait for user to move phone further away.
             return
         }

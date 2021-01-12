@@ -8,38 +8,27 @@
 import UIKit
 
 class SkinToneAnalyzer: AssessFaceControllerDelegate {
-    private struct ImageDetails {
-        var image: CIImage
-        var fullFaceMask: CIImage
-    }
-    
-    private var headingImageDetailsMap: [Int:ImageDetails] = [:]
+    private var headingImageDetailsMap: [Int:FaceProperties] = [:]
     private let headingQueue = DispatchQueue(label: "Heading Queue to analyze skin tone", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
-    private var currImageDetails: ImageDetails?
+    private var currFaceProperties: FaceProperties?
     
     init() {}
     
     func handleUpdatedHeading(heading: Int) {
         self.headingQueue.async {
-            guard let imageDetails = self.currImageDetails else {
+            guard let faceProperties = self.currFaceProperties else {
                 return
             }
             if self.headingImageDetailsMap[heading] != nil {
                 return
             }
-            self.headingImageDetailsMap[heading] = imageDetails
+            self.headingImageDetailsMap[heading] = faceProperties
         }
     }
     
-    func handleUpdatedImage(image: CIImage?, fullFaceMask: CIImage?) {
+    func handleUpdatedImage(faceProperties: FaceProperties) {
         self.headingQueue.async {
-            guard let img = image else {
-                return
-            }
-            guard let fullMask = fullFaceMask else {
-                return
-            }
-            self.currImageDetails = ImageDetails(image: img, fullFaceMask: fullMask)
+            self.currFaceProperties = faceProperties
         }
     }
 }

@@ -9,6 +9,15 @@ import UIKit
 import Vision
 import Photos
 
+// FaceProperties stores easy to access properties of a face.
+struct FaceProperties {
+    var image: CIImage
+    var faceDepth: Float
+    var fullFaceMask: CIImage
+    var leftCheekMask: CIImage
+    var rightCheekMask: CIImage
+}
+
 class FaceDetector: NSObject, FaceProcessor {
     // AVCaptureSession variables.
     private let captureSessionQueue = DispatchQueue(label: "vision request queue", qos: .userInteractive, attributes: [], autoreleaseFrequency: .inherit, target: nil)
@@ -21,6 +30,12 @@ class FaceDetector: NSObject, FaceProcessor {
     private static let FRAME_RATE: Int32 = 20
     private var delegate: FaceProcessorDelegate?
     private var firstFrame: Bool = true
+    
+    // Landmark regions.
+    private var noseLandmarks: VNFaceLandmarkRegion2D!
+    private var rightEyeLandmarks: VNFaceLandmarkRegion2D!
+    private var leftEyeLandmarks: VNFaceLandmarkRegion2D!
+    private var faceContourLandmarks: VNFaceLandmarkRegion2D!
     
     // Face properties.
     private var image: CIImage?
@@ -38,11 +53,40 @@ class FaceDetector: NSObject, FaceProcessor {
     private var depthOfFaceCenter: Float?
     private var depthMaskCIImage: CIImage?
     private var fullFaceMask: CIImage?
+    private var leftCheekMask: CIImage?
+    private var rightCheekMask: CIImage?
     
-    // toCGCoordinates maps given points from UIImage coordinate system (left bottom origin)
-    // to the CGImage coordinate system (left top origion).
-    private static func toCGCoordinates(_ points: [CGPoint], _ imageHeight: CGFloat) -> [CGPoint] {
-        points.compactMap({ return CGPoint(x: $0.x, y: imageHeight - $0.y) })
+    // toCGCoordinates maps given face landmark to the CGImage coordinate system (left top origion).
+    private func toCGCoordinates(_ landmark: VNFaceLandmarkRegion2D) -> [CGPoint] {
+        guard let width = self.image?.extent.width else {
+            return []
+        }
+        guard let height = self.image?.extent.height else {
+            return []
+        }
+        
+        let points = landmark.pointsInImage(imageSize: CGSize(width: width, height: height))
+        return points.compactMap({ return CGPoint(x: $0.x, y: height - $0.y) })
+    }
+    
+    // bbox returns a bounding box of given face landmark.
+    private func bbox(landmark: VNFaceLandmarkRegion2D) -> CGRect? {
+        // Convert normalized points to image coordinate space.
+        let landmarkPoints = self.toCGCoordinates(landmark)
+        
+        guard let xMin = landmarkPoints.min(by: {p1, p2 in p1.x < p2.x})?.x else {
+            return nil
+        }
+        guard let xMax = landmarkPoints.max(by: {p1, p2 in p1.x < p2.x})?.x else {
+            return nil
+        }
+        guard let yMin = landmarkPoints.min(by: {p1, p2 in p1.y < p2.y})?.y else {
+            return nil
+        }
+        guard let yMax = landmarkPoints.max(by: {p1, p2 in p1.y < p2.y})?.y else {
+            return nil
+        }
+        return CGRect(x: xMin, y: yMin, width: xMax - xMin, height: yMax - yMin)
     }
     
     func startDetection(vc: FaceProcessorDelegate?) {
@@ -173,10 +217,14 @@ class FaceDetector: NSObject, FaceProcessor {
                     print ("Left Eye not found in image")
                     return
                 }
+                self.leftEyeLandmarks = leftEye
+                
                 guard let rightEye = landmarks.rightEye else {
                     print ("Right Eye not found in image")
                     return
                 }
+                self.rightEyeLandmarks = rightEye
+                
                 guard let leftEyebrow = landmarks.leftEyebrow else {
                     print ("Left Eyebrow not found in image")
                     return
@@ -189,10 +237,17 @@ class FaceDetector: NSObject, FaceProcessor {
                     print ("outerLips not found in image")
                     return
                 }
+                guard let nose = landmarks.nose else {
+                    print ("nose not found in image")
+                    return
+                }
+                self.noseLandmarks = nose
+                
                 guard let faceContour = landmarks.faceContour else {
                     print ("faceContour not found in image")
                     return
                 }
+                self.faceContourLandmarks = faceContour
                 
                 self.faceBoundsMask = self.createFaceBoundsMask(result.boundingBox)
                 self.leftEyeMask = self.createLandmarkMask(leftEye)
@@ -204,6 +259,8 @@ class FaceDetector: NSObject, FaceProcessor {
                 self.depthOfFaceCenter = self.computeDepthOfFace(depthPixelBuffer)
                 self.depthMaskCIImage = self.createDepthMask(depthPixelBuffer)
                 self.fullFaceMask = self.getFaceMask()
+                self.leftCheekMask = self.getLeftCheekMask()
+                self.rightCheekMask = self.getRightCheekMask()
             })])
         } catch let error as NSError {
             print ("Failed to perform Face detection with error: \(error)")
@@ -248,8 +305,7 @@ class FaceDetector: NSObject, FaceProcessor {
         }
         
         // Convert normalized points to image coordinate space.
-        var landmarkPoints = landmark.pointsInImage(imageSize: CGSize(width: width, height: height))
-        landmarkPoints = FaceDetector.toCGCoordinates(landmarkPoints, height)
+        let landmarkPoints = self.toCGCoordinates(landmark)
         
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -277,8 +333,7 @@ class FaceDetector: NSObject, FaceProcessor {
         }
         
         // Convert normalized points to image coordinate space.
-        var faceContourPoints = faceContour.pointsInImage(imageSize: CGSize(width: width, height: height))
-        faceContourPoints = FaceDetector.toCGCoordinates(faceContourPoints, height)
+        let faceContourPoints = self.toCGCoordinates(faceContour)
         
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -308,6 +363,98 @@ class FaceDetector: NSObject, FaceProcessor {
             return nil
         }
         return CIImage(cgImage: cgImage)
+    }
+    
+    // getLeftCheekMask returns a CIImage of left cheek.
+    private func getLeftCheekMask() -> CIImage? {
+        guard let width = self.image?.extent.width else {
+            return nil
+        }
+        guard let height = self.image?.extent.height else {
+            return nil
+        }
+        
+        // Due to some weird lateral inversion/flipped coordinate system along x axis, righteyelandmarks
+        // appear on the left side. TODO: Dig into this later.
+        // X-axis from right to left, Y-axis from top to bottom.
+        guard let leftEyeBbox = self.bbox(landmark: self.rightEyeLandmarks) else {
+            return nil
+        }
+        guard let noseBbox = self.bbox(landmark: self.noseLandmarks) else {
+            return nil
+        }
+        let faceContourPoints = self.toCGCoordinates(self.faceContourLandmarks)
+        
+        // Create left cheek CGRect image.
+        let xMin = max(leftEyeBbox.minX, noseBbox.maxX)
+        let xMax = faceContourPoints.first!.x
+        let yMin = leftEyeBbox.minY + leftEyeBbox.height + 20
+        let yMax = noseBbox.minY + noseBbox.height
+        
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
+        let img = renderer.image { ctx in
+            ctx.cgContext.setFillColor(UIColor.white.cgColor)
+            ctx.cgContext.addRect(CGRect(x: xMin, y: yMin, width: xMax-xMin, height: yMax-yMin))
+            ctx.cgContext.drawPath(using: .fill)
+        }
+        guard let cgImage = img.cgImage else {
+            print ("landmarks cgimage is nil")
+            return nil
+        }
+        
+        // Bitwise AND with fullfaceMask to ensure all points in mask lie inside face.
+        let comp = CIFilter.minimumCompositing()
+        comp.backgroundImage = self.fullFaceMask
+        comp.inputImage = CIImage(cgImage: cgImage)
+        return comp.outputImage
+    }
+    
+    // getRightCheekMask returns a CIImage of right cheek.
+    private func getRightCheekMask() -> CIImage? {
+        guard let width = self.image?.extent.width else {
+            return nil
+        }
+        guard let height = self.image?.extent.height else {
+            return nil
+        }
+        
+        // Due to some weird lateral inversion/flipped coordinate system along x axis, leftEyelandmarks
+        // appear on the right side. TODO: Dig into this later.
+        // X-axis from right to left, Y-axis from top to bottom.
+        guard let rightEyeBbox = self.bbox(landmark: self.leftEyeLandmarks) else {
+            return nil
+        }
+        guard let noseBbox = self.bbox(landmark: self.noseLandmarks) else {
+            return nil
+        }
+        let faceContourPoints = self.toCGCoordinates(self.faceContourLandmarks)
+        
+        // Create left cheek CGRect image.
+        let xMin = faceContourPoints.last!.x
+        let xMax = min(rightEyeBbox.maxX, noseBbox.minX)
+        let yMin = rightEyeBbox.minY + rightEyeBbox.height + 20
+        let yMax = noseBbox.minY + noseBbox.height
+        
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
+        let img = renderer.image { ctx in
+            ctx.cgContext.setFillColor(UIColor.white.cgColor)
+            ctx.cgContext.addRect(CGRect(x: xMin, y: yMin, width: xMax-xMin, height: yMax-yMin))
+            ctx.cgContext.drawPath(using: .fill)
+        }
+        guard let cgImage = img.cgImage else {
+            print ("landmarks cgimage is nil")
+            return nil
+        }
+        
+        // Bitwise AND with fullfaceMask to ensure all points in mask lie inside face.
+        let comp = CIFilter.minimumCompositing()
+        comp.backgroundImage = self.fullFaceMask
+        comp.inputImage = CIImage(cgImage: cgImage)
+        return comp.outputImage
     }
     
     // computeDepthOfFace returns the depth value at the center of the detected face.
@@ -363,42 +510,27 @@ class FaceDetector: NSObject, FaceProcessor {
     
     // getFaceMask returns mask of face points excluding eyes, eyebrows, lips and teeth.
     private func getFaceMask() -> CIImage? {
+        
         // blend depthmask and face contour mask.
-        var comp = CIFilter.minimumCompositing()
-        comp.inputImage = self.depthMaskCIImage
-        comp.backgroundImage = self.faceContourMask
-        var out = comp.outputImage
+        var out = CIImageHelper.bitwiseAnd(firstMask: self.faceContourMask, secondMask: self.depthMaskCIImage)
         
         // blend face bounds mask.
-        comp.inputImage = out
-        comp.backgroundImage = self.faceBoundsMask
-        out = comp.outputImage
+        out = CIImageHelper.bitwiseAnd(firstMask: out, secondMask: self.faceBoundsMask)
         
         // blend left eye mask.
-        comp = CIFilter.differenceBlendMode()
-        comp.backgroundImage = out
-        comp.inputImage = self.leftEyeMask
-        out = comp.outputImage
+        out = CIImageHelper.bitwiseXor(firstMask: out, secondMask: self.leftEyeMask)
         
         // blend right eye mask.
-        comp.backgroundImage = out
-        comp.inputImage = self.rightEyeMask
-        out = comp.outputImage
+        out = CIImageHelper.bitwiseXor(firstMask: out, secondMask: self.rightEyeMask)
         
         // blend left eyebrow mask.
-        comp.backgroundImage = out
-        comp.inputImage = self.leftEyebrowMask
-        out = comp.outputImage
+        out = CIImageHelper.bitwiseXor(firstMask: out, secondMask: self.leftEyebrowMask)
         
         // blend right eyebrow mask.
-        comp.backgroundImage = out
-        comp.inputImage = self.rightEyebrowMask
-        out = comp.outputImage
+        out = CIImageHelper.bitwiseXor(firstMask: out, secondMask: self.rightEyebrowMask)
         
         // blend outer lips mask.
-        comp.backgroundImage = out
-        comp.inputImage = self.outerLipsMask
-        out = comp.outputImage
+        out = CIImageHelper.bitwiseXor(firstMask: out, secondMask: self.outerLipsMask)
         
         return out
     }
@@ -447,23 +579,43 @@ extension FaceDetector: AVCaptureDataOutputSynchronizerDelegate {
             // Expected 1 face.
             return
         }
-        guard let faceDepth = self.depthOfFaceCenter else {
-            print ("face depth value not found")
-            return
-        }
         
         if self.firstFrame {
             self.delegate?.firstFrame()
             self.firstFrame = false
         }
-        
         self.image = rgbImage
-        guard let fullFaceMask = self.fullFaceMask else {
-            print ("full face mask missing")
+        
+        guard let faceProperties = self.constructFaceProperties() else {
+            print ("failed to construct face properties")
             return
         }
         
-        self.delegate?.frameUpdated(rgbImage: rgbImage, faceDepth: faceDepth, fullFaceMask: fullFaceMask)
+        self.delegate?.frameUpdated(faceProperties: faceProperties)
+    }
+    
+    private func constructFaceProperties() -> FaceProperties? {
+        guard let image = self.image else {
+            print ("rgbimage not found")
+            return nil
+        }
+        guard let faceDepth = self.depthOfFaceCenter else {
+            print ("face depth value not found")
+            return nil
+        }
+        guard let fullFaceMask = self.fullFaceMask else {
+            print ("full face mask missing")
+            return nil
+        }
+        guard let leftCheekMask = self.leftCheekMask else {
+            print ("left cheek mask missing")
+            return nil
+        }
+        guard let rightCheekMask = self.rightCheekMask else {
+            print ("right cheek mask missing")
+            return nil
+        }
+        return FaceProperties(image: image, faceDepth: faceDepth, fullFaceMask: fullFaceMask, leftCheekMask: leftCheekMask, rightCheekMask: rightCheekMask)
     }
 }
 
