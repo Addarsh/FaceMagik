@@ -40,7 +40,7 @@ protocol EnvObserverDelegate {
 
 protocol AssessFaceControllerDelegate {
     func handleUpdatedHeading(heading: Int)
-    func handleUpdatedImage(faceProperties: FaceProperties)
+    func handleUpdatedImageValues(leftCheekPercentValue: Int, rightCheekPercentValue: Int)
 }
 
 class AssessFaceController: UIViewController {
@@ -50,6 +50,8 @@ class AssessFaceController: UIViewController {
     @IBOutlet private var instructions: UILabel!
     @IBOutlet weak private var previewView: PreviewMetalView!
     @IBOutlet private var resultLabel: UILabel!
+    @IBOutlet private var leftCheekValueLabel: UILabel!
+    @IBOutlet private var rightCheekValueLabel: UILabel!
     
     private let notifCenter = NotificationCenter.default
     var faceDetector: FaceProcessor?
@@ -76,7 +78,8 @@ class AssessFaceController: UIViewController {
         self.stateMgr = StateManager()
         
         self.previewView.rotation = .rotate180Degrees
-    
+        self.previewView.mirroring = true
+        
         self.resetState()
         
         self.notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
@@ -229,10 +232,15 @@ extension AssessFaceController: FaceProcessorDelegate {
     }
     
     func frameUpdated(faceProperties: FaceProperties) {
-        self.previewView.image = CIImageHelper.overlayMask(image: faceProperties.image, mask: faceProperties.fullFaceMask)
+        self.previewView.image = CIImageHelper.overlayMask(image: faceProperties.image, mask: CIImageHelper.bitwiseXor(firstMask: faceProperties.leftCheekMask, secondMask: faceProperties.rightCheekMask)!)
+        
+        DispatchQueue.main.async {
+            self.leftCheekValueLabel.text = String(faceProperties.leftCheekPercentValue)
+            self.rightCheekValueLabel.text = String(faceProperties.rightCheekPercentValue)
+        }
         
         if self.stateMgr?.getState() == StateManager.State.StartTurnAround {
-            self.skinAnalyzerDelegate?.handleUpdatedImage(faceProperties: faceProperties)
+            self.skinAnalyzerDelegate?.handleUpdatedImageValues(leftCheekPercentValue: faceProperties.leftCheekPercentValue, rightCheekPercentValue: faceProperties.rightCheekPercentValue)
         }
         
         if isPhoneTooClose(faceDepth: faceProperties.faceDepth) {

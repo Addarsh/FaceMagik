@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="Waf-79-2N2">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17701" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="Waf-79-2N2">
     <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17505"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17703"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -70,15 +70,29 @@
                                 <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <nil key="highlightedColor"/>
                             </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Left" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="NPm-q9-258">
+                                <rect key="frame" x="20" y="730" width="30" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Right" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="LG1-aY-1Ll">
+                                <rect key="frame" x="80" y="730" width="40" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="OBd-ui-Vph"/>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
                             <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="TTl-xX-X6o" secondAttribute="trailing" constant="20" id="1tp-xB-Tbo"/>
+                            <constraint firstItem="NPm-q9-258" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="507-kw-vin"/>
                             <constraint firstItem="TTl-xX-X6o" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="AxO-7p-AJQ"/>
                             <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="7bc-mQ-YsQ" secondAttribute="trailing" id="Ddg-EY-mkh"/>
                             <constraint firstItem="6Lp-kd-FBW" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="HEr-Lo-ckP"/>
                             <constraint firstItem="aAF-WD-cgR" firstAttribute="leading" secondItem="cJc-jb-57N" secondAttribute="trailing" constant="30" id="KWo-6p-vOu"/>
+                            <constraint firstItem="LG1-aY-1Ll" firstAttribute="top" secondItem="aAF-WD-cgR" secondAttribute="bottom" constant="5" id="Lke-ce-ckC"/>
                             <constraint firstItem="cJc-jb-57N" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="Y4T-6A-Rg1"/>
                             <constraint firstItem="TTl-xX-X6o" firstAttribute="top" secondItem="OBd-ui-Vph" secondAttribute="top" constant="30" id="Ztn-k2-tuF"/>
                             <constraint firstItem="eUi-jK-ECb" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="agk-XE-PkM"/>
@@ -90,15 +104,19 @@
                             <constraint firstItem="7bc-mQ-YsQ" firstAttribute="top" secondItem="TTl-xX-X6o" secondAttribute="bottom" id="qMC-6r-tEr"/>
                             <constraint firstItem="jdw-df-nbZ" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="rj0-Vi-Ye9"/>
                             <constraint firstItem="cJc-jb-57N" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="s0x-M1-XHo"/>
+                            <constraint firstItem="NPm-q9-258" firstAttribute="top" secondItem="cJc-jb-57N" secondAttribute="bottom" constant="5" id="tNe-vM-lkm"/>
                             <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="jdw-df-nbZ" secondAttribute="trailing" constant="20" id="tXC-CC-DH2"/>
+                            <constraint firstItem="LG1-aY-1Ll" firstAttribute="leading" secondItem="NPm-q9-258" secondAttribute="trailing" constant="30" id="xQR-BJ-aNN"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="exposureLabel" destination="aAF-WD-cgR" id="wop-9P-Mdb"/>
                         <outlet property="instructions" destination="TTl-xX-X6o" id="9I5-4d-Owk"/>
                         <outlet property="isoLabel" destination="cJc-jb-57N" id="6j9-UM-MbH"/>
+                        <outlet property="leftCheekValueLabel" destination="NPm-q9-258" id="Gkp-pV-MhF"/>
                         <outlet property="previewView" destination="7bc-mQ-YsQ" id="Yf4-da-T6S"/>
                         <outlet property="resultLabel" destination="6Lp-kd-FBW" id="hAW-H9-SeJ"/>
+                        <outlet property="rightCheekValueLabel" destination="LG1-aY-1Ll" id="3qK-a2-5vd"/>
                         <outlet property="tempLabel" destination="eUi-jK-ECb" id="Oh8-fa-ftN"/>
                     </connections>
                 </viewController>

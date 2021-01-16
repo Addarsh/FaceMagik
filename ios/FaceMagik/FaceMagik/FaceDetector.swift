@@ -16,6 +16,10 @@ struct FaceProperties {
     var fullFaceMask: CIImage
     var leftCheekMask: CIImage
     var rightCheekMask: CIImage
+    var leftCheekBbox: CGRect
+    var rightCheekBbox: CGRect
+    var leftCheekPercentValue: Int
+    var rightCheekPercentValue: Int
 }
 
 class FaceDetector: NSObject, FaceProcessor {
@@ -56,6 +60,10 @@ class FaceDetector: NSObject, FaceProcessor {
     private var leftCheekMask: CIImage?
     private var rightCheekMask: CIImage?
     
+    // Bounding boxes.
+    private var leftCheekBbox: CGRect?
+    private var rightCheekBbox: CGRect?
+    
     // toCGCoordinates maps given face landmark to the CGImage coordinate system (left top origion).
     private func toCGCoordinates(_ landmark: VNFaceLandmarkRegion2D) -> [CGPoint] {
         guard let width = self.image?.extent.width else {
@@ -67,6 +75,17 @@ class FaceDetector: NSObject, FaceProcessor {
         
         let points = landmark.pointsInImage(imageSize: CGSize(width: width, height: height))
         return points.compactMap({ return CGPoint(x: $0.x, y: height - $0.y) })
+    }
+    
+    // toCICoordinates returns given CGRect in UI coordinates to CGRect in CI coordinates.
+    private func toCICoordinates(rect: CGRect?) -> CGRect? {
+        guard let r = rect else {
+            return nil
+        }
+        guard let height = self.image?.extent.height else {
+            return nil
+        }
+        return CGRect(x: r.minX, y: height - r.maxY, width: r.width, height: r.height)
     }
     
     // bbox returns a bounding box of given face landmark.
@@ -127,8 +146,10 @@ class FaceDetector: NSObject, FaceProcessor {
         self.captureSession.addOutput(self.videoOutput)
             
         if let videoConnection = self.videoOutput.connection(with: .video) {
-            videoConnection.videoOrientation = .portrait
+            //videoConnection.videoOrientation = .portrait
+            videoConnection.isVideoMirrored = true
             videoConnection.isEnabled = true
+            videoConnection.videoOrientation = .portrait
         }
         
         // Set sRGB as default color space.
@@ -191,7 +212,6 @@ class FaceDetector: NSObject, FaceProcessor {
         }
         
         let imageRequestHandler = VNImageRequestHandler(ciImage: image,
-                                                        orientation: .up,
                                                         options: [:])
         do {
             try imageRequestHandler.perform([VNDetectFaceLandmarksRequest(completionHandler: { (request, error) in
@@ -259,8 +279,10 @@ class FaceDetector: NSObject, FaceProcessor {
                 self.depthOfFaceCenter = self.computeDepthOfFace(depthPixelBuffer)
                 self.depthMaskCIImage = self.createDepthMask(depthPixelBuffer)
                 self.fullFaceMask = self.getFaceMask()
-                self.leftCheekMask = self.getLeftCheekMask()
-                self.rightCheekMask = self.getRightCheekMask()
+                self.leftCheekBbox = self.getLeftCheekBbox()
+                self.leftCheekMask = self.bboxToMask(bbox: self.leftCheekBbox)
+                self.rightCheekBbox = self.getRightCheekBbox()
+                self.rightCheekMask = self.bboxToMask(bbox: self.rightCheekBbox)
             })])
         } catch let error as NSError {
             print ("Failed to perform Face detection with error: \(error)")
@@ -365,19 +387,9 @@ class FaceDetector: NSObject, FaceProcessor {
         return CIImage(cgImage: cgImage)
     }
     
-    // getLeftCheekMask returns a CIImage of left cheek.
-    private func getLeftCheekMask() -> CIImage? {
-        guard let width = self.image?.extent.width else {
-            return nil
-        }
-        guard let height = self.image?.extent.height else {
-            return nil
-        }
-        
-        // Due to some weird lateral inversion/flipped coordinate system along x axis, righteyelandmarks
-        // appear on the left side. TODO: Dig into this later.
-        // X-axis from right to left, Y-axis from top to bottom.
-        guard let leftEyeBbox = self.bbox(landmark: self.rightEyeLandmarks) else {
+    // Returns a bounding box for left cheek on face.
+    private func getLeftCheekBbox() -> CGRect? {
+        guard let leftEyeBbox = self.bbox(landmark: self.leftEyeLandmarks) else {
             return nil
         }
         guard let noseBbox = self.bbox(landmark: self.noseLandmarks) else {
@@ -385,45 +397,20 @@ class FaceDetector: NSObject, FaceProcessor {
         }
         let faceContourPoints = self.toCGCoordinates(self.faceContourLandmarks)
         
-        // Create left cheek CGRect image.
-        let xMin = max(leftEyeBbox.minX, noseBbox.maxX)
-        let xMax = faceContourPoints.first!.x
-        let yMin = leftEyeBbox.minY + leftEyeBbox.height + 20
-        let yMax = noseBbox.minY + noseBbox.height
+        let delta = leftEyeBbox.height
         
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
-        let img = renderer.image { ctx in
-            ctx.cgContext.setFillColor(UIColor.white.cgColor)
-            ctx.cgContext.addRect(CGRect(x: xMin, y: yMin, width: xMax-xMin, height: yMax-yMin))
-            ctx.cgContext.drawPath(using: .fill)
-        }
-        guard let cgImage = img.cgImage else {
-            print ("landmarks cgimage is nil")
-            return nil
-        }
+        // faceContourPoints.last is the left cheek start on the mirrored image. It's very confusing. :P.
+        let xMin = faceContourPoints.last!.x + 2*delta
+        let xMax = noseBbox.minX - delta*2
+        let yMin = noseBbox.minY + noseBbox.height/2.0
+        let yMax = noseBbox.maxY
         
-        // Bitwise AND with fullfaceMask to ensure all points in mask lie inside face.
-        let comp = CIFilter.minimumCompositing()
-        comp.backgroundImage = self.fullFaceMask
-        comp.inputImage = CIImage(cgImage: cgImage)
-        return comp.outputImage
+        return CGRect(x: xMin, y: yMin, width: xMax-xMin, height: yMax-yMin)
     }
     
-    // getRightCheekMask returns a CIImage of right cheek.
-    private func getRightCheekMask() -> CIImage? {
-        guard let width = self.image?.extent.width else {
-            return nil
-        }
-        guard let height = self.image?.extent.height else {
-            return nil
-        }
-        
-        // Due to some weird lateral inversion/flipped coordinate system along x axis, leftEyelandmarks
-        // appear on the right side. TODO: Dig into this later.
-        // X-axis from right to left, Y-axis from top to bottom.
-        guard let rightEyeBbox = self.bbox(landmark: self.leftEyeLandmarks) else {
+    // Returns a bounding box for right cheek on face.
+    private func getRightCheekBbox() -> CGRect? {
+        guard let rightEyeBbox = self.bbox(landmark: self.rightEyeLandmarks) else {
             return nil
         }
         guard let noseBbox = self.bbox(landmark: self.noseLandmarks) else {
@@ -431,30 +418,44 @@ class FaceDetector: NSObject, FaceProcessor {
         }
         let faceContourPoints = self.toCGCoordinates(self.faceContourLandmarks)
         
-        // Create left cheek CGRect image.
-        let xMin = faceContourPoints.last!.x
-        let xMax = min(rightEyeBbox.maxX, noseBbox.minX)
-        let yMin = rightEyeBbox.minY + rightEyeBbox.height + 20
-        let yMax = noseBbox.minY + noseBbox.height
+        let delta = rightEyeBbox.height
+        
+        // faceContourPoints.first is the right cheek start on the mirrored image. It's very confusing. :P.
+        let xMin = noseBbox.maxX + delta*2
+        let xMax = faceContourPoints.first!.x - delta*1.5
+        let yMin = noseBbox.minY + noseBbox.height/2.0
+        let yMax = noseBbox.maxY
+        
+        return CGRect(x: xMin, y: yMin, width: xMax-xMin, height: yMax-yMin)
+    }
+        
+    // bboxToMask draws given bounding box as a new CIImage mask and returns it.
+    private func bboxToMask(bbox: CGRect?) -> CIImage? {
+        guard let box = bbox else {
+            print ("input bounding box is nil")
+            return nil
+        }
+        
+        guard let width = self.image?.extent.width else {
+            return nil
+        }
+        guard let height = self.image?.extent.height else {
+            return nil
+        }
         
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
         let img = renderer.image { ctx in
             ctx.cgContext.setFillColor(UIColor.white.cgColor)
-            ctx.cgContext.addRect(CGRect(x: xMin, y: yMin, width: xMax-xMin, height: yMax-yMin))
+            ctx.cgContext.addRect(box)
             ctx.cgContext.drawPath(using: .fill)
         }
         guard let cgImage = img.cgImage else {
-            print ("landmarks cgimage is nil")
+            print ("bbox cgimage is nil")
             return nil
         }
-        
-        // Bitwise AND with fullfaceMask to ensure all points in mask lie inside face.
-        let comp = CIFilter.minimumCompositing()
-        comp.backgroundImage = self.fullFaceMask
-        comp.inputImage = CIImage(cgImage: cgImage)
-        return comp.outputImage
+        return CIImage(cgImage: cgImage)
     }
     
     // computeDepthOfFace returns the depth value at the center of the detected face.
@@ -615,7 +616,28 @@ extension FaceDetector: AVCaptureDataOutputSynchronizerDelegate {
             print ("right cheek mask missing")
             return nil
         }
-        return FaceProperties(image: image, faceDepth: faceDepth, fullFaceMask: fullFaceMask, leftCheekMask: leftCheekMask, rightCheekMask: rightCheekMask)
+        guard let leftCheekBbox = self.toCICoordinates(rect: self.leftCheekBbox) else {
+            print ("left cheek mask bounding box missing")
+            return nil
+        }
+        guard let rightCheekBbox = self.toCICoordinates(rect: self.rightCheekBbox) else {
+            print ("right cheek mask bounding box missing")
+            return nil
+        }
+        guard let leftCheekValue =
+                CIImageHelper.averageValue(rgbImage: image, maskBbox: leftCheekBbox) else {
+            print ("left cheek val calculation error")
+            return nil
+        }
+        let leftCheekPercentValue = Int((Float(leftCheekValue)/255.0)*100.0)
+        
+        guard let rightCheekValue = CIImageHelper.averageValue(rgbImage: image, maskBbox: rightCheekBbox) else {
+            print ("right cheek val calculation error")
+            return nil
+        }
+        let rightCheekPercentValue = Int((Float(rightCheekValue)/255.0)*100.0)
+        
+        return FaceProperties(image: image, faceDepth: faceDepth, fullFaceMask: fullFaceMask, leftCheekMask: leftCheekMask, rightCheekMask: rightCheekMask, leftCheekBbox: leftCheekBbox, rightCheekBbox: rightCheekBbox, leftCheekPercentValue: leftCheekPercentValue, rightCheekPercentValue: rightCheekPercentValue)
     }
 }
 
