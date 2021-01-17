@@ -9,65 +9,66 @@ import UIKit
 
 class SkinToneAnalyzer: AssessFaceControllerDelegate {
     struct FaceValues {
+        var heading: Int
         var leftCheekPercentValue: Int
         var rightCheekPercentValue: Int
     }
     
     private let headingQueue = DispatchQueue(label: "Heading Queue to analyze skin tone", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
-    private var currFaceValues: FaceValues?
-    private var headingValuesMap: [Int:FaceValues] = [:]
+    private var currLeftCheekPercentValue: Int?
+    private var currRightCheekPercentValue: Int?
+    private var headingValuesMap: [Int: FaceValues] = [:]
     private var firstHeading: Int?
     
     init() {}
     
     func handleUpdatedHeading(heading: Int) {
         self.headingQueue.async {
-            guard let faceValues = self.currFaceValues else {
+            guard let leftCheekPercentValue = self.currLeftCheekPercentValue else {
+                return
+            }
+            guard let rightCheekPercentValue = self.currRightCheekPercentValue else {
+                return
+            }
+            if self.headingValuesMap[heading] != nil {
                 return
             }
             if self.firstHeading == nil {
                 self.firstHeading = heading
             }
-            if self.headingValuesMap[heading] != nil {
-                return
-            }
-            self.headingValuesMap[heading] = faceValues
+            self.headingValuesMap[heading] = FaceValues(heading: heading, leftCheekPercentValue: leftCheekPercentValue, rightCheekPercentValue: rightCheekPercentValue)
         }
     }
     
     func handleUpdatedImageValues(leftCheekPercentValue: Int, rightCheekPercentValue: Int) {
         self.headingQueue.async {
-            self.currFaceValues = FaceValues(leftCheekPercentValue: leftCheekPercentValue, rightCheekPercentValue: rightCheekPercentValue)
+            self.currLeftCheekPercentValue = leftCheekPercentValue
+            self.currRightCheekPercentValue = rightCheekPercentValue
         }
     }
     
     // estimatePrimaryLightDirection estimates primary light direction (degrees) from given heading and values data.
-    func estimatePrimaryLightDirection() -> Int? {
-        guard let firstHeading = self.firstHeading else {
-            print ("first heading value missing")
-            return nil
-        }
-        
-        var count: Int = 0
-        var degrees: [Int] = []
-        while count < self.headingValuesMap.count {
-            if self.headingValuesMap[firstHeading + count] == nil {
-                continue
-            }
-            guard let lCheekPercentVal = self.headingValuesMap[firstHeading + count]?.leftCheekPercentValue else {
-                continue
-            }
-            guard let rCheekPercentVal = self.headingValuesMap[firstHeading + count]?.rightCheekPercentValue else {
-                continue
+    func estimatePrimaryLightDirection() -> Int {
+        self.headingQueue.sync {
+            
+            let values: [FaceValues] = self.headingValuesMap.map{$1}
+            // Filter degrees with similar left and right cheek intensities.
+            let filteredValues = values.filter { fv in abs(fv.leftCheekPercentValue - fv.rightCheekPercentValue) < 10
             }
             
-            if abs(lCheekPercentVal - rCheekPercentVal) <= 5 {
-                degrees.append(firstHeading + count)
+            // Sort by greater combined cheek intensity first.
+            let sortByIntensityValues = filteredValues.sorted {fv1, fv2 in
+                return fv1.leftCheekPercentValue + fv1.rightCheekPercentValue >= fv2.leftCheekPercentValue + fv2.rightCheekPercentValue
             }
-            count += 1
+            
+            // Pick Top 5 and sort by minimum left and right cheek intensities.
+            let finalSortedValues = sortByIntensityValues[..<5].sorted { fv1, fv2 in
+                let diff1 = abs(fv1.leftCheekPercentValue - fv1.rightCheekPercentValue)
+                let diff2 = abs(fv2.leftCheekPercentValue - fv2.rightCheekPercentValue)
+                return diff1 <= diff2
+            }
+            
+            return finalSortedValues[0].heading
         }
-        
-        // TODO: Find best degree. Currently unimplemented.
-        return 0
     }
 }

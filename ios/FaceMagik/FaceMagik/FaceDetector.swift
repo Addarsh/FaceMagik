@@ -400,8 +400,8 @@ class FaceDetector: NSObject, FaceProcessor {
         let delta = leftEyeBbox.height
         
         // faceContourPoints.last is the left cheek start on the mirrored image. It's very confusing. :P.
-        let xMin = faceContourPoints.last!.x + 2*delta
-        let xMax = noseBbox.minX - delta*2
+        let xMin = faceContourPoints.last!.x + delta
+        let xMax = noseBbox.minX - delta
         let yMin = noseBbox.minY + noseBbox.height/2.0
         let yMax = noseBbox.maxY
         
@@ -421,8 +421,8 @@ class FaceDetector: NSObject, FaceProcessor {
         let delta = rightEyeBbox.height
         
         // faceContourPoints.first is the right cheek start on the mirrored image. It's very confusing. :P.
-        let xMin = noseBbox.maxX + delta*2
-        let xMax = faceContourPoints.first!.x - delta*1.5
+        let xMin = noseBbox.maxX + delta
+        let xMax = faceContourPoints.first!.x - delta
         let yMin = noseBbox.minY + noseBbox.height/2.0
         let yMax = noseBbox.maxY
         

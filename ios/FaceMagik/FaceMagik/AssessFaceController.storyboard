@@ -82,10 +82,23 @@
                                 <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <nil key="highlightedColor"/>
                             </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Diff" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="6EJ-kV-YWI">
+                                <rect key="frame" x="150" y="730" width="28" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Deg" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ikl-SZ-w2I">
+                                <rect key="frame" x="332.5" y="733" width="31.5" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="OBd-ui-Vph"/>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
+                            <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="ikl-SZ-w2I" secondAttribute="trailing" constant="50" id="1Kd-dH-gS3"/>
                             <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="TTl-xX-X6o" secondAttribute="trailing" constant="20" id="1tp-xB-Tbo"/>
                             <constraint firstItem="NPm-q9-258" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="507-kw-vin"/>
                             <constraint firstItem="TTl-xX-X6o" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="AxO-7p-AJQ"/>
@@ -94,10 +107,13 @@
                             <constraint firstItem="aAF-WD-cgR" firstAttribute="leading" secondItem="cJc-jb-57N" secondAttribute="trailing" constant="30" id="KWo-6p-vOu"/>
                             <constraint firstItem="LG1-aY-1Ll" firstAttribute="top" secondItem="aAF-WD-cgR" secondAttribute="bottom" constant="5" id="Lke-ce-ckC"/>
                             <constraint firstItem="cJc-jb-57N" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" constant="20" id="Y4T-6A-Rg1"/>
+                            <constraint firstItem="6EJ-kV-YWI" firstAttribute="top" secondItem="aAF-WD-cgR" secondAttribute="bottom" constant="5" id="ZoH-du-33t"/>
                             <constraint firstItem="TTl-xX-X6o" firstAttribute="top" secondItem="OBd-ui-Vph" secondAttribute="top" constant="30" id="Ztn-k2-tuF"/>
                             <constraint firstItem="eUi-jK-ECb" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="agk-XE-PkM"/>
+                            <constraint firstItem="6EJ-kV-YWI" firstAttribute="leading" secondItem="LG1-aY-1Ll" secondAttribute="trailing" constant="30" id="apd-7r-0y7"/>
                             <constraint firstItem="aAF-WD-cgR" firstAttribute="top" secondItem="7bc-mQ-YsQ" secondAttribute="bottom" constant="50" id="bV2-8v-1wz"/>
                             <constraint firstItem="OBd-ui-Vph" firstAttribute="trailing" secondItem="6Lp-kd-FBW" secondAttribute="trailing" constant="50" id="deC-Br-Kla"/>
+                            <constraint firstItem="ikl-SZ-w2I" firstAttribute="top" secondItem="6Lp-kd-FBW" secondAttribute="bottom" constant="5" id="gEe-15-xFh"/>
                             <constraint firstItem="jdw-df-nbZ" firstAttribute="bottom" secondItem="OBd-ui-Vph" secondAttribute="bottom" id="j0a-vL-1yI"/>
                             <constraint firstItem="eUi-jK-ECb" firstAttribute="leading" secondItem="aAF-WD-cgR" secondAttribute="trailing" constant="30" id="lvx-lQ-HCx"/>
                             <constraint firstItem="7bc-mQ-YsQ" firstAttribute="leading" secondItem="OBd-ui-Vph" secondAttribute="leading" id="pou-Xx-eez"/>
@@ -110,7 +126,9 @@
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="cheekValueDiffLabel" destination="6EJ-kV-YWI" id="gRr-11-nhh"/>
                         <outlet property="exposureLabel" destination="aAF-WD-cgR" id="wop-9P-Mdb"/>
+                        <outlet property="headingLabel" destination="ikl-SZ-w2I" id="aam-cX-x4D"/>
                         <outlet property="instructions" destination="TTl-xX-X6o" id="9I5-4d-Owk"/>
                         <outlet property="isoLabel" destination="cJc-jb-57N" id="6j9-UM-MbH"/>
                         <outlet property="leftCheekValueLabel" destination="NPm-q9-258" id="Gkp-pV-MhF"/>

@@ -21,7 +21,14 @@ struct SensorValues {
     var sceneType: SceneType
 }
 
-class EnvConditions: NSObject, EnvObserver {    
+class EnvConditions: NSObject, EnvObserver {
+    enum State: Int {
+        case WaitingForFirstDegree = 1
+        case WaitingForSecondDegree = 2
+        case CollectionInProgress = 3
+        case CollectionComplete = 4
+    }
+    
     private var delegate: EnvObserverDelegate?
     @objc private var cameraDevice: AVCaptureDevice!
     private var exposureObservation: NSKeyValueObservation?
@@ -37,10 +44,23 @@ class EnvConditions: NSObject, EnvObserver {
     private var motionQueue = OperationQueue()
     private static let motionFrequency = 1.0/30.0
     private var sensorMap: [Int: SensorValues] = [:]
+    private var currState: State = .WaitingForFirstDegree
     
-    // returns smallest absolute difference (a-b) in degrees taking into account roll over from 360 to 0.
+    // returns smallest the difference (a-b) in degrees between two angles that are close to each other taking into account roll over from 360 to 0.
     private static func smallestDegreeDiff(_ a: Int, _ b: Int) -> Int {
-        return abs(a-b) < 360 - abs(a-b) ? abs(a-b)  : 360 - abs(a-b)
+        if abs(a-b) > 360 - abs(a-b) {
+            // Roll over.
+            return a-b >= 0 ? abs(a-b) - 360 : 360 - abs(a-b)
+        }
+        return a - b
+    }
+    
+    // differenceAlongDirection calculates the difference (a-b) in degrees between two angles along the given direction. Direction can be positive (i.e. 0->360 clockwise) or negative (i.e. 360->0 counterclockwise).
+    private static func differenceAlongDirection(_ a: Int, _ b: Int, positive: Bool) -> Int {
+        if positive {
+            return a-b >= 0 ? a-b : 360 - (b-a)
+        }
+        return b-a >= 0 ? b-a: 360 - (a-b)
     }
     
     func observeLighting(device: AVCaptureDevice?, vc: EnvObserverDelegate?) {
@@ -104,10 +124,14 @@ class EnvConditions: NSObject, EnvObserver {
             return
         }
         
-        var firstDegree: Int? = nil
-        var secondDegree: Int? = nil
-        var lastDegree: Int? = nil
-        var collectionComplete: Bool = false
+        self.currState = .WaitingForFirstDegree
+        var firstDegree: Int = 0
+        var secondDegree: Int = 0
+        var prevDegree: Int = 0
+        var direction: Int = 0
+        var wrongDirectionMode: Bool = false
+        var degreesRotated: Int = 0
+        let degreeDelta = 20
         self.motionManager.deviceMotionUpdateInterval = EnvConditions.motionFrequency
         self.motionManager.startDeviceMotionUpdates(using: .xMagneticNorthZVertical, to: self.motionQueue, withHandler: { (data, error) in
             guard let validData = data else {
@@ -115,26 +139,57 @@ class EnvConditions: NSObject, EnvObserver {
             }
             let heading = Int(validData.heading)
             self.envQueue.async {
-                if collectionComplete {
-                    // Completed sensor data collection.
-                    return
-                }
-                self.delegate?.notifyHeading(heading: heading)
-                if firstDegree == nil {
+                switch self.currState {
+                case .WaitingForFirstDegree:
                     firstDegree = heading
-                    lastDegree = heading + 180 < 360 ? heading + 180 : heading - 180
-                }
-                if secondDegree == nil && EnvConditions.smallestDegreeDiff(heading, firstDegree!) >= 5 {
+                    self.currState = .WaitingForSecondDegree
+                case .WaitingForSecondDegree:
+                    if abs(EnvConditions.smallestDegreeDiff(heading, firstDegree)) < degreeDelta {
+                        break
+                    }
                     secondDegree = heading
+                    prevDegree = heading
+                    direction = EnvConditions.smallestDegreeDiff(secondDegree, firstDegree)
                     self.delegate?.motionUpdating()
+                    self.currState = .CollectionInProgress
+                case .CollectionInProgress:
+                    let prevDiff = EnvConditions.smallestDegreeDiff(heading, prevDegree)
+                    if abs(prevDiff) < degreeDelta {
+                        // No need to update prevDegree.
+                        break
+                    }
+                    
+                    // test that direction of user movement is correct.
+                    if direction * prevDiff >= 0 {
+                        // User moving in right direction.
+                        if wrongDirectionMode {
+                            wrongDirectionMode = false
+                            self.delegate?.motionUpdating()
+                        }
+                        degreesRotated += EnvConditions.differenceAlongDirection(heading, prevDegree, positive: direction > 0)
+                        prevDegree = heading
+                    } else {
+                        // User moving in wrong direction.
+                        if !wrongDirectionMode {
+                            wrongDirectionMode = true
+                            self.delegate?.wrongMotionDirection()
+                        }
+                        degreesRotated -= EnvConditions.differenceAlongDirection(heading, prevDegree, positive: direction < 0)
+                        prevDegree = heading
+                        return
+                    }
+                case .CollectionComplete:
+                    return
                 }
                 if self.sensorMap[heading] != nil {
                     return
                 }
+                self.delegate?.notifyHeading(heading: heading)
+                
                 self.sensorMap[heading] = SensorValues(iso: self.currISO, exposure: self.currExposure, temp: self.currTemp, sceneType: SceneType.Unknown)
                 
-                if abs(lastDegree! - heading) <= 5 {
-                    collectionComplete = true
+                if degreesRotated >= range - degreeDelta {
+                    self.currState = .CollectionComplete
                     
                     self.delegate?.motionUpdateComplete()
                     self.processLighting()

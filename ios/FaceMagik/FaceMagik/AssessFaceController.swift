@@ -32,6 +32,7 @@ protocol EnvObserverDelegate {
     func notifyTempUpdate(newTemp: Int)
     func notifyHeading(heading: Int)
     func motionUpdating()
+    func wrongMotionDirection()
     func motionUpdateComplete()
     func badColorTemperature()
     func possiblyOutdoors()
@@ -41,6 +42,7 @@ protocol EnvObserverDelegate {
 protocol AssessFaceControllerDelegate {
     func handleUpdatedHeading(heading: Int)
     func handleUpdatedImageValues(leftCheekPercentValue: Int, rightCheekPercentValue: Int)
+    func estimatePrimaryLightDirection() -> Int
 }
 
 class AssessFaceController: UIViewController {
@@ -52,6 +54,8 @@ class AssessFaceController: UIViewController {
     @IBOutlet private var resultLabel: UILabel!
     @IBOutlet private var leftCheekValueLabel: UILabel!
     @IBOutlet private var rightCheekValueLabel: UILabel!
+    @IBOutlet private var cheekValueDiffLabel: UILabel!
+    @IBOutlet private var headingLabel: UILabel!
     
     private let notifCenter = NotificationCenter.default
     var faceDetector: FaceProcessor?
@@ -63,6 +67,7 @@ class AssessFaceController: UIViewController {
     private let unknownPrompt = "Waiting to detect face"
     private let turnAroundPrompt = "Turn Around 180 degrees"
     private let keepTurningPrompt = "Keep Turning..."
+    private let turningWrongDirectionPrompt = "Wrong direction! Turn other way"
     private let stopPrompt = "Stop"
     
     static func storyboardInstance() -> AssessFaceController? {
@@ -140,6 +145,9 @@ extension AssessFaceController: EnvObserverDelegate {
         if self.stateMgr?.getState() == StateManager.State.StartTurnAround {
             self.skinAnalyzerDelegate?.handleUpdatedHeading(heading: heading)
         }
+        DispatchQueue.main.async {
+            self.headingLabel.text = String(heading)
+        }
     }
     
     func motionUpdating() {
@@ -149,21 +157,30 @@ extension AssessFaceController: EnvObserverDelegate {
         }
     }
     
+    func wrongMotionDirection() {
+        DispatchQueue.main.async {
+            self.instructions.text = self.turningWrongDirectionPrompt
+            self.instructions.textColor = UIColor.systemRed
+        }
+    }
+    
     func motionUpdateComplete() {
         self.envObserver?.stopMotionUpdates()
+        let primaryLightDirection = self.skinAnalyzerDelegate?.estimatePrimaryLightDirection()
         self.stateMgr?.updateState(state: StateManager.State.TurnAroundComplete)
         DispatchQueue.main.async {
             self.instructions.stopBlink()
             self.instructions.text = self.stopPrompt
             self.instructions.textColor = UIColor.systemRed
+            
+            
+            // Primary Light Direction.
+            self.resultLabel.text = String(primaryLightDirection ?? -1)
         }
         
     }
     
     func badColorTemperature() {
-        DispatchQueue.main.async {
-            self.resultLabel.text = "Bad color"
-        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             guard let vc = BadColorTemperature.storyboardInstance() else {
                 return
@@ -173,9 +190,6 @@ extension AssessFaceController: EnvObserverDelegate {
     }
     
     func possiblyOutdoors() {
-        DispatchQueue.main.async {
-            self.resultLabel.text = "Outdoors"
-        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             guard let vc = PossiblyOutsideError.storyboardInstance() else {
                 return
@@ -222,7 +236,7 @@ extension AssessFaceController: FaceProcessorDelegate {
     func firstFrame() {
         self.stateMgr?.updateState(state: StateManager.State.StartTurnAround)
         self.envObserver?.observeLighting(device: self.faceDetector?.getDevice(), vc: self)
-        self.envObserver?.startMotionUpdates(range: 180)
+        self.envObserver?.startMotionUpdates(range: 360)
         
         DispatchQueue.main.async {
             self.instructions.text = self.turnAroundPrompt
@@ -237,6 +251,7 @@ extension AssessFaceController: FaceProcessorDelegate {
         DispatchQueue.main.async {
             self.leftCheekValueLabel.text = String(faceProperties.leftCheekPercentValue)
             self.rightCheekValueLabel.text = String(faceProperties.rightCheekPercentValue)
+            self.cheekValueDiffLabel.text = String(abs(faceProperties.leftCheekPercentValue - faceProperties.rightCheekPercentValue))
         }
         
         if self.stateMgr?.getState() == StateManager.State.StartTurnAround {
