@@ -18,7 +18,6 @@ class SkinToneAnalyzer: AssessFaceControllerDelegate {
     private var currLeftCheekPercentValue: Int?
     private var currRightCheekPercentValue: Int?
     private var headingValuesMap: [Int: FaceValues] = [:]
-    private var firstHeading: Int?
     
     init() {}
     
@@ -32,9 +31,6 @@ class SkinToneAnalyzer: AssessFaceControllerDelegate {
             }
             if self.headingValuesMap[heading] != nil {
                 return
-            }
-            if self.firstHeading == nil {
-                self.firstHeading = heading
             }
             self.headingValuesMap[heading] = FaceValues(heading: heading, leftCheekPercentValue: leftCheekPercentValue, rightCheekPercentValue: rightCheekPercentValue)
         }
@@ -52,17 +48,25 @@ class SkinToneAnalyzer: AssessFaceControllerDelegate {
         self.headingQueue.sync {
             
             let values: [FaceValues] = self.headingValuesMap.map{$1}
+            
             // Filter degrees with similar left and right cheek intensities.
             let filteredValues = values.filter { fv in abs(fv.leftCheekPercentValue - fv.rightCheekPercentValue) < 10
             }
-            
-            // Sort by greater combined cheek intensity first.
-            let sortByIntensityValues = filteredValues.sorted {fv1, fv2 in
-                return fv1.leftCheekPercentValue + fv1.rightCheekPercentValue >= fv2.leftCheekPercentValue + fv2.rightCheekPercentValue
+            if filteredValues.count < 2 {
+                return 0
             }
             
-            // Pick Top 5 and sort by minimum left and right cheek intensities.
-            let finalSortedValues = sortByIntensityValues[..<5].sorted { fv1, fv2 in
+            // Compute combined intensity cutoff.
+            let intensityValues = filteredValues.sorted { fv1, fv2 in
+                return fv1.leftCheekPercentValue + fv1.rightCheekPercentValue <= fv2.leftCheekPercentValue + fv2.rightCheekPercentValue
+            }
+            let intensityCutoff = intensityValues.last!.leftCheekPercentValue + intensityValues.last!.rightCheekPercentValue - 20
+            
+            // Filter valuess greater than given cutoff and sort in increasing order of intensity difference.
+            let finalFilteredValues = intensityValues.filter { fv in
+                return fv.leftCheekPercentValue + fv.rightCheekPercentValue >= intensityCutoff
+            }
+            let finalSortedValues = finalFilteredValues.sorted { fv1, fv2 in
                 let diff1 = abs(fv1.leftCheekPercentValue - fv1.rightCheekPercentValue)
                 let diff2 = abs(fv2.leftCheekPercentValue - fv2.rightCheekPercentValue)
                 return diff1 <= diff2

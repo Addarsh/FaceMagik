@@ -23,10 +23,14 @@ protocol FaceProcessorDelegate {
 protocol MotionObserver {
     func startMotionUpdates(delegate: MotionObserverDelegate?)
     func stopMotionUpdates()
+    func ensureUserRotates(range: Int)
 }
 
 protocol MotionObserverDelegate {
     func updatedHeading(heading: Int)
+    func userHasStartedRotating()
+    func wrongRotationDirection()
+    func rotationComplete()
 }
 
 protocol LightingObserver {
@@ -45,14 +49,11 @@ protocol EnvObserver {
     func updatedISO(iso: Int)
     func updatedExposure(exposure: Int)
     func updatedColorTemp(temp: Int)
-    func observerUserRotation(range: Int, delegate: EnvObserverDelegate?)
-    func stopObserving()
+    func observeLighting(delegate: EnvObserverDelegate?)
+    func processLighting()
 }
 
 protocol EnvObserverDelegate {
-    func motionUpdating()
-    func wrongMotionDirection()
-    func motionUpdateComplete()
     func badColorTemperature()
     func possiblyOutdoors()
     func tooBright()
@@ -87,7 +88,7 @@ class AssessFaceController: UIViewController {
     private var phoneTooCloseAlert: AlertViewController?
 
     private let unknownPrompt = "Waiting to detect face"
-    private let turnAroundPrompt = "Turn Around 180 degrees"
+    private let turnAroundPrompt = "Turn Around 360 degrees"
     private let keepTurningPrompt = "Keep Turning..."
     private let turningWrongDirectionPrompt = "Wrong direction! Turn other way"
     private let stopPrompt = "Stop"
@@ -110,13 +111,13 @@ class AssessFaceController: UIViewController {
         self.notifCenter.addObserver(self, selector: #selector(appMovedToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         self.notifCenter.addObserver(self, selector: #selector(appMovedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         
+        self.motionObserver?.startMotionUpdates(delegate: self)
         self.faceDetector?.startDetection(vc: self)
     }
     
     @objc private func appMovedToBackground() {
         self.motionObserver?.stopMotionUpdates()
         self.lightingObserver?.stopObserving()
-        self.envObserver?.stopObserving()
         self.faceDetector?.stop()
         self.previewView.image = nil
     }
@@ -138,7 +139,6 @@ class AssessFaceController: UIViewController {
         self.notifCenter.removeObserver(self)
         self.motionObserver?.stopMotionUpdates()
         self.lightingObserver?.stopObserving()
-        self.envObserver?.stopObserving()
         self.faceDetector?.stop()
         self.previewView.image = nil
         self.dismiss(animated: true)
@@ -155,39 +155,37 @@ extension AssessFaceController: MotionObserverDelegate {
             self.headingLabel.text = String(heading)
         }
     }
-}
-
-extension AssessFaceController: EnvObserverDelegate {
     
-    func motionUpdating() {
+    func userHasStartedRotating() {
         DispatchQueue.main.async {
             self.instructions.text = self.keepTurningPrompt
             self.instructions.textColor = UIColor.systemIndigo
         }
     }
     
-    func wrongMotionDirection() {
+    func wrongRotationDirection() {
         DispatchQueue.main.async {
             self.instructions.text = self.turningWrongDirectionPrompt
             self.instructions.textColor = UIColor.systemRed
         }
     }
     
-    func motionUpdateComplete() {
+    func rotationComplete() {
         let primaryLightDirection = self.skinAnalyzerDelegate?.estimatePrimaryLightDirection()
         self.stateMgr?.updateState(state: StateManager.State.TurnAroundComplete)
+        self.envObserver?.processLighting()
         DispatchQueue.main.async {
             self.instructions.stopBlink()
             self.instructions.text = self.stopPrompt
             self.instructions.textColor = UIColor.systemRed
             
-            
             // Primary Light Direction.
             self.resultLabel.text = String(primaryLightDirection ?? -1)
         }
-        
     }
-    
+}
+
+extension AssessFaceController: EnvObserverDelegate {
     func badColorTemperature() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             guard let vc = BadColorTemperature.storyboardInstance() else {
@@ -268,9 +266,8 @@ extension AssessFaceController: FaceProcessorDelegate {
     func firstFrame() {
         self.cameraDevice = self.faceDetector?.getDevice()
         self.stateMgr?.updateState(state: StateManager.State.StartTurnAround)
-        self.motionObserver?.startMotionUpdates(delegate: self)
+        self.motionObserver?.ensureUserRotates(range: 360)
         self.lightingObserver?.startObserving(device: self.cameraDevice, delegate: self)
-        self.envObserver?.observerUserRotation(range: 360, delegate: self)
         
         DispatchQueue.main.async {
             self.instructions.text = self.turnAroundPrompt
