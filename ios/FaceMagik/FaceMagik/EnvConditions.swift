@@ -23,28 +23,30 @@ struct SensorValues {
 
 class EnvConditions: NSObject, EnvObserver {
     enum State: Int {
-        case WaitingForFirstDegree = 1
-        case WaitingForSecondDegree = 2
-        case CollectionInProgress = 3
-        case CollectionComplete = 4
+        case Idle = 1
+        case WaitingForFirstDegree = 2
+        case WaitingForSecondDegree = 3
+        case CollectionInProgress = 4
     }
     
     private var delegate: EnvObserverDelegate?
-    @objc private var cameraDevice: AVCaptureDevice!
-    private var exposureObservation: NSKeyValueObservation?
-    private var isoObservation: NSKeyValueObservation?
-    private var tempObservation: NSKeyValueObservation?
     private var currTemp: Int = 0
     private var currISO: Int = 0
     private var currExposure: Int = 0
+    private var currState: State = .Idle
     private let envQueue = DispatchQueue(label: "Env Queue", qos: .userInitiated , attributes: [], autoreleaseFrequency: .inherit, target: nil)
-    
-    // Core Motion variables.
-    private let motionManager = CMMotionManager()
-    private var motionQueue = OperationQueue()
-    private static let motionFrequency = 1.0/30.0
     private var sensorMap: [Int: SensorValues] = [:]
-    private var currState: State = .WaitingForFirstDegree
+    
+    // collection variables.
+    private var rangeToRotate: Int = 0
+    private var firstDegree: Int = 0
+    private var secondDegree: Int = 0
+    private var prevDegree: Int = 0
+    private var direction: Int = 0
+    private var wrongDirectionMode: Bool = false
+    private var degreesRotated: Int = 0
+    private static let degreeTolerance = 20
+
     
     // returns smallest the difference (a-b) in degrees between two angles that are close to each other taking into account roll over from 360 to 0.
     private static func smallestDegreeDiff(_ a: Int, _ b: Int) -> Int {
@@ -63,149 +65,115 @@ class EnvConditions: NSObject, EnvObserver {
         return b-a >= 0 ? b-a: 360 - (a-b)
     }
     
-    func observeLighting(device: AVCaptureDevice?, vc: EnvObserverDelegate?) {
-        guard let dev = device else {
-            return
-        }
-        self.cameraDevice = dev
-        self.delegate = vc
-        
-        // Set initial values.
+    // updated Heading value of the user.
+    func updatedHeading(heading: Int) {
         self.envQueue.async {
-            self.currExposure = Int(1/self.cameraDevice.exposureDuration.seconds)
-            self.currISO = Int(self.cameraDevice.iso)
-            self.currTemp = Int(self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature)
-        }
-        self.delegate?.notifyExposureUpdate(newExpsosure: Int(1/self.cameraDevice.exposureDuration.seconds))
-        self.delegate?.notifyISOUpdate(newISO: Int(self.cameraDevice.iso))
-        self.delegate?.notifyTempUpdate(newTemp: Int(self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature))
-        
-        // Start observing camera device exposureDuration.
-        self.exposureObservation = observe(\.self.cameraDevice.exposureDuration, options: .new){
-            object, change in
-            guard let newVal = change.newValue else {
-                return
-            }
-            self.envQueue.async {
-                self.currExposure = Int(1/(newVal.seconds))
-            }
-            self.delegate?.notifyExposureUpdate(newExpsosure: Int(1/(newVal.seconds)))
-        }
-        
-        // Start observing camera device white balance gains.
-        self.isoObservation = observe(\.self.cameraDevice.iso, options: .new){
-            obj, change in
-            guard let newVal = change.newValue else {
-                return
-            }
-            self.envQueue.async {
-                self.currISO = Int(newVal)
-            }
-            self.delegate?.notifyISOUpdate(newISO: Int(newVal))
-        }
-        
-        // Start observing camera device white balance gains.
-        self.tempObservation = observe(\.self.cameraDevice.deviceWhiteBalanceGains, options: .new){
-            obj, chng in
-            let temp = self.cameraDevice.temperatureAndTintValues(for: self.cameraDevice.deviceWhiteBalanceGains).temperature
-            self.envQueue.async {
-                self.currTemp = Int(temp)
-            }
-            self.delegate?.notifyTempUpdate(newTemp: Int(temp))
+            self.handleUserRotation(heading: heading)
         }
     }
     
-    func startMotionUpdates(range: Int) {
-        if !self.motionManager.isDeviceMotionAvailable {
-            print ("Device motion unavaible! Error!")
-            return
+    func updatedISO(iso: Int) {
+        self.envQueue.async {
+            self.currISO = iso
         }
-        if self.motionManager.isDeviceMotionActive {
-            return
+    }
+    
+    func updatedExposure(exposure: Int) {
+        self.envQueue.async {
+            self.currExposure = exposure
         }
-        
-        self.currState = .WaitingForFirstDegree
-        var firstDegree: Int = 0
-        var secondDegree: Int = 0
-        var prevDegree: Int = 0
-        var direction: Int = 0
-        var wrongDirectionMode: Bool = false
-        var degreesRotated: Int = 0
-        let degreeDelta = 20
-        self.motionManager.deviceMotionUpdateInterval = EnvConditions.motionFrequency
-        self.motionManager.startDeviceMotionUpdates(using: .xMagneticNorthZVertical, to: self.motionQueue, withHandler: { (data, error) in
-            guard let validData = data else {
-                return
+    }
+    
+    func updatedColorTemp(temp: Int) {
+        self.envQueue.async {
+            self.currTemp = temp
+        }
+    }
+    
+    // handleUserRotation is a helper function handle state associated with user rotation.
+    private func handleUserRotation(heading: Int) {
+        switch self.currState {
+        case .Idle:
+            return
+        case .WaitingForFirstDegree:
+            self.firstDegree = heading
+            self.currState = .WaitingForSecondDegree
+        case .WaitingForSecondDegree:
+            if abs(EnvConditions.smallestDegreeDiff(heading, self.firstDegree)) < EnvConditions.degreeTolerance {
+                break
             }
-            let heading = Int(validData.heading)
-            self.envQueue.async {
-                switch self.currState {
-                case .WaitingForFirstDegree:
-                    firstDegree = heading
-                    self.currState = .WaitingForSecondDegree
-                case .WaitingForSecondDegree:
-                    if abs(EnvConditions.smallestDegreeDiff(heading, firstDegree)) < degreeDelta {
-                        break
-                    }
-                    secondDegree = heading
-                    prevDegree = heading
-                    direction = EnvConditions.smallestDegreeDiff(secondDegree, firstDegree)
+            self.secondDegree = heading
+            self.prevDegree = heading
+            self.direction = EnvConditions.smallestDegreeDiff(self.secondDegree, self.firstDegree)
+            self.delegate?.motionUpdating()
+            self.currState = .CollectionInProgress
+        case .CollectionInProgress:
+            let prevDiff = EnvConditions.smallestDegreeDiff(heading, self.prevDegree)
+            if abs(prevDiff) < EnvConditions.degreeTolerance {
+                // No need to update prevDegree.
+                break
+            }
+            
+            // test that direction of user movement is correct.
+            if self.direction * prevDiff >= 0 {
+                // User moving in right direction.
+                if self.wrongDirectionMode {
+                    self.wrongDirectionMode = false
                     self.delegate?.motionUpdating()
-                    self.currState = .CollectionInProgress
-                case .CollectionInProgress:
-                    let prevDiff = EnvConditions.smallestDegreeDiff(heading, prevDegree)
-                    if abs(prevDiff) < degreeDelta {
-                        // No need to update prevDegree.
-                        break
-                    }
-                    
-                    // test that direction of user movement is correct.
-                    if direction * prevDiff >= 0 {
-                        // User moving in right direction.
-                        if wrongDirectionMode {
-                            wrongDirectionMode = false
-                            self.delegate?.motionUpdating()
-                        }
-                        degreesRotated += EnvConditions.differenceAlongDirection(heading, prevDegree, positive: direction > 0)
-                        prevDegree = heading
-                    } else {
-                        // User moving in wrong direction.
-                        if !wrongDirectionMode {
-                            wrongDirectionMode = true
-                            self.delegate?.wrongMotionDirection()
-                        }
-                        degreesRotated -= EnvConditions.differenceAlongDirection(heading, prevDegree, positive: direction < 0)
-                        prevDegree = heading
-                        return
-                    }
-                case .CollectionComplete:
-                    return
                 }
-                if self.sensorMap[heading] != nil {
-                    return
+                self.degreesRotated += EnvConditions.differenceAlongDirection(heading, self.prevDegree, positive: self.direction > 0)
+                self.prevDegree = heading
+            } else {
+                // User moving in wrong direction.
+                if !self.wrongDirectionMode {
+                    self.wrongDirectionMode = true
+                    self.delegate?.wrongMotionDirection()
                 }
-                self.delegate?.notifyHeading(heading: heading)
-                
-                self.sensorMap[heading] = SensorValues(iso: self.currISO, exposure: self.currExposure, temp: self.currTemp, sceneType: SceneType.Unknown)
-                
-                if degreesRotated >= range - degreeDelta {
-                    self.currState = .CollectionComplete
-                    
-                    self.delegate?.motionUpdateComplete()
-                    self.processLighting()
-                }
+                self.degreesRotated -= EnvConditions.differenceAlongDirection(heading, self.prevDegree, positive: self.direction < 0)
+                self.prevDegree = heading
+                return
             }
-        })
-    }
-    
-    func stopMotionUpdates() {
-        if !self.motionManager.isDeviceMotionActive {
+        }
+        if self.sensorMap[heading] != nil {
             return
         }
-        self.motionManager.stopDeviceMotionUpdates()
-        self.envQueue.async {
-            self.sensorMap = [:]
+        
+        self.sensorMap[heading] = SensorValues(iso: self.currISO, exposure: self.currExposure, temp: self.currTemp, sceneType: SceneType.Unknown)
+        
+        if self.degreesRotated >= self.rangeToRotate - EnvConditions.degreeTolerance {
+            self.currState = .Idle
+            
+            self.delegate?.motionUpdateComplete()
+            self.processLighting()
         }
+    }
+    
+    // observeUserRotation manages user rotation and collects lighting parameters in surroundings.
+    func observerUserRotation(range: Int, delegate: EnvObserverDelegate?) {
+        self.delegate = delegate
+        self.resetData()
+        self.envQueue.async {
+            self.rangeToRotate = range
+            self.currState = .WaitingForFirstDegree
+        }
+    }
+    
+    func stopObserving() {
+        self.envQueue.async {
+            self.resetData()
+            self.currState = .Idle
+        }
+    }
+    
+    private func resetData() {
+        self.sensorMap = [:]
+        self.rangeToRotate = 0
+        self.firstDegree = 0
+        self.secondDegree = 0
+        self.prevDegree = 0
+        self.direction = 0
+        self.wrongDirectionMode = false
+        self.degreesRotated = 0
     }
     
     // processLighting will process environment lighting using values in sensor map.

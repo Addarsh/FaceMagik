@@ -20,17 +20,36 @@ protocol FaceProcessorDelegate {
     func frameUpdated(faceProperties: FaceProperties)
 }
 
-protocol EnvObserver {
-    func observeLighting(device: AVCaptureDevice?, vc: EnvObserverDelegate?)
-    func startMotionUpdates(range: Int)
+protocol MotionObserver {
+    func startMotionUpdates(delegate: MotionObserverDelegate?)
     func stopMotionUpdates()
 }
 
+protocol MotionObserverDelegate {
+    func updatedHeading(heading: Int)
+}
+
+protocol LightingObserver {
+    func startObserving(device: AVCaptureDevice?, delegate: LightingObserverDelegate?)
+    func stopObserving()
+}
+
+protocol LightingObserverDelegate {
+    func updatedISO(iso: Int)
+    func updatedExposure(exposure: Int)
+    func updatedColorTemp(temp: Int)
+}
+
+protocol EnvObserver {
+    func updatedHeading(heading: Int)
+    func updatedISO(iso: Int)
+    func updatedExposure(exposure: Int)
+    func updatedColorTemp(temp: Int)
+    func observerUserRotation(range: Int, delegate: EnvObserverDelegate?)
+    func stopObserving()
+}
+
 protocol EnvObserverDelegate {
-    func notifyISOUpdate(newISO: Int)
-    func notifyExposureUpdate(newExpsosure: Int)
-    func notifyTempUpdate(newTemp: Int)
-    func notifyHeading(heading: Int)
     func motionUpdating()
     func wrongMotionDirection()
     func motionUpdateComplete()
@@ -58,9 +77,12 @@ class AssessFaceController: UIViewController {
     @IBOutlet private var headingLabel: UILabel!
     
     private let notifCenter = NotificationCenter.default
+    private var cameraDevice: AVCaptureDevice?
     var faceDetector: FaceProcessor?
     var envObserver: EnvObserver?
     var skinAnalyzerDelegate: AssessFaceControllerDelegate?
+    var lightingObserver: LightingObserver?
+    var motionObserver: MotionObserver?
     var stateMgr: StateManager?
     private var phoneTooCloseAlert: AlertViewController?
 
@@ -78,8 +100,6 @@ class AssessFaceController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        self.skinAnalyzerDelegate = SkinToneAnalyzer()
         self.stateMgr = StateManager()
         
         self.previewView.rotation = .rotate180Degrees
@@ -94,7 +114,9 @@ class AssessFaceController: UIViewController {
     }
     
     @objc private func appMovedToBackground() {
-        self.envObserver?.stopMotionUpdates()
+        self.motionObserver?.stopMotionUpdates()
+        self.lightingObserver?.stopObserving()
+        self.envObserver?.stopObserving()
         self.faceDetector?.stop()
         self.previewView.image = nil
     }
@@ -114,41 +136,28 @@ class AssessFaceController: UIViewController {
     // back allowes user to go back to previous view controller.
     @IBAction func back() {
         self.notifCenter.removeObserver(self)
-        self.envObserver?.stopMotionUpdates()
+        self.motionObserver?.stopMotionUpdates()
+        self.lightingObserver?.stopObserving()
+        self.envObserver?.stopObserving()
         self.faceDetector?.stop()
         self.previewView.image = nil
         self.dismiss(animated: true)
     }
 }
 
-extension AssessFaceController: EnvObserverDelegate {
-    
-    func notifyISOUpdate(newISO: Int) {
-        DispatchQueue.main.async {
-            self.isoLabel.text = "ISO:" + String(newISO)
-        }
-    }
-    
-    func notifyTempUpdate(newTemp: Int) {
-        DispatchQueue.main.async {
-            self.tempLabel.text = String(newTemp) + "K"
-        }
-    }
-    
-    func notifyExposureUpdate(newExpsosure: Int) {
-        DispatchQueue.main.async {
-            self.exposureLabel.text = "E:" + String(newExpsosure)
-        }
-    }
-    
-    func notifyHeading(heading: Int) {
+extension AssessFaceController: MotionObserverDelegate {
+    func updatedHeading(heading: Int) {
         if self.stateMgr?.getState() == StateManager.State.StartTurnAround {
+            self.envObserver?.updatedHeading(heading: heading)
             self.skinAnalyzerDelegate?.handleUpdatedHeading(heading: heading)
         }
         DispatchQueue.main.async {
             self.headingLabel.text = String(heading)
         }
     }
+}
+
+extension AssessFaceController: EnvObserverDelegate {
     
     func motionUpdating() {
         DispatchQueue.main.async {
@@ -165,7 +174,6 @@ extension AssessFaceController: EnvObserverDelegate {
     }
     
     func motionUpdateComplete() {
-        self.envObserver?.stopMotionUpdates()
         let primaryLightDirection = self.skinAnalyzerDelegate?.estimatePrimaryLightDirection()
         self.stateMgr?.updateState(state: StateManager.State.TurnAroundComplete)
         DispatchQueue.main.async {
@@ -232,11 +240,37 @@ extension UILabel {
     }
 }
 
+extension AssessFaceController: LightingObserverDelegate {
+    func updatedISO(iso: Int) {
+        self.envObserver?.updatedISO(iso: iso)
+        DispatchQueue.main.async {
+            self.isoLabel.text = "ISO:" + String(iso)
+        }
+    }
+    
+    func updatedExposure(exposure: Int) {
+        self.envObserver?.updatedExposure(exposure: exposure)
+        DispatchQueue.main.async {
+            self.exposureLabel.text = "E:" + String(exposure)
+        }
+    }
+    
+    func updatedColorTemp(temp: Int) {
+        self.envObserver?.updatedColorTemp(temp: temp)
+        DispatchQueue.main.async {
+            self.tempLabel.text = String(temp) + "K"
+        }
+    }
+    
+}
+
 extension AssessFaceController: FaceProcessorDelegate {
     func firstFrame() {
+        self.cameraDevice = self.faceDetector?.getDevice()
         self.stateMgr?.updateState(state: StateManager.State.StartTurnAround)
-        self.envObserver?.observeLighting(device: self.faceDetector?.getDevice(), vc: self)
-        self.envObserver?.startMotionUpdates(range: 360)
+        self.motionObserver?.startMotionUpdates(delegate: self)
+        self.lightingObserver?.startObserving(device: self.cameraDevice, delegate: self)
+        self.envObserver?.observerUserRotation(range: 360, delegate: self)
         
         DispatchQueue.main.async {
             self.instructions.text = self.turnAroundPrompt

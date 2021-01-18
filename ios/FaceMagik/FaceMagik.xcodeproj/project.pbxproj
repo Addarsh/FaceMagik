@@ -55,6 +55,8 @@
 		98C7C09E25AA34050032A0CA /* PossiblyOutsideError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C7C09D25AA34050032A0CA /* PossiblyOutsideError.swift */; };
 		98C7C0A325AA5EA00032A0CA /* SkinToneAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C7C0A225AA5EA00032A0CA /* SkinToneAnalyzer.swift */; };
 		98E7F0E525AD6F5900FBF99E /* CIImageHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E7F0E425AD6F5900FBF99E /* CIImageHelper.swift */; };
+		98E7F0ED25B4EFFC00FBF99E /* MotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E7F0EC25B4EFFC00FBF99E /* MotionManager.swift */; };
+		98E7F0F225B5383800FBF99E /* LightingMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E7F0F125B5383800FBF99E /* LightingMeasurement.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -128,6 +130,8 @@
 		98C7C09D25AA34050032A0CA /* PossiblyOutsideError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PossiblyOutsideError.swift; sourceTree = "<group>"; };
 		98C7C0A225AA5EA00032A0CA /* SkinToneAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinToneAnalyzer.swift; sourceTree = "<group>"; };
 		98E7F0E425AD6F5900FBF99E /* CIImageHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CIImageHelper.swift; sourceTree = "<group>"; };
+		98E7F0EC25B4EFFC00FBF99E /* MotionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionManager.swift; sourceTree = "<group>"; };
+		98E7F0F125B5383800FBF99E /* LightingMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightingMeasurement.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -217,6 +221,8 @@
 				98C7C0A225AA5EA00032A0CA /* SkinToneAnalyzer.swift */,
 				985108B525966C860037E455 /* AssessFaceController.storyboard */,
 				98455F3C25A281F700827928 /* EnvConditions.swift */,
+				98E7F0F125B5383800FBF99E /* LightingMeasurement.swift */,
+				98E7F0EC25B4EFFC00FBF99E /* MotionManager.swift */,
 				986471B72586A1A00080F976 /* LightConditionsController.swift */,
 				9851213D257AA0CA00F11004 /* OverviewController.swift */,
 				9851212825789E7100F11004 /* AlertViewController.storyboard */,
@@ -413,6 +419,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				989F45D9259260C3005B1D4B /* RemindPhoneOrientationController.swift in Sources */,
+				98E7F0ED25B4EFFC00FBF99E /* MotionManager.swift in Sources */,
 				98512159257F25CC00F11004 /* GoogLeNetPlaces.mlmodel in Sources */,
 				9851D373253A461C0009D709 /* ViewController.swift in Sources */,
 				98E7F0E525AD6F5900FBF99E /* CIImageHelper.swift in Sources */,
@@ -421,6 +428,7 @@
 				985108B125966C700037E455 /* AssessFaceController.swift in Sources */,
 				9816BAAF256CAF8E00FF90C6 /* PassThrough.metal in Sources */,
 				989F45C3258F1758005B1D4B /* LightingResultsController.swift in Sources */,
+				98E7F0F225B5383800FBF99E /* LightingMeasurement.swift in Sources */,
 				985108C8259CE6470037E455 /* FaceDetector.swift in Sources */,
 				985F8B72256C80F800EAA558 /* PreviewMetalView.swift in Sources */,
 				989F459D258BCAF9005B1D4B /* RotateInstructionsController.swift in Sources */,

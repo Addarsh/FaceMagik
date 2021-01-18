@@ -79,7 +79,10 @@ class OverviewController: UIViewController {
             }
             vc.modalPresentationStyle = .fullScreen
             vc.faceDetector = FaceDetector()
+            vc.motionObserver = MotionManager()
+            vc.lightingObserver = LightingMeasurement()
             vc.envObserver = EnvConditions()
+            vc.skinAnalyzerDelegate = SkinToneAnalyzer()
             self.present(vc, animated: true)
         } else {
             guard let vc = LightConditionsController.storyboardInstance() else {
