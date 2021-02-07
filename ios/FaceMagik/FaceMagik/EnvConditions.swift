@@ -77,10 +77,16 @@ class EnvConditions: NSObject, EnvObserver {
                 avgExposure += Float(readouts.exposure)
             }
             
+            // TODO: Add more cases later. For now just assume env is good if we reach this spot.
+            self.delegate?.envIsGood()
+            
+            return
+            
             let kCount = Float(self.sensorMap.count)
             avgTemp /= kCount
             avgISO /= kCount
             avgExposure /= kCount
+            
             
             if avgTemp < 4000 {
                 self.delegate?.badColorTemperature()
@@ -92,7 +98,9 @@ class EnvConditions: NSObject, EnvObserver {
             }
             if avgISO < 200 {
                 self.delegate?.tooBright()
+                return
             }
+            
         }
     }
 }

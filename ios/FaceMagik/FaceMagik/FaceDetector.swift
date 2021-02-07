@@ -16,8 +16,6 @@ struct FaceProperties {
     var fullFaceMask: CIImage
     var leftCheekMask: CIImage
     var rightCheekMask: CIImage
-    var leftCheekBbox: CGRect
-    var rightCheekBbox: CGRect
     var leftCheekPercentValue: Int
     var rightCheekPercentValue: Int
 }
@@ -40,6 +38,8 @@ class FaceDetector: NSObject, FaceProcessor {
     private var rightEyeLandmarks: VNFaceLandmarkRegion2D!
     private var leftEyeLandmarks: VNFaceLandmarkRegion2D!
     private var faceContourLandmarks: VNFaceLandmarkRegion2D!
+    private var leftEyebrowLandmarks: VNFaceLandmarkRegion2D!
+    private var rightEyebrowLandmarks: VNFaceLandmarkRegion2D!
     
     // Face properties.
     private var image: CIImage?
@@ -249,10 +249,14 @@ class FaceDetector: NSObject, FaceProcessor {
                     print ("Left Eyebrow not found in image")
                     return
                 }
+                self.leftEyebrowLandmarks = leftEyebrow
+                
                 guard let rightEyebrow = landmarks.rightEyebrow else {
                     print ("Right Eyebrow not found in image")
                     return
                 }
+                self.rightEyebrowLandmarks = rightEyebrow
+                
                 guard let outerLips = landmarks.outerLips else {
                     print ("outerLips not found in image")
                     return
@@ -278,7 +282,7 @@ class FaceDetector: NSObject, FaceProcessor {
                 self.faceContourMask = self.createFaceContourMask(faceContour)
                 self.depthOfFaceCenter = self.computeDepthOfFace(depthPixelBuffer)
                 self.depthMaskCIImage = self.createDepthMask(depthPixelBuffer)
-                self.fullFaceMask = self.getFaceMask()
+                self.fullFaceMask = self.getFullFaceMask()
                 self.leftCheekBbox = self.getLeftCheekBbox()
                 self.leftCheekMask = self.bboxToMask(bbox: self.leftCheekBbox)
                 self.rightCheekBbox = self.getRightCheekBbox()
@@ -402,7 +406,7 @@ class FaceDetector: NSObject, FaceProcessor {
         // faceContourPoints.last is the left cheek start on the mirrored image. It's very confusing. :P.
         let xMin = faceContourPoints.last!.x + delta
         let xMax = noseBbox.minX - delta
-        let yMin = noseBbox.minY + noseBbox.height/2.0
+        let yMin = noseBbox.minY + delta
         let yMax = noseBbox.maxY
         
         return CGRect(x: xMin, y: yMin, width: xMax-xMin, height: yMax-yMin)
@@ -423,8 +427,31 @@ class FaceDetector: NSObject, FaceProcessor {
         // faceContourPoints.first is the right cheek start on the mirrored image. It's very confusing. :P.
         let xMin = noseBbox.maxX + delta
         let xMax = faceContourPoints.first!.x - delta
-        let yMin = noseBbox.minY + noseBbox.height/2.0
+        let yMin = noseBbox.minY + delta
         let yMax = noseBbox.maxY
+        
+        return CGRect(x: xMin, y: yMin, width: xMax-xMin, height: yMax-yMin)
+    }
+    
+    // Returns a bounding box for forehead on face.
+    private func getForeheadBbox() -> CGRect? {
+        guard let leftEyebrowBbox = self.bbox(landmark: self.leftEyebrowLandmarks) else {
+            return nil
+        }
+        guard let rightEyebrowBbox = self.bbox(landmark: self.rightEyebrowLandmarks) else {
+            return nil
+        }
+        guard let faceBoundsRect = self.faceBoundsRect else {
+            return nil
+        }
+        
+        let delta = leftEyebrowBbox.width*0.2
+        
+        // faceContourPoints.first is the right cheek start on the mirrored image. It's very confusing. :P.
+        let xMin = leftEyebrowBbox.minX + delta
+        let xMax = rightEyebrowBbox.maxX - delta
+        let yMin = faceBoundsRect.minY
+        let yMax = min(leftEyebrowBbox.minY, rightEyebrowBbox.minY)
         
         return CGRect(x: xMin, y: yMin, width: xMax-xMin, height: yMax-yMin)
     }
@@ -495,8 +522,9 @@ class FaceDetector: NSObject, FaceProcessor {
         
         let s :CGFloat = -10
         let b = -s*CGFloat(depthCutOff+0.25)
+        let depthImage = CIImage(cvPixelBuffer: depthPixelBuffer).oriented(.upMirrored)
         
-        guard let mat = CIFilter(name: "CIColorMatrix", parameters: ["inputImage": CIImage(cvPixelBuffer: depthPixelBuffer), "inputRVector": CIVector(x: s, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: s, z: 0, w: 0),"inputBVector": CIVector(x: 0, y: 0, z: s, w: 0),"inputBiasVector": CIVector(x: b, y: b, z: b, w: 0)]) else {
+        guard let mat = CIFilter(name: "CIColorMatrix", parameters: ["inputImage": depthImage, "inputRVector": CIVector(x: s, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: s, z: 0, w: 0),"inputBVector": CIVector(x: 0, y: 0, z: s, w: 0),"inputBiasVector": CIVector(x: b, y: b, z: b, w: 0)]) else {
             print ("Could not construct CIFilter")
             return nil
         }
@@ -509,8 +537,8 @@ class FaceDetector: NSObject, FaceProcessor {
         return out?.transformed(by: scale)
     }
     
-    // getFaceMask returns mask of face points excluding eyes, eyebrows, lips and teeth.
-    private func getFaceMask() -> CIImage? {
+    // getFullFaceMask returns full facemask of face points excluding eyes, eyebrows, lips and teeth.
+    private func getFullFaceMask() -> CIImage? {
         
         // blend depthmask and face contour mask.
         var out = CIImageHelper.bitwiseAnd(firstMask: self.faceContourMask, secondMask: self.depthMaskCIImage)
@@ -637,7 +665,7 @@ extension FaceDetector: AVCaptureDataOutputSynchronizerDelegate {
         }
         let rightCheekPercentValue = Int((Float(rightCheekValue)/255.0)*100.0)
         
-        return FaceProperties(image: image, faceDepth: faceDepth, fullFaceMask: fullFaceMask, leftCheekMask: leftCheekMask, rightCheekMask: rightCheekMask, leftCheekBbox: leftCheekBbox, rightCheekBbox: rightCheekBbox, leftCheekPercentValue: leftCheekPercentValue, rightCheekPercentValue: rightCheekPercentValue)
+        return FaceProperties(image: image, faceDepth: faceDepth, fullFaceMask: fullFaceMask, leftCheekMask: leftCheekMask, rightCheekMask: rightCheekMask, leftCheekPercentValue: leftCheekPercentValue, rightCheekPercentValue: rightCheekPercentValue)
     }
 }
 

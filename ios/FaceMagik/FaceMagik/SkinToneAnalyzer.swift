@@ -55,24 +55,13 @@ class SkinToneAnalyzer: AssessFaceControllerDelegate {
             if filteredValues.count < 2 {
                 return 0
             }
-            
-            // Compute combined intensity cutoff.
-            let intensityValues = filteredValues.sorted { fv1, fv2 in
-                return fv1.leftCheekPercentValue + fv1.rightCheekPercentValue <= fv2.leftCheekPercentValue + fv2.rightCheekPercentValue
+        
+            var sum :Float = 0
+            for v in values {
+                sum += Float(v.leftCheekPercentValue)
+                sum += Float(v.rightCheekPercentValue)
             }
-            let intensityCutoff = intensityValues.last!.leftCheekPercentValue + intensityValues.last!.rightCheekPercentValue - 20
-            
-            // Filter valuess greater than given cutoff and sort in increasing order of intensity difference.
-            let finalFilteredValues = intensityValues.filter { fv in
-                return fv.leftCheekPercentValue + fv.rightCheekPercentValue >= intensityCutoff
-            }
-            let finalSortedValues = finalFilteredValues.sorted { fv1, fv2 in
-                let diff1 = abs(fv1.leftCheekPercentValue - fv1.rightCheekPercentValue)
-                let diff2 = abs(fv2.leftCheekPercentValue - fv2.rightCheekPercentValue)
-                return diff1 <= diff2
-            }
-            
-            return finalSortedValues[0].heading
+            return Int(Float(sum)/Float(values.count*2))
         }
     }
 }

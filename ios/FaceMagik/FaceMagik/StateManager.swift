@@ -12,6 +12,7 @@ class StateManager {
         case Unknown
         case StartTurnAround
         case TurnAroundComplete
+        case EnvIsGood
     }
     private var currState: State = .Unknown
     private let queue = DispatchQueue(label: "State Queue", qos: .default, attributes: [], autoreleaseFrequency: .inherit, target: nil)

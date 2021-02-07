@@ -57,12 +57,17 @@ protocol EnvObserverDelegate {
     func badColorTemperature()
     func possiblyOutdoors()
     func tooBright()
+    func envIsGood()
 }
 
 protocol AssessFaceControllerDelegate {
     func handleUpdatedHeading(heading: Int)
     func handleUpdatedImageValues(leftCheekPercentValue: Int, rightCheekPercentValue: Int)
     func estimatePrimaryLightDirection() -> Int
+}
+
+protocol AlertDismissedDelegate {
+    func dismissed()
 }
 
 class AssessFaceController: UIViewController {
@@ -88,7 +93,7 @@ class AssessFaceController: UIViewController {
     private var phoneTooCloseAlert: AlertViewController?
 
     private let unknownPrompt = "Waiting to detect face"
-    private let turnAroundPrompt = "Turn Around 360 degrees"
+    private let turnAroundPrompt = "Turn Around %d degrees"
     private let keepTurningPrompt = "Keep Turning..."
     private let turningWrongDirectionPrompt = "Wrong direction! Turn other way"
     private let stopPrompt = "Stop"
@@ -134,6 +139,14 @@ class AssessFaceController: UIViewController {
         self.instructions.textColor = UIColor.systemRed
     }
     
+    @IBAction func backCamera() {
+        guard let vc = AssessLightController.storyboardInstance() else {
+            return
+        }
+        vc.modalPresentationStyle = .fullScreen
+        self.present(vc, animated: true)
+    }
+    
     // back allowes user to go back to previous view controller.
     @IBAction func back() {
         self.notifCenter.removeObserver(self)
@@ -142,6 +155,19 @@ class AssessFaceController: UIViewController {
         self.faceDetector?.stop()
         self.previewView.image = nil
         self.dismiss(animated: true)
+    }
+}
+
+extension AssessFaceController: AlertDismissedDelegate {
+    func dismissed() {
+        if self.stateMgr?.getState() != StateManager.State.EnvIsGood {
+            return
+        }
+        DispatchQueue.main.async {
+            self.instructions.text = String(format: self.turnAroundPrompt, 45)
+            self.instructions.textColor = UIColor.systemIndigo
+            self.instructions.blink()
+        }
     }
 }
 
@@ -209,6 +235,10 @@ extension AssessFaceController: EnvObserverDelegate {
         // Start movement towards direction of light.
     }
     
+    func envIsGood() {
+        self.stateMgr?.updateState(state: StateManager.State.EnvIsGood)
+    }
+    
     func displayError(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {
         DispatchQueue.main.async {
             guard let vc = LightingResultsController.storyboardInstance() else {
@@ -264,20 +294,25 @@ extension AssessFaceController: LightingObserverDelegate {
 
 extension AssessFaceController: FaceProcessorDelegate {
     func firstFrame() {
+        let rangeToRotate: Int = 360
         self.cameraDevice = self.faceDetector?.getDevice()
         self.stateMgr?.updateState(state: StateManager.State.StartTurnAround)
-        self.motionObserver?.ensureUserRotates(range: 360)
+        self.motionObserver?.ensureUserRotates(range: rangeToRotate)
         self.lightingObserver?.startObserving(device: self.cameraDevice, delegate: self)
+        self.envObserver?.observeLighting(delegate: self)
         
         DispatchQueue.main.async {
-            self.instructions.text = self.turnAroundPrompt
+            self.instructions.text = String(format: self.turnAroundPrompt, rangeToRotate)
             self.instructions.textColor = UIColor.systemIndigo
             self.instructions.blink()
         }
     }
     
     func frameUpdated(faceProperties: FaceProperties) {
-        self.previewView.image = CIImageHelper.overlayMask(image: faceProperties.image, mask: CIImageHelper.bitwiseXor(firstMask: faceProperties.leftCheekMask, secondMask: faceProperties.rightCheekMask)!)
+        //let netMask =  CIImageHelper.bitwiseXor(firstMask: CIImageHelper.bitwiseXor(firstMask: faceProperties.leftCheekMask, secondMask: faceProperties.rightCheekMask), secondMask: faceProperties.foreheadMask)
+        //self.previewView.image = CIImageHelper.overlayMask(image: faceProperties.image, mask: netMask!)
+        self.previewView.image = faceProperties.image
+        //self.previewView.image = CIImageHelper.overlayMask(image: faceProperties.image, mask: faceProperties.fullFaceMask)
         
         DispatchQueue.main.async {
             self.leftCheekValueLabel.text = String(faceProperties.leftCheekPercentValue)

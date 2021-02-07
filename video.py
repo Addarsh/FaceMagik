@@ -82,6 +82,9 @@ def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
     print ("Mean sat: ", np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0))
     print ("Mean brightness: ", np.mean(f.brightImage[m], axis=0)[2]*(100.0/255.0))
 
+    if (np.count_nonzero(m)/np.count_nonzero(mypts)) < 0.08:
+      continue
+
     print ("")
     if i != 0:
       print ("PREV BRIGHT DIFF:  ", (np.mean(f.brightImage[m], axis=0)[2] - np.mean(f.brightImage[resMasks[i-1]], axis=0)[2])*(100.0/255.0))

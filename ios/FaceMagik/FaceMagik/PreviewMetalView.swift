@@ -70,6 +70,7 @@ class PreviewMetalView: MTKView {
     private var ciContext: CIContext!
     
     private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+    //private let colorSpace = CGColorSpaceCreateDeviceRGB()
     
     private var commandQueue: MTLCommandQueue?
     
