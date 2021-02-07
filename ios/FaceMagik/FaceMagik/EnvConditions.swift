@@ -57,6 +57,30 @@ class EnvConditions: NSObject, EnvObserver {
         }
     }
     
+    // processEnv instructs class to process env lighting conditions and determine if they are suitable for
+    // capturing pictures.
+    func processEnv() {
+        self.envQueue.async {
+            // TODO: Add more cases later. For now just assume env is good if we reach this spot.
+            self.delegate?.envIsGood()
+            return
+            
+            if self.currTemp < 3500 {
+                self.delegate?.badColorTemperature()
+                return
+            }
+            // AFAIK Exposure maxes out at 30 indoors on iPhones. Extra tolerance for safety.
+            if self.currExposure > 35 {
+                self.delegate?.possiblyOutdoors()
+                return
+            }
+            if self.currISO >= 700 {
+                self.delegate?.tooDark()
+                return
+            }
+        }
+    }
+    
     // observeLighting collects lighting parameters in surroundings.
     func observeLighting(delegate: EnvObserverDelegate?) {
         self.delegate = delegate
@@ -94,10 +118,6 @@ class EnvConditions: NSObject, EnvObserver {
             }
             if avgExposure >= 45 {
                 self.delegate?.possiblyOutdoors()
-                return
-            }
-            if avgISO < 200 {
-                self.delegate?.tooBright()
                 return
             }
             

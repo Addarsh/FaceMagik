@@ -51,13 +51,14 @@ protocol EnvObserver {
     func updatedColorTemp(temp: Int)
     func observeLighting(delegate: EnvObserverDelegate?)
     func processLighting()
+    func processEnv()
 }
 
 protocol EnvObserverDelegate {
     func badColorTemperature()
     func possiblyOutdoors()
-    func tooBright()
     func envIsGood()
+    func tooDark()
 }
 
 protocol AssessFaceControllerDelegate {
@@ -93,6 +94,8 @@ class AssessFaceController: UIViewController {
     private var phoneTooCloseAlert: AlertViewController?
 
     private let unknownPrompt = "Waiting to detect face"
+    private let scanningEnv = "Scanning environment..."
+    private let scanComplete = "Scan Complete"
     private let turnAroundPrompt = "Turn Around %d degrees"
     private let keepTurningPrompt = "Keep Turning..."
     private let turningWrongDirectionPrompt = "Wrong direction! Turn other way"
@@ -160,14 +163,7 @@ class AssessFaceController: UIViewController {
 
 extension AssessFaceController: AlertDismissedDelegate {
     func dismissed() {
-        if self.stateMgr?.getState() != StateManager.State.EnvIsGood {
-            return
-        }
-        DispatchQueue.main.async {
-            self.instructions.text = String(format: self.turnAroundPrompt, 45)
-            self.instructions.textColor = UIColor.systemIndigo
-            self.instructions.blink()
-        }
+        // Do nothing for now.
     }
 }
 
@@ -175,7 +171,6 @@ extension AssessFaceController: MotionObserverDelegate {
     func updatedHeading(heading: Int) {
         if self.stateMgr?.getState() == StateManager.State.StartTurnAround {
             self.envObserver?.updatedHeading(heading: heading)
-            self.skinAnalyzerDelegate?.handleUpdatedHeading(heading: heading)
         }
         DispatchQueue.main.async {
             self.headingLabel.text = String(heading)
@@ -212,7 +207,13 @@ extension AssessFaceController: MotionObserverDelegate {
 }
 
 extension AssessFaceController: EnvObserverDelegate {
+    
+    func tooDark() {
+        self.envScanComplete()
+    }
+    
     func badColorTemperature() {
+        self.envScanComplete()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             guard let vc = BadColorTemperature.storyboardInstance() else {
                 return
@@ -221,7 +222,9 @@ extension AssessFaceController: EnvObserverDelegate {
         }
     }
     
+    // possibleOutdoors means exposure value too high meaning possibly outdoors.
     func possiblyOutdoors() {
+        self.envScanComplete()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             guard let vc = PossiblyOutsideError.storyboardInstance() else {
                 return
@@ -229,16 +232,14 @@ extension AssessFaceController: EnvObserverDelegate {
             self.present(vc, animated: true)
         }
     }
-    
-    func tooBright() {
-        // Delay.
-        // Start movement towards direction of light.
-    }
-    
+
+    // Surroundings are good for taking pictures.
     func envIsGood() {
-        self.stateMgr?.updateState(state: StateManager.State.EnvIsGood)
+        self.envScanComplete()
+        self.stateMgr?.updateState(state: StateManager.State.TakePictures)
     }
     
+    // DEPERECATED: Used in a previous iteration of the app.
     func displayError(isIndoors: Bool, isDayLight: Bool, isGoodISO: Bool, isGoodExposure: Bool) {
         DispatchQueue.main.async {
             guard let vc = LightingResultsController.storyboardInstance() else {
@@ -249,6 +250,14 @@ extension AssessFaceController: EnvObserverDelegate {
             vc.isGoodISO = isGoodISO
             vc.isGoodExposure = isGoodExposure
             self.present(vc, animated: true)
+        }
+    }
+    
+    private func envScanComplete() {
+        DispatchQueue.main.async {
+            self.instructions.text = self.scanComplete
+            self.instructions.textColor = UIColor.systemIndigo
+            self.instructions.stopBlink()
         }
     }
 }
@@ -294,17 +303,20 @@ extension AssessFaceController: LightingObserverDelegate {
 
 extension AssessFaceController: FaceProcessorDelegate {
     func firstFrame() {
-        let rangeToRotate: Int = 360
         self.cameraDevice = self.faceDetector?.getDevice()
-        self.stateMgr?.updateState(state: StateManager.State.StartTurnAround)
-        self.motionObserver?.ensureUserRotates(range: rangeToRotate)
+        self.stateMgr?.updateState(state: StateManager.State.FaceDetected)
         self.lightingObserver?.startObserving(device: self.cameraDevice, delegate: self)
         self.envObserver?.observeLighting(delegate: self)
         
         DispatchQueue.main.async {
-            self.instructions.text = String(format: self.turnAroundPrompt, rangeToRotate)
+            self.instructions.text = self.scanningEnv
             self.instructions.textColor = UIColor.systemIndigo
             self.instructions.blink()
+            
+            // Wait for some time before measuring env lighting conditions.
+            Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { timer in
+                self.envObserver?.processEnv()
+            }
         }
     }
     

@@ -43,7 +43,7 @@ class SkinToneAnalyzer: AssessFaceControllerDelegate {
         }
     }
     
-    // estimatePrimaryLightDirection estimates primary light direction (degrees) from given heading and values data.
+    // estimatePrimaryLightDirection estimates primary light direction (degrees) from given heading and values data that span 360 degrees.
     func estimatePrimaryLightDirection() -> Int {
         self.headingQueue.sync {
             

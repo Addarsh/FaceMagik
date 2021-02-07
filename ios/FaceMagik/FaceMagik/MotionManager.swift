@@ -57,6 +57,7 @@ class MotionManager: MotionObserver {
         return b-a >= 0 ? b-a: 360 - (a-b)
     }
     
+    // startMotionUpdates return motion updates from user.
     func startMotionUpdates(delegate: MotionObserverDelegate?) {
         if !self.motionManager.isDeviceMotionAvailable {
             print ("Device motion unavaible! Error!")
@@ -71,7 +72,7 @@ class MotionManager: MotionObserver {
             guard let validData = data else {
                 return
             }
-            self.handleUserRotation(heading: Int(validData.heading))
+            self.handleHeadingUpdate(heading: Int(validData.heading))
         })
     }
         
@@ -91,9 +92,8 @@ class MotionManager: MotionObserver {
         }
     }
     
-    // handleUserRotation is a helper function to ensure user rotates from current position to
-    // the given range successfully.
-    private func handleUserRotation(heading: Int) {
+    // handleHeadingUpdaten is a helper function to manage user motion using given updated heading.
+    private func handleHeadingUpdate(heading: Int) {
         self.mpQueue.async {
             switch self.currState {
             case .Idle:
