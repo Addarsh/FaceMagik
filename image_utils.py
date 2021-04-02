@@ -121,10 +121,10 @@ class ImageUtils:
   """
   Plots a histogram of the given image for given mask.
   """
-  def plot_histogram(img, mask, channel=0, block=True, bins=40, fig_num=1):
+  def plot_histogram(img, mask, channel=0, block=True, bins=40, fig_num=1, xlim=[0, 256]):
     plt.figure(fig_num)
     plt.hist(img[mask][:, channel], bins=bins, density=True, histtype="step")
-    plt.xlim([0,256])
+    plt.xlim(xlim)
     plt.show(block=block)
 
   """
@@ -963,12 +963,11 @@ class ImageUtils:
   """
   def sRGBtoMunsell(sRGB):
     sRGB = sRGB/255.0
+    C = colour.CCS_ILLUMINANTS['cie_2_1931']['C']
     try:
-      C = colour.ILLUMINANTS['CIE 1931 2 Degree Standard Observer']['C']
       return colour.xyY_to_munsell_colour(colour.XYZ_to_xyY(colour.sRGB_to_XYZ(sRGB, C)))
     except Exception as e:
-      return "Could not be converted"
-
+      return "None"
 
   """
   flatten_rgb flattens the given RGB tuple into its corresponding index number
@@ -1260,7 +1259,7 @@ class ImageUtils:
       medIndices = list(medIndicesSet).copy()
 
     medoids = [colors[idx] for idx in medIndices]
-    return medoids
+    return medoids, clusterMap, medIndices
 
   """
   clusterCost returns the cost of using given medoids as cluster centers
@@ -1295,7 +1294,7 @@ class ImageUtils:
   best_clusters returns k colors that best represent the given colors against given
   mask cmpMask (for given image) as well as the corresponding masks.
   """
-  def best_clusters(colors, image, cmpMask, k, numIters=500, tol=2):
+  def best_clusters(colors, image, cmpMask, k, numIters=1000, tol=2):
     n = colors.shape[0]
     dMatrix = np.zeros((n,n))
     for i in range(n):
@@ -1311,7 +1310,7 @@ class ImageUtils:
     minCost = 10000.0
     for iter in range(numIters):
       try:
-        medoids = ImageUtils.Kmedoids(colors, dMatrix, k=k)
+        medoids, _, _ = ImageUtils.Kmedoids(colors, dMatrix, k=k)
         mdHash = hash(medoids)
         if mdHash in mdHashSet:
           continue
@@ -1385,8 +1384,8 @@ if __name__ == "__main__":
   #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
   #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
-  print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#bc8a6d"), ImageUtils.HEX2RGB("#ab7e62")))
-  #print ("munsell: ", ImageUtils.sRGBtoMunsell(np.array([246, 191, 153])))
+  #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#d1af9b"), ImageUtils.HEX2RGB("#daa894")))
+  print ("munsell: ", ImageUtils.sRGBtoMunsell(ImageUtils.HEX2RGB("#C09868")))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))
   #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#ae8269"), ImageUtils.HEX2RGB("#bc8d78")))
   #print ("ycbcr: ", ImageUtils.sRGBtoYCbCr(ImageUtils.HEX2RGB("#cf9d85")))

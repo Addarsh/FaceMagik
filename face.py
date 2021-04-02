@@ -158,7 +158,18 @@ class Face:
   to_YCrCb converts self.image, self.satImage etc. from RGB to ycrcb.
   """
   def to_YCrCb(self):
+    self.storedsRGBImage = self.image.copy()
     self.image = cv2.cvtColor(self.image, cv2.COLOR_RGB2YCR_CB)
+    self.hueImage = self.to_hueImage(self.image)
+    self.satImage = self.to_satImage(self.image)
+    self.brightImage = self.to_brightImage(self.image)
+    self.ratioImage = self.to_ratioImage(self.image)
+
+  """
+  yCrCb_to_sRGB converts current YCrCb to sRGB.
+  """
+  def yCrCb_to_sRGB(self):
+    self.image = self.storedsRGBImage.copy()
     self.hueImage = self.to_hueImage(self.image)
     self.satImage = self.to_satImage(self.image)
     self.brightImage = self.to_brightImage(self.image)
@@ -704,12 +715,12 @@ class Face:
     nose_row_min, nose_col_min, nose_width, nose_height = self.bbox(nose_mask)
     left_eye_row_min, left_eye_col_min, left_eye_width, left_eye_height = self.bbox(left_eye_mask)
 
-    row_min = left_eye_row_min+left_eye_height
+    #row_min = left_eye_row_min+left_eye_height
+    row_min = left_eye_row_min+2*left_eye_height
     row_max = nose_row_min+nose_height
     col_min = max(np.nonzero(face_mask[row_min, :])[0][0], np.nonzero(face_mask[row_max, :])[0][0])
     col_max = min(nose_col_min, left_eye_col_min+left_eye_width)
     height = row_max - row_min + 1
-    row_min = row_min + int(height/2)
     #row_max = row_max - int(height/4)
 
     keypoints = self.faceMask.copy()
@@ -734,12 +745,12 @@ class Face:
     nose_row_min, nose_col_min, nose_width, nose_height = self.bbox(nose_mask)
     right_eye_row_min, right_eye_col_min, right_eye_width, right_eye_height = self.bbox(right_eye_mask)
 
-    row_min = right_eye_row_min+right_eye_height
+    #row_min = right_eye_row_min+right_eye_height
+    row_min = right_eye_row_min+2*right_eye_height
     row_max = nose_row_min+nose_height
     col_min = max(nose_col_min + nose_width, right_eye_col_min)
     col_max = min(np.nonzero(face_mask[row_min, :])[0][-1], np.nonzero(face_mask[row_max, :])[0][-1])
     height = row_max - row_min + 1
-    row_min = row_min + int(height/2)
     #row_max = row_max - int(height/5)
 
     keypoints = self.faceMask.copy()
@@ -854,8 +865,10 @@ class Face:
 
     mask = faceMask.copy()
     for ebMask in eyebrowMasks:
-      rmin, _, _, _ = self.bbox(ebMask)
-      mask[rmin:,:] = False
+      rmin, _, _, h = self.bbox(ebMask)
+      rmax = rmin + h
+      mask[rmax:,:] = False
+      mask = np.bitwise_xor(mask, ebMask)
     return mask
 
   """
