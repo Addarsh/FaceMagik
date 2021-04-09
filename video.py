@@ -46,97 +46,135 @@ def analyze(videoPath=None, imagePath=None, k=3, delta_tol=4, sat_tol=5):
   for r, f in enumerate(faceList):
     f.windowName = "image"
 
-    mypts = f.get_forehead_points()
+    #mypts = f.get_forehead_points()
     #mypts = f.get_nose_keypoints()
     #mypts = f.get_left_cheek_keypoints()
     #mypts = f.get_right_cheek_keypoints()
     #mypts = f.get_face_mask()
     #mypts = f.get_face_keypoints()
     #mypts = f.get_face_until_nose_end()
-
-    f.to_YCrCb()
-
-    medoids, allMasks, allIndices = best_clusters(f, mypts, delta_tol)
-
-    print ("Dividing image into ", len(allMasks), " clusters")
-
-    # Sort masks by decreasing brightness.
-    tupleList = [(m, i) for m, i in zip(allMasks, allIndices)]
-    stupleList = sorted(tupleList, key=lambda m:np.mean(f.brightImage[m[0]], axis=0)[2])
-    resMasks = [m[0] for m in stupleList]
-    iMasks = [m[1] for m in stupleList]
-
-    munsellMasks = {"RPR": [], "R": [], "RYR": [], "YR": [], "YRY": [], "Y": [], "YGY": [], "GY": [], "GYG": [], "G": [], "GBG": [], "BG": [], "BGB": [], "B": [], "BPB": []}
+    cmap = {"Blue": ["BGB", "BG", "GBG", "G"],"Green": ["GYG", "GY", "YGY"], "YellowOrange": ["Y", "YRY"], "Red": ["YR", "RYR", "R", "RPR"]}
     prevMap = {"B": "BGB","BG": "GBG", "G": "GYG", "GY": "YGY", "Y": "YRY", "YR": "RYR", "R": "RPR"}
     nextMap = {"B": "BPB", "BG": "BGB", "G": "GBG", "GY": "GYG", "Y": "YGY", "YR": "YRY", "R": "RYR"}
-    for i, m in enumerate(resMasks):
-      meanColor = np.mean(f.image[m], axis=0)
-      meanBrightness = np.mean(f.brightImage[m], axis=0)[2]*(100.0/255.0)
-      meanSaturation = np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0)
-      meanHue = np.mean(f.hueImage[m], axis=0)[0]
-      clusterPercent = (np.count_nonzero(m)/np.count_nonzero(mypts))*100.0
+    finalCMasks = {"Blue": np.zeros(faceList[0].faceMask.shape, dtype=bool), "Green": np.zeros(faceList[0].faceMask.shape, dtype=bool), "YellowOrange": np.zeros(faceList[0].faceMask.shape, dtype=bool), "Red": np.zeros(faceList[0].faceMask.shape, dtype=bool)}
+    allPointsCount = 0
 
-      print ("i: ", i)
-      print ("Mean color: ", ImageUtils.RGB2HEX(meanColor))
-      print ("Percent: ", clusterPercent)
-      print ("Cluster Cost Mean: ", np.mean(ImageUtils.delta_e_mask_matrix(medoids[iMasks[i]], f.image[m])))
-      print ("Mean Hue: ", meanHue)
-      print ("Mean sat: ", meanSaturation)
-      print ("Mean brightness: ", meanBrightness)
-      print ("mHue: ", ImageUtils.sRGBtoMunsell(meanColor), "\n")
-      print ("")
+    for mypts in [f.get_forehead_points(), f.get_nose_keypoints(), f.get_left_cheek_keypoints(), f.get_right_cheek_keypoints()]:
 
-      # Add munsell color hue.
-      mHue = ImageUtils.sRGBtoMunsell(meanColor).split(" ")[0]
-      rx = re.compile("[A-Z]+")
-      hVals = re.findall(re.compile("[A-Z]+"), mHue)
-      if len(hVals) == 1:
-        if hVals[0] in munsellMasks:
-          hueNum = float(mHue.replace(hVals[0], ""))
-          if hueNum >= 2.5 and hueNum <= 6:
-            munsellMasks[hVals[0]].append(m)
-          elif hueNum < 2.5:
-            munsellMasks[prevMap[hVals[0]]].append(m)
-          else:
-            munsellMasks[nextMap[hVals[0]]].append(m)
+      f.to_YCrCb()
 
-      print ("")
+      medoids, allMasks, allIndices = best_clusters(f, mypts, delta_tol)
+
+      print ("Dividing image into ", len(allMasks), " clusters")
+
+      # Sort masks by decreasing brightness.
+      tupleList = [(m, i) for m, i in zip(allMasks, allIndices)]
+      stupleList = sorted(tupleList, key=lambda m:np.mean(f.brightImage[m[0]], axis=0)[2])
+      resMasks = [m[0] for m in stupleList]
+      iMasks = [m[1] for m in stupleList]
+
+      munsellMasks = {"RPR": [], "R": [], "RYR": [], "YR": [], "YRY": [], "Y": [], "YGY": [], "GY": [], "GYG": [], "G": [], "GBG": [], "BG": [], "BGB": [], "B": [], "BPB": []}
+      for i, m in enumerate(resMasks):
+        meanColor = np.mean(f.image[m], axis=0)
+        meanBrightness = np.mean(f.brightImage[m], axis=0)[2]*(100.0/255.0)
+        meanSaturation = np.mean(f.satImage[m], axis=0)[1]*(100.0/255.0)
+        meanHue = np.mean(f.hueImage[m], axis=0)[0]
+        clusterPercent = (np.count_nonzero(m)/np.count_nonzero(mypts))*100.0
+
+        print ("i: ", i)
+        print ("Mean color: ", ImageUtils.RGB2HEX(meanColor))
+        print ("Percent: ", clusterPercent)
+        print ("Cluster Cost Mean: ", np.mean(ImageUtils.delta_e_mask_matrix(medoids[iMasks[i]], f.image[m])))
+        print ("Mean Hue: ", meanHue)
+        print ("Mean sat: ", meanSaturation)
+        print ("Mean brightness: ", meanBrightness)
+        print ("mHue: ", ImageUtils.sRGBtoMunsell(meanColor), "\n")
+        print ("")
+
+        # Add munsell color hue.
+        mHue = ImageUtils.sRGBtoMunsell(meanColor).split(" ")[0]
+        rx = re.compile("[A-Z]+")
+        hVals = re.findall(re.compile("[A-Z]+"), mHue)
+        if len(hVals) == 1:
+          if hVals[0] in munsellMasks:
+            hueNum = float(mHue.replace(hVals[0], ""))
+            if hueNum >= 2.5 and hueNum <= 6:
+              munsellMasks[hVals[0]].append(m)
+            elif hueNum < 2.5:
+              munsellMasks[prevMap[hVals[0]]].append(m)
+            else:
+              munsellMasks[nextMap[hVals[0]]].append(m)
+
+        print ("")
+
+        if args.show == "True":
+          f.show_mask(m)
+
+      print ("Total time taken: ", time.time() - startTime)
 
       if args.show == "True":
-        f.show_mask(m)
+        f.show_orig_image()
 
-    print ("Total time taken: ", time.time() - startTime)
+      #f.yCrCb_to_sRGB()
 
-    if args.show == "True":
-      f.show_orig_image()
+      totalPoints = 0
+      for mHue in munsellMasks:
+        rMask = np.zeros(faceList[0].faceMask.shape, dtype=bool)
+        for m in munsellMasks[mHue]:
+          rMask = np.bitwise_or(rMask, m)
+        totalPoints += np.count_nonzero(rMask)
 
-    f.yCrCb_to_sRGB()
+      allPointsCount += totalPoints
 
-    totalPoints = 0
-    for mHue in munsellMasks:
-      rMask = np.zeros(faceList[0].faceMask.shape, dtype=bool)
-      for m in munsellMasks[mHue]:
-        rMask = np.bitwise_or(rMask, m)
-      totalPoints += np.count_nonzero(rMask)
+      for mHue in ["BPB", "B", "BGB", "BG", "GBG", "G", "GYG", "GY", "YGY", "Y", "YRY","YR", "RYR","R", "RPR"]:
+        if mHue not in munsellMasks:
+          continue
+        rMask = np.zeros(faceList[0].faceMask.shape, dtype=bool)
+        for m in munsellMasks[mHue]:
+          rMask = np.bitwise_or(rMask, m)
+        pcent = round(((np.count_nonzero(rMask)/totalPoints)*100.0),2)
+        if pcent == 0:
+          continue
 
-    allNewMasksMap = {}
-    for mHue in ["BPB", "B", "BGB", "BG", "GBG", "G", "GYG", "GY", "YGY", "Y", "YRY","YR", "RYR","R", "RPR"]:
-      if mHue not in munsellMasks:
-        continue
-      rMask = np.zeros(faceList[0].faceMask.shape, dtype=bool)
-      for m in munsellMasks[mHue]:
-        rMask = np.bitwise_or(rMask, m)
-      pcent = round(((np.count_nonzero(rMask)/totalPoints)*100.0),2)
+        print ("Munsell Hue: ",mHue, ", Percent: ", pcent, " Saturation: ", round(np.mean(f.satImage[rMask], axis=0)[1]*(100.0/255.0), 2), " Brightness: ", round(np.mean(f.brightImage[rMask], axis=0)[2]*(100.0/255.0), 2), " hue: ", round(np.mean(f.hueImage[rMask], axis=0)[0], 2))
+
+        f.show_mask(rMask)
+
+      print ("\n")
+
+      # Show aggregated clusters.
+      for ckey in cmap:
+        rMask = np.zeros(faceList[0].faceMask.shape, dtype=bool)
+        for mHue in cmap[ckey]:
+          if mHue not in munsellMasks:
+            continue
+          for m in munsellMasks[mHue]:
+            rMask = np.bitwise_or(rMask, m)
+
+        pcent = round(((np.count_nonzero(rMask)/totalPoints)*100.0),2)
+        if pcent == 0:
+          continue
+
+        finalCMasks[ckey] = np.bitwise_or(finalCMasks[ckey], rMask)
+
+        print ("Result Color: ", ckey, ", Percent: ", pcent, " Saturation: ", round(np.mean(f.satImage[rMask], axis=0)[1]*(100.0/255.0), 2), " Brightness: ", round(np.mean(f.brightImage[rMask], axis=0)[2]*(100.0/255.0), 2), " hue: ", round(np.mean(f.hueImage[rMask], axis=0)[0], 2))
+
+        f.show_mask(rMask)
+
+      f.yCrCb_to_sRGB()
+
+    print ("\n")
+    for ckey in finalCMasks:
+      rMask = finalCMasks[ckey]
+      pcent = round(((np.count_nonzero(rMask)/allPointsCount)*100.0),2)
       if pcent == 0:
         continue
-
-      allNewMasksMap[mHue] = rMask
-
-      print ("Munsell Hue: ",mHue, ", Percent: ", pcent, " Saturation: ", round(np.mean(f.satImage[rMask], axis=0)[1]*(100.0/255.0), 2), " Brightness: ", round(np.mean(f.brightImage[rMask], axis=0)[2]*(100.0/255.0), 2), " hue: ", round(np.mean(f.hueImage[rMask], axis=0)[0], 2))
+      print ("Final Color: ", ckey, ", Percent: ", pcent, " Saturation: ", round(np.mean(f.satImage[rMask], axis=0)[1]*(100.0/255.0), 2), " Brightness: ", round(np.mean(f.brightImage[rMask], axis=0)[2]*(100.0/255.0), 2), " hue: ", round(np.mean(f.hueImage[rMask], axis=0)[0], 2))
 
       f.show_mask(rMask)
 
     f.show_orig_image()
+
 
 
 """
