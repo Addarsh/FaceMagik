@@ -389,6 +389,7 @@ class Face:
   def distinct_colors(self, mask, tol=0.05):
     # Divide by hue and sat.
     allHueMasks = self.divide_all_hue(mask, tol=tol)
+    #allHueMasks = self.divide_all_brightness(mask, tol=tol)
     allMasks = []
     for m in allHueMasks:
       allMasks += self.divide_all_sat(m, tol=tol)
@@ -666,6 +667,18 @@ class Face:
     return faceMask
 
   """
+  get_face_mask_without_area_around_eyes returns mask of face without area under and above
+  eyes to reduce noise in the skin tone algorithm.
+  """
+  def get_face_mask_without_area_around_eyes(self):
+    faceMask = self.get_face_mask()
+    leftEyeAreaMask = self.get_area_around_left_eye()
+    rightEyeAreaMask = self.get_area_around_right_eye()
+
+    return np.bitwise_and(faceMask, np.logical_not(np.bitwise_or(leftEyeAreaMask, rightEyeAreaMask)))
+
+
+  """
   ratio get_ratio_range returns the range of ratio values on the face
   keypoints. It gives a sense of how bright/how dark an image is.
   """
@@ -799,36 +812,69 @@ class Face:
     return nsmask
 
   """
-  get_chakra_keypoints returns keypoints between
-  the two eyebrows.
+  does_facial_hair_exist checks if facial hair exists on face. Doensn't work
+  reliably for stubble/lighter beards.
   """
-  def get_chakra_keypoints(self):
-    eyebrow_masks = self.get_attr_masks(EYEBROW)
-    eye_masks = self.get_attr_masks(EYE_OPEN)
-    assert len(eyebrow_masks) == 2, "Want 2 masks for eyebrows!"
-    assert len(eye_masks) == 2, "Want 2 masks for eyes!"
+  def does_facial_hair_exist(self):
+    return len(self.get_attr_masks(FACIAL_HAIR)) > 0
 
-    left_eyebrow_mask = eyebrow_masks[0] if self.bbox(eyebrow_masks[0])[1] < self.bbox(eyebrow_masks[1])[1] else eyebrow_masks[1]
-    right_eyebrow_mask = eyebrow_masks[1] if self.bbox(eyebrow_masks[0])[1] < self.bbox(eyebrow_masks[1])[1] else eyebrow_masks[0]
+  """
+  get_area_around_eyes returns mask of area around eyes.
+  """
+  def get_area_around_eyes(self):
+    eyeMasks = self.get_attr_masks(EYE_OPEN)
+    eyebrowMasks = self.get_attr_masks(LE)
+    assert len(eyeMasks) == 2, "Want 2 masks for eyes!"
 
-    left_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] < self.bbox(eye_masks[1])[1] else eye_masks[1]
-    right_eye_mask = eye_masks[1] if self.bbox(eye_masks[0])[1] < self.bbox(eye_masks[1])[1] else eye_masks[0]
+  """
+  get_area_around_left_eye returns mask of area around left eye.
+  """
+  def get_area_around_left_eye(self):
+    eyeMasks = self.get_attr_masks(EYE_OPEN)
+    eyebrowMasks = self.get_attr_masks(EYEBROW)
+    assert len(eyeMasks) == 2, "Want 2 masks for eyes!"
+    assert len(eyebrowMasks) == 2, "Want 2 masks for eyebrows!"
 
-    lebrmin,lebcmin, lebw, _ = self.bbox(left_eyebrow_mask)
-    rebrmin, rebcmin, rebw, _ = self.bbox(right_eyebrow_mask)
+    leftEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] <= self.bbox(eyeMasks[1])[1] else eyeMasks[1]
+    leftEyebrowMask = eyebrowMasks[0] if self.bbox(eyebrowMasks[0])[1] <= self.bbox(eyebrowMasks[1])[1] else eyebrowMasks[1]
 
-    lermin, _, _, leh = self.bbox(left_eye_mask)
-    rermin, _, _, reh = self.bbox(right_eye_mask)
+    eyeRowMin, eyeColMin, eyeWidth, eyeHeight = self.bbox(leftEyeMask)
+    eyebrowRowMin, eyebrowColMin, eyebrowWidth, eyebrowHeight = self.bbox(leftEyebrowMask)
 
-    rmin = int(max(lebrmin, rebrmin))
-    rmax = int(min(lermin + leh, rermin + reh))
-    ebWidth = rebcmin - lebcmin - lebw
-    cmin = int(lebcmin + lebw + ebWidth/4)
-    cmax = int(rebcmin - ebWidth/4)
+    # Bounding box.
+    rowMin = eyebrowRowMin + eyebrowHeight/2
+    rowMax = eyeRowMin + eyeHeight + 3*eyeHeight/4
+    colMin = eyeColMin - 3*eyeHeight/4
+    colMax = eyeColMin + eyeWidth + eyeHeight/2
 
-    mask = np.zeros(left_eye_mask.shape, dtype=bool)
-    mask[rmin:rmax+1, cmin:cmax+1] = True
-    return mask
+    finalMask = np.zeros(self.faceMask.shape, dtype=bool)
+    finalMask[int(rowMin):int(rowMax)+1, int(colMin):int(colMax)+1] = True
+    return finalMask
+
+  """
+  get_area_around_right_eye returns mask of area around right eye.
+  """
+  def get_area_around_right_eye(self):
+    eyeMasks = self.get_attr_masks(EYE_OPEN)
+    eyebrowMasks = self.get_attr_masks(EYEBROW)
+    assert len(eyeMasks) == 2, "Want 2 masks for eyes!"
+    assert len(eyebrowMasks) == 2, "Want 2 masks for eyebrows!"
+
+    rightEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] >= self.bbox(eyeMasks[1])[1] else eyeMasks[1]
+    rightEyebrowMask = eyebrowMasks[0] if self.bbox(eyebrowMasks[0])[1] >= self.bbox(eyebrowMasks[1])[1] else eyebrowMasks[1]
+
+    eyeRowMin, eyeColMin, eyeWidth, eyeHeight = self.bbox(rightEyeMask)
+    eyebrowRowMin, eyebrowColMin, eyebrowWidth, eyebrowHeight = self.bbox(rightEyebrowMask)
+
+    # Bounding box.
+    rowMin = eyebrowRowMin + eyebrowHeight/2
+    rowMax = eyeRowMin + eyeHeight + 3*eyeHeight/4
+    colMin = eyeColMin - eyeHeight/2
+    colMax = eyeColMin + eyeWidth + 3*eyeHeight/4
+
+    finalMask = np.zeros(self.faceMask.shape, dtype=bool)
+    finalMask[int(rowMin):int(rowMax)+1, int(colMin):int(colMax)+1] = True
+    return finalMask
 
   """
   get_neck_points returns some points of the neck of the person.
@@ -1046,9 +1092,10 @@ class Face:
   """
   divide_all_brightness divides given mask into brightness masks repeatedly.
   """
-  def divide_all_brightness(self, mask):
+  def divide_all_brightness(self, mask, tol=0.05):
     a, b = self.divide_by_brightness(mask, False)
-    if (np.mean(self.brightImage[a], axis=0)[2] - np.mean(self.brightImage[b], axis=0)[2])*100.0/255.0 < 1 \
+    if np.array_equal(b, np.zeros(self.faceMask.shape, dtype=bool)) or \
+      (np.mean(self.brightImage[a], axis=0)[2] - np.mean(self.brightImage[b], axis=0)[2])*100.0/255.0 < 1 \
       or np.count_nonzero(mask)/np.count_nonzero(self.faceMask) < 0.05:
       return [mask]
     return self.divide_all_brightness(a) + self.divide_all_brightness(b)

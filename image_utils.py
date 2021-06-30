@@ -99,6 +99,7 @@ class ImageUtils:
     for p in points:
       y, x = int(p[0]), int(p[1])
       cv2.circle(img, (x,y), radius, color, -1)
+    return img
 
   """
   plot_arrowed_line plots arrowed lines between given set of points on given RGB image.
@@ -587,6 +588,11 @@ class ImageUtils:
     xy = colour.XYZ_to_xy(xyz)
     return colour.xy_to_Luv_uv(xy)
 
+  """
+  to_YCrCb converts given sRGB image to YCrCb image.
+  """
+  def to_YCrCb(srgbImage):
+    return cv2.cvtColor(srgbImage, cv2.COLOR_RGB2YCR_CB)
 
   """
   chromatic_adaptation converts given
@@ -967,6 +973,7 @@ class ImageUtils:
     try:
       return colour.xyY_to_munsell_colour(colour.XYZ_to_xyY(colour.sRGB_to_XYZ(sRGB, C)))
     except Exception as e:
+      print ("e: ", e)
       return "None"
 
   """
@@ -1329,6 +1336,35 @@ class ImageUtils:
     return bestMedoids, bestMasks, bestIndices, minCost
 
   """
+  boundaries returns a list of masks that each represent a cluster of boundary points
+  associated with given mask.
+  """
+  def find_boundaries(mask):
+    from scipy import ndimage
+
+    # Find all distinct clusters in given mask.
+    labelImage, labels = ndimage.label(mask)
+    sizes = ndimage.sum(mask, labelImage, range(labels + 1))
+    clusterSizeCutOff = (1.0/100.0)*np.count_nonzero(mask)
+    indices = np.transpose(np.argwhere(sizes > clusterSizeCutOff))
+    allMasks = np.repeat(labelImage[:, :, np.newaxis], len(indices), axis=2) == indices
+
+    # Dominant mask, one with largest number of points.
+    #domMask = allMasks[:, :, np.argmax(np.sum(np.where(allMasks, np.repeat(self.beta[:, :, np.newaxis], len(indices), axis=2), 0), axis=(0,1))/sizes[indices])]
+
+    # Find boundary mask of each cluster.
+    flatIndicesList = [item for sublist in indices for item in sublist]
+    allBoundaryMasks = []
+    for idx in range(len(flatIndicesList)):
+      clusterMask = allMasks[:, :, idx]
+      contours, _ = cv2.findContours(cv2.threshold((200*clusterMask).astype(np.uint8), 127, 255, 0)[1], cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+      cImg = np.zeros(mask.shape)
+      cv2.drawContours(cImg, contours, 0, color=255, thickness=3)
+      allBoundaryMasks.append(cImg == 255)
+
+    return allBoundaryMasks
+
+  """
   show_rgb is a function to display given RGB image.
   """
   def show_rgb(image, imgSize=900):
@@ -1385,7 +1421,9 @@ if __name__ == "__main__":
   #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
   #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#d1af9b"), ImageUtils.HEX2RGB("#daa894")))
-  print ("munsell: ", ImageUtils.sRGBtoMunsell(ImageUtils.HEX2RGB("#C09868")))
+  rgb = ImageUtils.HEX2RGB("#B19D6C")
+  print ("munsell: ", ImageUtils.sRGBtoMunsell(rgb), " redness: ", int(rgb[0]) - int(rgb[1]))
+  #print ("ycrcb: ", ImageUtils.RGB2HEX(ImageUtils.YCrCbtosRGB(ImageUtils.HEX2RGB("#B69C68"))[0]))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))
   #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#ae8269"), ImageUtils.HEX2RGB("#bc8d78")))
   #print ("ycbcr: ", ImageUtils.sRGBtoYCbCr(ImageUtils.HEX2RGB("#cf9d85")))
