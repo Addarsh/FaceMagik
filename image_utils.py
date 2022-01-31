@@ -14,6 +14,8 @@ import bisect
 import colour
 import colormath
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import re
 
 from scipy.sparse import diags
 from scipy.stats import norm
@@ -100,6 +102,16 @@ class ImageUtils:
       y, x = int(p[0]), int(p[1])
       cv2.circle(img, (x,y), radius, color, -1)
     return img
+
+  """
+  Returns copy of image with given points plotted in given color as well as
+  the given mask colored green.
+  """
+  def plot_points_and_mask(img, points, mask, radius=5, color=[255, 0, 0]):
+    clone = img.copy()
+    clone[mask] = np.array([0, 255, 0])
+    clone = ImageUtils.plot_points_new(clone, points, radius=radius, color=color)
+    return clone
 
   """
   plot_arrowed_line plots arrowed lines between given set of points on given RGB image.
@@ -595,6 +607,12 @@ class ImageUtils:
     return cv2.cvtColor(srgbImage, cv2.COLOR_RGB2YCR_CB)
 
   """
+  to_hsv converts given sRGB image to HSV image.
+  """
+  def to_hsv(srgbImage):
+    return cv2.cvtColor(srgbImage, cv2.COLOR_RGB2HSV)
+
+  """
   chromatic_adaptation converts given
   """
   def chromatic_adaptation(imagePath, source_white):
@@ -625,6 +643,14 @@ class ImageUtils:
   """
   def CCT_to_sRGB(cct):
     return np.clip(ImageUtils.XYZ_to_sRGB_matrix(colour.xy_to_XYZ(colour.CCT_to_xy(cct))), 0, 255)
+
+  """
+  sRGB_to_CCT returns correlated color temperature(Kelvin) of sRGB color.
+  """
+  def sRGB_to_CCT(sRGB):
+    XYZ = colour.sRGB_to_XYZ(np.array(sRGB)/255.0)
+    xy = colour.XYZ_to_xy(XYZ)
+    return colour.xy_to_CCT(xy, 'hernandez1999')
 
   """
   Temp_to_sRGB returns sRGB value of correlated color temperature(K)
@@ -691,10 +717,10 @@ class ImageUtils:
   """
   def add_gamma_correction(rgb):
     for i in range(3):
-      if rgb[i] < 0.0031308:
-        rgb[i] = int(12.92*rgb[i]*255)
+      if abs(rgb[i]) < 0.0031308:
+        rgb[i] = int(12.92*abs(rgb[i])*255)
       else:
-        rgb[i] = int(255*(1.055*(math.pow(rgb[i], 1/2.4))-0.055))
+        rgb[i] = int(255*(1.055*(math.pow(abs(rgb[i]), 1/2.4))-0.055))
 
     return rgb
 
@@ -720,10 +746,10 @@ class ImageUtils:
   def remove_gamma_correction(rgb):
     for i in range(3):
       rgb[i] = rgb[i]/255.0
-      if rgb[i] < 0.04045:
-        rgb[i] = rgb[i]/12.92
+      if abs(rgb[i]) < 0.04045:
+        rgb[i] = abs(rgb[i])/12.92
       else:
-        rgb[i] = math.pow((rgb[i] + 0.055)/1.055, 2.4)
+        rgb[i] = math.pow((abs(rgb[i]) + 0.055)/1.055, 2.4)
     return rgb
 
   """
@@ -945,10 +971,21 @@ class ImageUtils:
 
   """
   LabtosRGB converts given Lab array (n by 3) into (n, 3) sRGB array.
+  The Lab input here is assumed to be in the cv2 range i.e. (L=0-255, a=0-255, b=0-255).
   """
   def LabtosRGB(colorArr):
     return np.reshape(cv2.cvtColor(np.reshape(colorArr,
       (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_LAB2RGB), (-1, 3))
+
+  """
+  LabTosRGBConventional converts given Lab array (n by 3) into (n, 3) display P3 RGB array.
+  The Lab input here is assumed to be in the conventional range (L=0-100, a=-128-127, b=-128-127).
+  We convert it to cv2 range first i.e. (L=0-255, a=0-255, b=0-255) and then
+  convert it to RGB display P3.
+  """
+  def LabTosRGBConventional(labArr):
+    lab = np.array([labArr[0]*(255.0/100.0), labArr[1] + 128.0, labArr[2] + 128.0])
+    return ImageUtils.LabtosRGB(lab)
 
   """
   sRGBtoYCrCb converts given sRGB array (n by 3) into (n, 3) YCrCb array.
@@ -968,12 +1005,23 @@ class ImageUtils:
   sRGBtoMunsell converts given sRGB array (1,3) to munsell color (string).
   """
   def sRGBtoMunsell(sRGB):
+    return ImageUtils.displayP3toMunsell(sRGB)
     sRGB = sRGB/255.0
     C = colour.CCS_ILLUMINANTS['cie_2_1931']['C']
     try:
       return colour.xyY_to_munsell_colour(colour.XYZ_to_xyY(colour.sRGB_to_XYZ(sRGB, C)))
     except Exception as e:
       print ("e: ", e)
+      return "None"
+
+  """
+  displayP3toMunsell converts given display P3 array (1,3) to munsell color (string).
+  """
+  def displayP3toMunsell(displayP3):
+    try:
+      return colour.xyY_to_munsell_colour(colour.XYZ_to_xyY(ImageUtils.displayP3toXYZ(displayP3)))
+    except Exception as e:
+      print ("display P3 to Munsell exception: ", e)
       return "None"
 
   """
@@ -1299,7 +1347,8 @@ class ImageUtils:
 
   """
   best_clusters returns k colors that best represent the given colors against given
-  mask cmpMask (for given image) as well as the corresponding masks.
+  mask cmpMask (for given image) as well as the corresponding masks. It was written
+  to be called by the method in the face class.
   """
   def best_clusters(colors, image, cmpMask, k, numIters=1000, tol=2):
     n = colors.shape[0]
@@ -1335,6 +1384,7 @@ class ImageUtils:
 
     return bestMedoids, bestMasks, bestIndices, minCost
 
+
   """
   boundaries returns a list of masks that each represent a cluster of boundary points
   associated with given mask.
@@ -1345,7 +1395,7 @@ class ImageUtils:
     # Find all distinct clusters in given mask.
     labelImage, labels = ndimage.label(mask)
     sizes = ndimage.sum(mask, labelImage, range(labels + 1))
-    clusterSizeCutOff = (1.0/100.0)*np.count_nonzero(mask)
+    clusterSizeCutOff = (0.1/100.0)*np.count_nonzero(mask)
     indices = np.transpose(np.argwhere(sizes > clusterSizeCutOff))
     allMasks = np.repeat(labelImage[:, :, np.newaxis], len(indices), axis=2) == indices
 
@@ -1362,7 +1412,155 @@ class ImageUtils:
       cv2.drawContours(cImg, contours, 0, color=255, thickness=3)
       allBoundaryMasks.append(cImg == 255)
 
+    assert len(allBoundaryMasks) > 0
     return allBoundaryMasks
+
+  """
+  Divides mask periodically along x-axis and then returns all mean coordinates of resulting
+  boundary masks.
+  """
+  def mean_coordinates_of_mask(mask):
+    # We break the mask to make it more likely that each submask boundary is convex
+    # and therefore the mean coordinate is more accurate representation of the
+    # submask polygon.
+    brokenMask = ImageUtils.break_mask_periodically(mask.copy())
+
+    # Find boundaries will return the boundary mask clusters associated
+    # with the given broken mask. We find the mean coordinate of each boundary
+    # and return the list.
+    allBoundaryMasks = ImageUtils.find_boundaries(brokenMask)
+    meanCoordinateList = []
+    for m in allBoundaryMasks:
+      meanCoordinateList.append(ImageUtils.mean_coordinate(m))
+    return meanCoordinateList
+
+  """
+  Breaks given mask periodically along x-axis to ensure that
+  when cv2.findContours is applied later, we don't get large concave boundaries in
+  in the result that then result in incorrect mean points.
+  """
+  def break_mask_periodically(mask):
+    coordinates = np.argwhere(mask)
+    ymin, xmin = np.min(coordinates, axis=0)
+    ymax, xmax = np.max(coordinates, axis=0)
+
+    # If xmax-min < delta, then we don't break up the mask
+    # as applying findContours will give us accurate mean point
+    # representing the mask.
+    delta = 20
+    newMask = mask.copy()
+    for x in range(xmin, xmax, delta):
+      newMask[:, x] = False
+    return newMask
+
+  """
+  Performs Kmeans clustering of given mask using diffImg and returns 2 submasks.
+  The ordering of submasks returned is by decreasing mean value of diffImg.
+  diffImg has dimensions (W,H).
+  """
+  def Kmeans_1d(diffImg, totalPoints, mask):
+    from sklearn.cluster import KMeans
+
+    maskCords = np.transpose(np.nonzero(mask))
+    data = diffImg[mask].reshape((-1,1))
+
+    kmeans = KMeans(n_clusters=2).fit(data)
+    labels = kmeans.predict(data)
+    c1 = kmeans.cluster_centers_[0][0]
+    c2 = kmeans.cluster_centers_[1][0]
+
+    # first mask.
+    f1Mask = np.zeros(diffImg.shape, dtype=bool)
+    xArr = maskCords[labels == 0][:, 0]
+    yArr = maskCords[labels == 0][:, 1]
+    f1Mask[xArr, yArr] = True
+
+    # second mask.
+    f2Mask = np.zeros(diffImg.shape, dtype=bool)
+    xArr = maskCords[labels == 1][:, 0]
+    yArr = maskCords[labels == 1][:, 1]
+    f2Mask[xArr, yArr] = True
+
+    return ((f1Mask, c1), (f2Mask, c2)) if np.mean(diffImg[f1Mask]) > np.mean(diffImg[f2Mask]) else ((f2Mask, c2), (f1Mask, c1))
+
+
+  """
+  Returns the mean coordinates of the given image mask.
+  """
+  def mean_coordinate(mask):
+    return np.mean(np.argwhere(mask), axis=0)
+
+  """
+  converts a display P3 color to XYZ color.
+  """
+  def displayP3toXYZ(displayP3):
+    conversionMatrix = np.array([[0.486571, 0.265668, 0.198217], [0.228975, 0.691739, 0.079287],[0, 0.045113, 1.043944]]).T
+    return ImageUtils.remove_gamma_correction(np.array(displayP3)) @ conversionMatrix
+
+  """
+  converts a display P3 color to sRGB color.
+  """
+  def displayP3tosRGB(displayP3):
+    conversionMatrix = np.array([[1.2249,  -0.2247,  0], [-0.0420, 1.0419, 0], [-0.0197, -0.0786, 1.0979]]).T
+    return ImageUtils.add_gamma_correction(ImageUtils.remove_gamma_correction(np.array(displayP3)) @ conversionMatrix)
+
+  """
+  Converts a display P3 profile image to sRGB profile image.
+  The input is assumed to be (w, h, 3) in shape and (0-255) in range and so will be the output.
+  """
+  def displayP3tosRGBImage(displayP3Array):
+    conversionMatrix = np.array([[1.2249,  -0.2247,  0], [-0.0420, 1.0419, 0], [-0.0197, -0.0786, 1.0979]]).T
+    return np.clip(ImageUtils.add_gamma_correction_matrix(ImageUtils.remove_gamma_correction_matrix(displayP3Array) @ conversionMatrix), 0, 255).astype(np.uint8)
+
+  """
+  converts a sRGB color to display P3 color.
+  """
+  def sRGBtodisplayP3(sRGB):
+    conversionMatrix = np.array([[0.8225, 0.1774, 0], [0.0332, 0.9669, 0], [0.0171, 0.0724, 0.9108]]).T
+    return ImageUtils.add_gamma_correction(ImageUtils.remove_gamma_correction(np.array(sRGB) @ conversionMatrix))
+
+  """
+  Converts a sRGB profile image to display P3 profile image.
+  The input is assumed to be (w, h, 3) in shape and (0-255) in range and so will be the output.
+  """
+  def sRGBtodisplayP3Image(sRGBArray):
+    conversionMatrix = np.array([[0.8225, 0.1774, 0], [0.0332, 0.9669, 0], [0.0171, 0.0724, 0.9108]]).T
+    return np.clip(ImageUtils.add_gamma_correction_matrix(ImageUtils.remove_gamma_correction_matrix(sRGBArray) @ conversionMatrix), 0, 255).astype(np.uint8)
+
+  """
+  Computes percent of points in mask relative to given totalPoints.
+  """
+  def percentPoints(mask, totalPoints):
+    return round((np.count_nonzero(mask)/totalPoints)*100.0, 2)
+
+  """
+  Helper function to return the munsell hue letter(e.g. R) from given munsell string.
+  """
+  def munsell_hue_letter(s):
+    match = re.compile("[^\W\d]").search(s)
+    return s[match.start():match.end() + 1]
+
+  """
+  Helper function to return the munsell hue number (like 7 in 7R) from given munsell string.
+  """
+  def munsell_hue_number(s):
+    match = re.compile("[^\W\d]").search(s)
+    return float(s[:match.start()])
+
+  """
+  Multiplies the saturation of given rgbImage by given factor.
+  """
+  def set_saturation(rgbImage, factor):
+    hsv = cv2.cvtColor(rgbImage, cv2.COLOR_RGB2HSV)
+    hsv[:,:, 1] = np.clip(hsv[:, :, 1]*factor, 0, 255).astype(np.uint8)
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+
+  """
+  Multiplies the each channel of given rgbImage by given factor to increase
+  its brightness.
+  """
+  def set_brightness(rgbImage, factor):
+    return np.clip(np.array(rgbImage).astype(np.float)*factor, 0, 255).astype(np.uint8)
 
   """
   show_rgb is a function to display given RGB image.
@@ -1407,25 +1605,41 @@ class ImageUtils:
     cv2.imshow("image", gray2)
     cv2.waitKey(0)
 
+  def cct(sRGB):
+    n = (0.23881*sRGB[0] + 0.25499*sRGB[1] - 0.58291*sRGB[2])/(0.11109*sRGB[0] - 0.85406*sRGB[1] + 0.52289*sRGB[2])
+    return 449*math.pow(n,3) + 3525*math.pow(n,2) + 6823.3*n + 5520.33
+
+  def print_lab_to_rgb(lab):
+    srgb = ImageUtils.LabTosRGBConventional(lab)
+    print ("srgb: ", srgb)
+    print ("lab: ", ImageUtils.sRGBtodisplayP3(srgb[0]))
+
 if __name__ == "__main__":
   #ImageUtils.save_skin_spectra_uv()
   #ImageUtils.plot_skin_spectra()
   #print (ImageUtils.add_gamma_correction(np.array([0.5, 0.5, 0.5])))
   #print (ImageUtils.add_gamma_correction(ImageUtils.remove_gamma_correction(ImageUtils.CCT_to_sRGB(5837).astype(np.float))*0.5*1.029))
-  #print ("CCT_to_sRGB: ", ImageUtils.CCT_to_sRGB(5752))
+  #print ("CCT_to_sRGB: ", ImageUtils.CCT_to_sRGB(4900))
+  #print ("sRGB to CCT: ", ImageUtils.sRGB_to_CCT(ImageUtils.color("#FDDCD2")))
+  #print ("CCT: ", ImageUtils.cct(ImageUtils.color("#FDDCD2")))
   #print ("Temp_to_sRGB: ", ImageUtils.Temp_to_sRGB(5366.38))
   #print (ImageUtils.CCT_to_sRGB(5366))
   #print (ImageUtils.compute_luminance(ImageUtils.color("#BCBCBC")))
-  #ImageUtils.chromatic_adaptation("test/ancha.JPG", ImageUtils.color("#caf0fc"))
+  #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_6261.png", ImageUtils.color("#FFF2CF"))
   #ImageUtils.chromatic_adaptation("server/data/new/IMG_1001.png", ImageUtils.color("#FFF1E5"))
   #ImageUtils.chromatic_adaptation("server/data/red/red.png", ImageUtils.color("#FFEBDA"))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
   #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#d1af9b"), ImageUtils.HEX2RGB("#daa894")))
-  rgb = ImageUtils.HEX2RGB("#B19D6C")
-  print ("munsell: ", ImageUtils.sRGBtoMunsell(rgb), " redness: ", int(rgb[0]) - int(rgb[1]))
+  #img = mpimg.imread("/Users/addarsh/Desktop/anastasia-me/IMG_6613.png")
+  #ImageUtils.print_lab_to_rgb([60.0, 0.0, 0.0])
+  #ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/10_29_color_checker_foundation/IMG_7883.png")
+  print ("val: ", ImageUtils.displayP3tosRGB([204.0,158.0,141.0]))
+  #ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/10_24_21_addarsh_foundation/IMG_7819.png")
+  #ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/sephora_foundation_chart.png")
+  #print ("munsell: ", ImageUtils.sRGBtoMunsell(ImageUtils.HEX2RGB("#9F796A")))
   #print ("ycrcb: ", ImageUtils.RGB2HEX(ImageUtils.YCrCbtosRGB(ImageUtils.HEX2RGB("#B69C68"))[0]))
   #ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))
-  #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#ae8269"), ImageUtils.HEX2RGB("#bc8d78")))
+  #print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#563521"), ImageUtils.HEX2RGB("#805947")))
   #print ("ycbcr: ", ImageUtils.sRGBtoYCbCr(ImageUtils.HEX2RGB("#cf9d85")))
   #print ("delta 1: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFEBDA")))
   #print ("delta 2: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFF1E5")))

@@ -10,6 +10,7 @@ import h5py
 import argparse
 import json
 import tensorflow as tf
+import math
 from scipy import ndimage
 from scipy.optimize import minimize
 from image_utils import ImageUtils
@@ -34,6 +35,23 @@ from train import (
   BALD_HEAD,
   EAR,
 )
+from enum import Enum
+
+class MaskDirection(Enum):
+  LEFT = 1
+  CENTER = 2
+  RIGHT = 3
+
+class LightDirection(Enum):
+  CENTER = 1 # Light is either exactly facing or exactly opposite the person.
+  CENTER_LEFT = 2 # Largely facing the user but also drifts to the left with maybe a slight shadow.
+  CENTER_RIGHT = 3 # Largely facing the user but also drifts to the right with maybe a slight shadow.
+  LEFT_CENTER_RIGHT = 4 # Center dominates but there is a bright region on the left and some shadow on the right.
+  RIGHT_CENTER_LEFT = 5 # Center dominates but there is a bright region on the right and some shadow on the left.
+  LEFT_CENTER = 6 # Light starts from the left and then falls to center. May nor may not be a shadow at center.
+  LEFT_TO_RIGHT = 7 # Usually indicates there is a shadow in the scene.
+  RIGHT_CENTER = 8 # Light starts from the right and then falls to center. May nor may not be a shadow at center.
+  RIGHT_TO_LEFT = 9 # Usually indicates there is a shadow in the scene.
 
 class Face:
   def __init__(self, imagePath="", image=None, hdf5FileName=None):
@@ -47,10 +65,16 @@ class Face:
     self.MASKS_KEY = "masks"
     self.id_label_map = {v: k for k, v in label_id_map.items()}
 
+    self.issRGBProfle = self.is_sRGB_profile()
+
     if image is None:
       self.image = cv2.cvtColor(cv2.imread(imagePath), cv2.COLOR_BGR2RGB)
     else:
       self.image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    if self.issRGBProfle:
+      print ("image has sRGB profile")
+      self.image = ImageUtils.sRGBtodisplayP3Image(self.image)
 
     self.hueImage = self.to_hueImage(self.image)
     self.satImage = self.to_satImage(self.image)
@@ -63,6 +87,8 @@ class Face:
     self.beta = self.specularity()
     self.bgMask = self.detect_background()
     self.rFaceMask = self.get_reduced_face_mask()
+    self.rotMatrix = self.rotation_matrix()
+    self.noseMiddlePoint = ImageUtils.mean_coordinate(self.get_nose_keypoints())
 
     if imagePath.startswith("server/data") or imagePath.startswith("server/video"):
       # Load lighting, normals and face vertices.
@@ -91,6 +117,22 @@ class Face:
     cv2.resizeWindow(self.windowName, self.windowSize, self.windowSize)
     cv2.imshow(self.windowName, cv2.cvtColor(self.image, cv2.COLOR_RGB2GRAY))
     return cv2.waitKey(0) & 0xFF
+
+  """
+  get_profile returns the color profile of the picture.
+  Formula found here: https://stackoverflow.com/questions/50641637/identify-colour-space-of-any-image-if-icc-profile-is-empty-pil
+  """
+  def is_sRGB_profile(self):
+    from PIL import Image
+    from PIL import ImageCms
+
+    image = Image.open(self.imagePath)
+    exif = image._getexif() or {}
+    if exif == {}:
+      # Assume that the color profile is sRGB
+      return True
+
+    return exif.get(0xA001) == 1 or exif.get(0x0001) == 'R98'
 
   """
   show_masks will display multiple masks in the image.
@@ -124,6 +166,14 @@ class Face:
     return self.show(clone)
 
   """
+  show_mask_with_image will display given mask with given image.
+  """
+  def show_mask_with_image(self, image, mask, color=[0, 255, 0]):
+    clone = image.copy()
+    clone[mask] = np.array(color)
+    return self.show(clone)
+
+  """
   show_skin_tone sets given skin tone (sRGB) to background mask.
   """
   def show_skin_tone(self, skinTone):
@@ -151,7 +201,8 @@ class Face:
   def show(self, image):
     #cv2.namedWindow(self.windowName, cv2.WINDOW_NORMAL)
     #cv2.resizeWindow(self.windowName, (100, 100))
-    cv2.imshow(self.windowName, cv2.cvtColor(ImageUtils.ResizeWithAspectRatio(image, width=600), cv2.COLOR_RGB2BGR))
+    #cv2.imshow(self.windowName, cv2.cvtColor(ImageUtils.ResizeWithAspectRatio(image, width=600), cv2.COLOR_RGB2BGR))
+    cv2.imshow(self.windowName, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
     return cv2.waitKey(0) & 0xFF
 
   """
@@ -677,6 +728,17 @@ class Face:
 
     return np.bitwise_and(faceMask, np.logical_not(np.bitwise_or(leftEyeAreaMask, rightEyeAreaMask)))
 
+  """
+  get_face_until_nose_end_without_area_around_eyes returns mask of face without area under and above
+  eyes to reduce noise in the skin tone algorithm.
+  """
+  def get_face_until_nose_end_without_area_around_eyes(self):
+    faceMask = self.get_face_until_nose_end()
+    leftEyeAreaMask = self.get_area_around_left_eye()
+    rightEyeAreaMask = self.get_area_around_right_eye()
+
+    return np.bitwise_and(faceMask, np.logical_not(np.bitwise_or(leftEyeAreaMask, rightEyeAreaMask)))
+
 
   """
   ratio get_ratio_range returns the range of ratio values on the face
@@ -737,8 +799,8 @@ class Face:
     #row_max = row_max - int(height/4)
 
     keypoints = self.faceMask.copy()
-    keypoints[:, col_max:] = False
-    keypoints[:row_min:, :] = False
+    keypoints[:, col_max-10:] = False
+    keypoints[:row_min+20, :] = False
     keypoints[row_max:, :] = False
     return keypoints
 
@@ -767,8 +829,8 @@ class Face:
     #row_max = row_max - int(height/5)
 
     keypoints = self.faceMask.copy()
-    keypoints[:, :col_min] = False
-    keypoints[:row_min:, :] = False
+    keypoints[:, :col_min+10] = False
+    keypoints[:row_min+20, :] = False
     keypoints[row_max:, :] = False
     return keypoints
 
@@ -777,18 +839,22 @@ class Face:
   tone on the face.
   """
   def get_nose_keypoints(self):
-    nose_mask = self.get_attr_masks(NOSE)
+    nose_masks = self.get_attr_masks(NOSE)
     nostril_masks = self.get_attr_masks(NOSTRIL)
-    assert len(nose_mask) == 1, "Want 1 mask for nose!"
-    row_max = -1
+    assert len(nose_masks) == 1, "Want 1 mask for nose!"
+    if len(nostril_masks) == 0:
+      nose_mask = nose_masks[0]
+      row, _, _, h = self.bbox(nose_mask)
+      nose_mask[row+h-10:, :] = False
+      return nose_mask
+
+    row_max = 10**10
     for mask in nostril_masks:
       row, _, _, _ = self.bbox(mask)
-      if row_max == -1 or row < row_max:
+      if row < row_max:
         row_max = row
-    if row_max == -1:
-      return nose_mask[0]
-    nose_mask = nose_mask[0]
-    nose_mask[row_max:, :] = 0
+    nose_mask = nose_masks[0]
+    nose_mask[row_max-10:, :] = 0
     return nose_mask
 
   """
@@ -912,10 +978,186 @@ class Face:
     mask = faceMask.copy()
     for ebMask in eyebrowMasks:
       rmin, _, _, h = self.bbox(ebMask)
-      rmax = rmin + h
-      mask[rmax:,:] = False
-      mask = np.bitwise_xor(mask, ebMask)
+      mask[rmin:, :] = False
+
+      #rmax = rmin + h
+      #mask[rmax:,:] = False
+      #mask = np.bitwise_xor(mask, ebMask)
+
+    rmin, cmin, w, _ = self.bbox(faceMask)
+    # delta_pixels = 30
+    delta_pixels = 0
+    mask[:, :cmin+delta_pixels] = False
+    mask[:, cmin+w-delta_pixels:] = False
+    mask[:rmin+10, :] = False
     return mask
+
+  """
+  Returns the rotation matrix to transform from original coordinates to one
+  that is perpendicular to the line segment joining the eyes.
+  """
+  def rotation_matrix(self):
+    eyeMasks = self.get_attr_masks(EYE_OPEN)
+    assert len(eyeMasks) == 2, "Want 2 masks for eye!"
+
+    # Eye line.
+    leftEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] <= self.bbox(eyeMasks[1])[1] else eyeMasks[1]
+    rightEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] > self.bbox(eyeMasks[1])[1] else eyeMasks[1]
+
+    leftEyeCords = np.argwhere(leftEyeMask)
+    xMaxIndex = np.argmax(leftEyeCords, axis=0)[1]
+    leftMaxCord = leftEyeCords[xMaxIndex]
+
+    rightEyeCords = np.argwhere(rightEyeMask)
+    xMinIndex = np.argmin(rightEyeCords, axis=0)[1]
+    rightMinCord = rightEyeCords[xMinIndex]
+
+    leftY, leftX = leftMaxCord[0], leftMaxCord[1]
+    rightY, rightX = rightMinCord[0], rightMinCord[1]
+    theta = math.atan(float(leftY - rightY)/float(rightX - leftX))
+    rotMatrix = np.array([[math.cos(theta), math.sin(theta)], [ -math.sin(theta), math.cos(theta)]])
+
+    return rotMatrix
+
+  """
+  Returns mask direction by calculating the number of points to the left and
+  right of the nose center of the given mask. The calculation uses a coordinate
+  system whose X axis is parallel to the line segement between the eyes.
+  """
+  def get_mask_direction(self, mask):
+    maskCoordinates = np.argwhere(mask)
+    relPointsArr = maskCoordinates - self.noseMiddlePoint
+    relPointsArr = (self.rotMatrix @ relPointsArr.T).T
+
+    numPointsToLeft = np.count_nonzero(relPointsArr[:, 1] < 0)
+    numPointsToRight = np.count_nonzero(relPointsArr[:, 1] > 0)
+    numPointsInCenter = np.count_nonzero(relPointsArr[:, 1] == 0)
+    if numPointsToLeft <= numPointsToRight:
+      numPointsToLeft += numPointsInCenter
+    else:
+      numPointsToRight += numPointsInCenter
+
+    RATIO_MAX_VALUE = 100000
+
+    rightToLeftPointsRatio = RATIO_MAX_VALUE if numPointsToLeft == 0 else float(numPointsToRight)/float(numPointsToLeft)
+    leftToRightPointsRatio = RATIO_MAX_VALUE if numPointsToRight == 0 else float(numPointsToLeft)/float(numPointsToRight)
+
+    md = MaskDirection.CENTER
+    if leftToRightPointsRatio >= 3:
+      md = MaskDirection.LEFT
+    elif rightToLeftPointsRatio >= 3:
+      md = MaskDirection.RIGHT
+    print ("Mask direction: ",  md ," toLeftRatio: ", round(leftToRightPointsRatio, 2), " toRightRatio: ", round(rightToLeftPointsRatio, 2))
+    return md
+
+  """
+  Returns the light direction for the given mask directions and count percentage
+  per mask direction.
+  """
+  def get_light_direction(self, maskDirectionList, percentPerDirection):
+
+    # From the mask results, find the light direction.
+    # The algorithm determines direction of the light based on percentPerDirection
+    # and order of mask directions in the maskDirectionList.
+    startDirection = maskDirectionList[0]
+    endDirection = MaskDirection.CENTER
+    if startDirection == MaskDirection.LEFT and MaskDirection.RIGHT in percentPerDirection:
+      endDirection = MaskDirection.RIGHT
+    elif startDirection == MaskDirection.RIGHT and MaskDirection.LEFT in percentPerDirection:
+      endDirection = MaskDirection.LEFT
+    elif startDirection == MaskDirection.CENTER:
+      # Find the first non CENTER direction while iterating from the end.
+      endDirection = MaskDirection.CENTER
+      for i in range(len(maskDirectionList)-1, -1, -1):
+        dir =  maskDirectionList[i]
+        if dir != MaskDirection.CENTER:
+          endDirection = dir
+          break
+
+    print ("star direction: ", startDirection)
+    print ("end direction: ", endDirection)
+    leftPercent = 0 if MaskDirection.LEFT not in percentPerDirection else percentPerDirection[MaskDirection.LEFT]
+    centerPercent = 0 if MaskDirection.CENTER not in percentPerDirection else percentPerDirection[MaskDirection.CENTER]
+    rightPercent = 0 if MaskDirection.RIGHT not in percentPerDirection else percentPerDirection[MaskDirection.RIGHT]
+
+    maxPercent = max(leftPercent, centerPercent, rightPercent)
+    if maxPercent == centerPercent:
+      # Light is predominantly in the direction or behind the person.
+      if startDirection == MaskDirection.CENTER:
+        if endDirection == MaskDirection.CENTER:
+          return LightDirection.CENTER
+        return LightDirection.CENTER_LEFT if endDirection == MaskDirection.LEFT else LightDirection.CENTER_RIGHT
+
+      if startDirection == MaskDirection.LEFT:
+        if endDirection == MaskDirection.CENTER:
+          return LightDirection.LEFT_CENTER
+
+        if maxPercent >= 50:
+          return LightDirection.LEFT_CENTER_RIGHT
+
+        return LightDirection.LEFT_TO_RIGHT
+
+      # Start direction is right.
+      if endDirection == MaskDirection.CENTER:
+        return LightDirection.RIGHT_CENTER
+
+      if maxPercent >= 50:
+        return LightDirection.RIGHT_CENTER_LEFT
+
+      return LightDirection.RIGHT_TO_LEFT
+
+
+    if startDirection == MaskDirection.LEFT:
+      return LightDirection.LEFT_CENTER if endDirection == MaskDirection.CENTER else LightDirection.LEFT_TO_RIGHT
+
+
+    return LightDirection.RIGHT_CENTER if endDirection == MaskDirection.CENTER else LightDirection.RIGHT_TO_LEFT
+
+  """
+  Processes sorted list of mask directions and maskPercentList and returns the
+  light direction. maskPercentList is the list of percent count of each mask
+  in the maskDirectionsList. Both elements should be in the same order.
+  """
+  def process_mask_directions(self, maskDirectionsList, maskPercentList):
+    assert len(maskDirectionsList) > 0, "Mask directions list cannot be empty!"
+    assert len(maskPercentList) == len(maskDirectionsList), "Mask Percent list and direction list should be the same length!"
+
+    # Coaleasce consective masks in the same direction. Count the mask
+    # percent for each direction and store in a map. Skip coalesced masks
+    # from the final result that are less than 5% in size.
+    combinedMaskDirectionList = []
+    percentPerDirection = {}
+    minPercent = 5
+    direction = maskDirectionsList[0]
+    totalPercent = 0
+    for i in range(1, len(maskDirectionsList)):
+      if maskDirectionsList[i] == direction:
+        totalPercent += maskPercentList[i]
+        continue
+
+      if totalPercent >= minPercent:
+        combinedMaskDirectionList.append(direction)
+        if direction not in percentPerDirection:
+          percentPerDirection[direction] = round(totalPercent)
+        else:
+          percentPerDirection[direction] += round(totalPercent)
+
+      direction = maskDirectionsList[i]
+      totalPercent = maskPercentList[i]
+
+    if totalPercent >= minPercent:
+      combinedMaskDirectionList.append(direction)
+      if direction not in percentPerDirection:
+        percentPerDirection[direction] = round(totalPercent)
+      else:
+        percentPerDirection[direction] += round(totalPercent)
+
+    print ("percentPerDirection: ", percentPerDirection)
+
+    lightDirection = self.get_light_direction(combinedMaskDirectionList, percentPerDirection)
+    self.lightDirection = lightDirection
+
+    return lightDirection
 
   """
   get_left_forehead_points returns left half points on the forehead.
@@ -951,6 +1193,228 @@ class Face:
     for m in ebMasks:
       eMask = np.bitwise_xor(eMask, m)
     return eMask
+
+  def is_teeth_visible(self):
+    teethMasks = self.get_attr_masks(TEETH)
+    return len(teethMasks) > 0
+
+  """
+  get_mouth_points returns mask of mouth.
+  """
+  def get_mouth_points(self):
+    lipMask = np.zeros(self.faceMask.shape, dtype=bool)
+    ulipMasks = self.get_attr_masks(UPPER_LIP)
+    llipMasks = self.get_attr_masks(LOWER_LIP)
+    assert len(ulipMasks) == 1, "Want 1 upper lip mask"
+    assert len(llipMasks) == 1, "Want 1 lower lip mask"
+    ulipMask = ulipMasks[0]
+    llipMask = llipMasks[0]
+    rmin_ulip, cmin_ulip, w_ulip, h_ulip = self.bbox(ulipMask)
+    rmin_llip, cmin_llip, w_llip, h_llip = self.bbox(llipMask)
+
+    # Find mask that encompasses lips and mouth. Determine (ymin, ymax) for each x.
+    lipsAndMouthMask = np.zeros(self.faceMask.shape, dtype=bool)
+    cmin = min(cmin_ulip, cmin_llip)
+    cmax = max(cmin_ulip + w_ulip, cmin_llip + w_llip) + 1
+    rmax_ulip = rmin_ulip + h_ulip
+    rmax_llip = rmin_llip + h_llip
+    for x in range(cmin, cmax):
+      # Upper lip ymin point.
+      ymin = rmin_ulip
+      while ymin <= rmax_ulip and not ulipMask[ymin, x]:
+        ymin = ymin +1
+      if ymin > rmax_ulip:
+        continue
+      ymax = rmax_llip
+      while ymax >= rmin_llip and not llipMask[ymax, x]:
+        ymax = ymax -1
+      if ymax < rmin_llip:
+        continue
+
+      lipsAndMouthMask[ymin:ymax+1, x] = True
+
+    mouthMask = np.bitwise_xor(lipsAndMouthMask, np.bitwise_and(lipsAndMouthMask, np.bitwise_or(ulipMask, llipMask)))
+    print ("mouth mask percent: ", (np.count_nonzero(mouthMask)/np.count_nonzero(np.bitwise_or(ulipMask, llipMask)))*100.0)
+
+    return mouthMask
+
+  """
+  Prints the given effectiveColorMap for debugging.
+  """
+  def print_effectiveColorMap(self, effectiveColorMap, totalPoints):
+    print ("\nEffective Color Map: ")
+    ycrcbImage = ImageUtils.to_YCrCb(self.image)
+    prevMask = np.zeros(ycrcbImage.shape[:2], dtype=bool)
+    sortedEffectiveColorMap = sorted(effectiveColorMap, key=lambda h: 255.0 - np.mean(self.to_brightImage(self.image)[effectiveColorMap[h]], axis=0)[2])
+    for mHue in sortedEffectiveColorMap:
+      combMask = effectiveColorMap[mHue]
+      prev_delta_cie = 0 if np.count_nonzero(prevMask) == 0 else ImageUtils.delta_cie2000(np.mean(ycrcbImage[combMask], axis=0), np.mean(ycrcbImage[prevMask], axis=0))
+
+      print ("\npercent: ", ImageUtils.percentPoints(combMask, totalPoints), "munsell hue: ", mHue, " musell sat: ", round(np.mean(self.to_satImage(ycrcbImage)[combMask], axis=0)[1]*(100.0/255.0),2)," brightness: ", round(np.mean(np.max(self.image, axis=2)[combMask]),2), " mean + std: ", round(np.mean(np.max(self.image, axis=2)[combMask]) + np.std(np.max(self.image, axis=2)[combMask]),2), " hue: ", round(ImageUtils.sRGBtoHSV(np.mean(self.image[combMask], axis=0))[0, 0]*2,2), " sat: ", round(np.mean(self.to_satImage(self.image)[combMask], axis=0)[1]*(100.0/255.0),2), " red: ", round(np.mean(self.image[combMask][:, 0]),2), " green: ", round(np.mean(self.image[combMask][:, 1]),2), " blue: ", round(np.mean(self.image[combMask][:, 2]),2), " prev delta: ", round(prev_delta_cie, 2))
+
+      self.show_mask_with_image(ycrcbImage, combMask)
+      prevMask = combMask
+
+  """
+  Iterate effectiveColorMap to make each cluster for each color to be more accurate.
+  Each mask's delta_cie is compared with the cluster's color to determine it's
+  new cluster (based on smallest delta_cie).
+  """
+  def iterate_effectiveColorMap(self, effectiveColorMap, allClusterMasks):
+    ycrcbImage = ImageUtils.to_YCrCb(self.image)
+    resultColorMap = effectiveColorMap.copy()
+    for i in range(5):
+      tempColorMap = {}
+      for m in allClusterMasks:
+        min_dte = 1000.0
+        best_hue = ""
+        for mHue in resultColorMap:
+          cbMask = resultColorMap[mHue]
+          dte = ImageUtils.delta_cie2000(np.mean(ycrcbImage[cbMask], axis=0), np.mean(ycrcbImage[m], axis=0))
+          if dte < min_dte:
+            min_dte = dte
+            best_hue = mHue
+
+        if best_hue not in tempColorMap:
+          tempColorMap[best_hue] = m
+        else:
+          tempColorMap[best_hue] = np.bitwise_or(tempColorMap[best_hue], m)
+      resultColorMap = tempColorMap.copy()
+    return resultColorMap
+
+  """
+  Combine masks that are close to each other and may have delta_cie small
+  enough that they can be merged in a single cluster. Returns the new list
+  of masks.
+  """
+  def combine_masks_close_to_each_other(self, effectiveColorMap):
+    stillRem = True
+    tempCloseMasks = sorted([effectiveColorMap[e] for e in effectiveColorMap], key=lambda m: 255.0 - np.mean(self.to_brightImage(self.image)[m], axis=0)[2])
+    ycrcbImage = ImageUtils.to_YCrCb(self.image)
+    while stillRem:
+      stillRem = False
+      for i in range(1, len(tempCloseMasks)):
+        prev_delta_cie = ImageUtils.delta_cie2000(np.mean(ycrcbImage[tempCloseMasks[i]], axis=0), np.mean(ycrcbImage[tempCloseMasks[i-1]], axis=0))
+        next_delta_cie = 100 if i == len(tempCloseMasks)-1 else ImageUtils.delta_cie2000(np.mean(ycrcbImage[tempCloseMasks[i]], axis=0), np.mean(ycrcbImage[tempCloseMasks[i+1]], axis=0))
+        if prev_delta_cie >= 5 or next_delta_cie < prev_delta_cie:
+          # Check merge in the next index.
+          continue
+
+        # Merge with previous mask.
+        nowMasks = []
+        for j in range(i-1):
+          nowMasks.append(tempCloseMasks[j])
+        nowMasks.append(np.bitwise_or(tempCloseMasks[i-1], tempCloseMasks[i]))
+        for j in range(i+1, len(tempCloseMasks)):
+          nowMasks.append(tempCloseMasks[j])
+        tempCloseMasks = nowMasks.copy()
+        stillRem = True
+        break
+
+    return tempCloseMasks
+
+  """
+  The mapping from munsell Hue to known color is a hueristic obtained by
+  viewing many images and determining which munsell hues cluster together into a
+  known color like "Orange" or "LightGreen". These clustered colors are then
+  used to ascertain image brightness. This kind of clustering can only work if
+  the munsell hue determines the final color of the pixel to a large extent. It is
+  also likely that there can be better mapping to cluster colors.
+  """
+  def effective_color(self, munsellColor):
+    pinkRed = "PinkRed"
+    maroon = "Maroon"
+    orange = "Orange"
+    orangeYellow = "OrangeYellow"
+    yellowGreen = "YellowishGreen"
+    middleGreen = "MiddleGreen"
+    greenYellow = "GreenishYellow"
+    lightGreen = "LightGreen"
+    green = "Green"
+    blueGreen = "BluishGreen"
+    greenBlue = "GreenishBlue"
+    blue = "Blue"
+    none = "None"
+
+    if munsellColor == none:
+      return none
+
+    munsellHue = munsellColor.split(" ")[0]
+    hueLetter = ImageUtils.munsell_hue_letter(munsellHue)
+    hueNumber = ImageUtils.munsell_hue_number(munsellHue)
+
+    delta = 0.5
+
+    if hueLetter == "R":
+      if hueNumber < 7.5 - delta:
+        return pinkRed
+      return maroon
+    elif hueLetter == "YR":
+      if hueNumber < 2.5 - delta:
+        return maroon
+      elif hueNumber < 9 - delta:
+        return orange
+      return orangeYellow
+    elif hueLetter == "Y":
+      if hueNumber < 2.5 - delta:
+        return orangeYellow
+      #if hueNumber < 3 - delta:
+      #  return orangeYellow
+      elif hueNumber < 7.5 - delta:
+        return yellowGreen
+      return middleGreen
+      #if hueNumber < 5 - delta:
+      #  return orangeYellow
+      return yellowGreen
+    elif hueLetter == "GY":
+      if hueNumber < 2.5 - delta:
+        return middleGreen
+        return yellowGreen
+      elif hueNumber < 7.5 - delta:
+        return greenYellow
+      return lightGreen
+    elif hueLetter == "G":
+      if hueNumber < 2 - delta:
+        return lightGreen
+      elif hueNumber < 4.5 - delta:
+        return green
+      elif hueNumber < 9 - delta:
+        return greenBlue
+      return blueGreen
+    elif hueLetter == "BG":
+      if hueNumber < 2.5 - delta:
+        return blueGreen
+      return blue
+
+    # Old mapping. Deprecated.
+    if hueLetter == "R":
+      if hueNumber < 7.5 - delta:
+        return pinkRed
+      return maroon
+    elif hueLetter == "YR":
+      if hueNumber < 2.5 - delta:
+        return maroon
+      return orange
+    elif hueLetter == "Y":
+      if hueNumber < 7.5 - delta:
+        return orangeYellow
+      return yellowGreen
+    elif hueLetter == "GY":
+      if hueNumber < 2.5 - delta:
+        return yellowGreen
+      elif hueNumber < 7.5 - delta:
+        return greenYellow
+      return lightGreen
+    elif hueLetter == "G":
+      if hueNumber < 2 - delta:
+        return lightGreen
+      elif hueNumber < 4.5 - delta:
+        return green
+      elif hueNumber < 9 - delta:
+        return greenBlue
+      return blueGreen
+    elif hueLetter == "BG":
+      return blueGreen
 
   """
   good_face_points returns a mask containing points that are usually good to
@@ -1018,6 +1482,18 @@ class Face:
     hsvImage[:, :, 0] = 0
     hsvImage[:, :, 2] = 0
     return hsvImage
+
+  def to_LSatImage(self, image):
+    hslImage = cv2.cvtColor(image, cv2.COLOR_RGB2HLS).astype(np.float)
+    hslImage[:, :, 0] = 0
+    hslImage[:, :, 1] = 0
+    return hslImage
+
+  def to_LBriImage(self, image):
+    hslImage = cv2.cvtColor(image, cv2.COLOR_RGB2HLS).astype(np.float)
+    hslImage[:, :, 0] = 0
+    hslImage[:, :, 2] = 0
+    return hslImage
 
   """
   to_hueImage converts sRGB image to HSV image with
@@ -1332,6 +1808,56 @@ class Face:
     print ("\tRight Color closeness with mask: ", self.closeness_dist(np.median(self.image[rightMask], axis=0), mask))
     print ("")
     self.show_masks([leftMask, rightMask], [[0, 255, 0], [255, 0, 0]])
+
+
+  """
+  best_clusters repeatedly divides each mask until the cluster mean (when calculating delta_e of cluster w.r.t medoid)
+  is less than the given tolerance. This calls the other overloaded best_clusters method.
+  """
+  def best_clusters(self, faceMask, delta_tol=3):
+    # number of clusters.
+    k = 2
+    allMedoids, allMasks, allIndices, _ = ImageUtils.best_clusters(self.distinct_colors(faceMask, tol=0.0005), self.image, faceMask, k)
+
+    while True:
+      masks = []
+      medoids = []
+      indices = []
+
+      for i, m in zip(allIndices, allMasks):
+        if np.mean(ImageUtils.delta_e_mask_matrix(allMedoids[i], self.image[m])) <= delta_tol:
+          # No need to sub divide mask.
+          masks.append(m)
+          indices.append(len(medoids))
+          medoids.append(allMedoids[i])
+          continue
+
+        cmeds, cmasks, _ , _ = ImageUtils.best_clusters(self.distinct_colors(m, tol=0.0005), self.image, m, k, delta_tol)
+        if len(cmasks) == 0:
+          # Some kind of exception occrured, just use the mask and move on.
+          masks.append(m)
+          indices.append(len(medoids))
+          medoids.append(allMedoids[i])
+          continue
+
+        # Append both sub masks.
+        masks.append(cmasks[0])
+        indices.append(len(medoids))
+        medoids.append(cmeds[0])
+
+        masks.append(cmasks[1])
+        indices.append(len(medoids))
+        medoids.append(cmeds[1])
+
+      if len(masks) == len(allMasks):
+        # Iterations complete, return masks.
+        break
+
+      allMasks = masks.copy()
+      allIndices = indices.copy()
+      allMedoids = medoids.copy()
+
+    return allMedoids, allMasks, allIndices
 
   """
   divide_mask will divide given mask into clusters based on delta_e_cie2000 differences.
