@@ -54,7 +54,7 @@ def plot_color(image, maskList, totalPoints):
 analyze will process image with the given path. It will augment the image
 by given factor of brightness and saturation before processing.
 """
-def analyze(imagePath=None, cut=1.0, sat=1.0):
+def analyze(imagePath=None, bri=1.0, sat=1.0):
   startTime = time.time()
 
   # Detect face and show class.
@@ -62,7 +62,7 @@ def analyze(imagePath=None, cut=1.0, sat=1.0):
 
   f.windowName = "image"
 
-  newImg = ImageUtils.set_brightness(f.image, cut)
+  newImg = ImageUtils.set_brightness(f.image, bri)
   newImg = ImageUtils.set_saturation(newImg, sat)
   f.image = newImg
 
@@ -144,16 +144,15 @@ if __name__ == "__main__":
   # Parse command line arguments
   parser = argparse.ArgumentParser(description='Image for processing')
   parser.add_argument('--image', required=True,metavar="path to video file")
-  parser.add_argument('--cut', required=False,metavar="cut")
+  parser.add_argument('--bri', required=False,metavar="bri")
   parser.add_argument('--sat', required=False,metavar="sat")
-  parser.add_argument('--show', default="True", required=False,metavar="show")
   args = parser.parse_args()
 
-  cut = 1.0
+  bri = 1.0
   sat = 1.0
-  if args.cut is not None:
-    cut = float(args.cut)
+  if args.bri is not None:
+    bri = float(args.bri)
   if args.sat is not None:
     sat = float(args.sat)
 
-  analyze(args.image, cut, sat)
+  analyze(args.image, bri, sat)
