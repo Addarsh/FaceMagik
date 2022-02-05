@@ -13,146 +13,158 @@ clusters is less than given tolerance. Returns the cluster with the largest
 diff value. diffImg has dimensions (W, H) and contains the values to peform
 clustering on. mask is boolean mask of same dimensions,
 """
-def brightest_cluster(diffImg, mask, totalPoints, tol=2, cutoffPercent=2):
-  c1Tuple, c2Tuple = ImageUtils.Kmeans_1d(diffImg, totalPoints, mask)
-  c1Mask, centroid1 = c1Tuple
-  c2Mask, centroid2 = c2Tuple
-
-  if ImageUtils.percentPoints(c1Mask, totalPoints) < cutoffPercent or ImageUtils.percentPoints(c2Mask, totalPoints) < cutoffPercent:
-    # end cluster division.
-    return mask
-  if abs(centroid1 - centroid2) <= tol:
-    # end cluster division.
-    return mask
-  return brightest_cluster(diffImg, c1Mask, totalPoints, tol, cutoffPercent)
-
-def plot_color(image, maskList, totalPoints):
-  if len(maskList) > 1:
-    plt.close()
-  fig = plt.figure()
-  ax = fig.add_subplot(111)
-
-  x = [i for i in range(len(maskList))]
-  percentList = [ImageUtils.percentPoints(mask, totalPoints) for mask in maskList]
-  colorList = [np.mean(image[mask], axis=0)/255.0 for mask in maskList]
-  munsellColorList = [ImageUtils.sRGBtoMunsell(np.mean(image[mask], axis=0)) for mask in maskList]
-  ax.bar(x=x, height=percentList, color=colorList, align="edge")
-  # Set munsell color values on top of value.
-  for i in range(len(x)):
-    plt.text(i, percentList[i], munsellColorList[i])
-  plt.show(block=False)
 
 
-  ax.bar(x=x, height=percentList, color=colorList, align="edge")
-  #ax.set_xticklabels(x, fontsize=8)
-  # Set munsell color values on top of value.
-  for i in range(len(x)):
-    plt.text(i, percentList[i], munsellColorList[i])
-  plt.show(block=False)
+def brightest_cluster(diff_img: np.ndarray, mask: object, total_points: int, tol: int = 2,
+                      cutoff_percent: int = 2) -> np.ndarray:
+    c1_tuple, c2_tuple = ImageUtils.Kmeans_1d(diff_img, mask)
+    c1_mask, centroid1 = c1_tuple
+    c2_mask, centroid2 = c2_tuple
+
+    if ImageUtils.percentPoints(c1_mask, total_points) < cutoff_percent or ImageUtils.percentPoints(c2_mask,
+                                                                                                    total_points) < \
+            cutoff_percent:
+        # end cluster division.
+        return mask
+    if abs(centroid1 - centroid2) <= tol:
+        # end cluster division.
+        return mask
+    return brightest_cluster(diff_img, c1_mask, total_points, tol, cutoff_percent)
+
+
+def plot_color(image, mask_list, total_points):
+    if len(mask_list) > 1:
+        plt.close()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    x = [i for i in range(len(mask_list))]
+    percent_list = [ImageUtils.percentPoints(mask, total_points) for mask in mask_list]
+    color_list = [np.mean(image[mask], axis=0) / 255.0 for mask in mask_list]
+    munsell_color_list = [ImageUtils.sRGBtoMunsell(np.mean(image[mask], axis=0)) for mask in mask_list]
+    ax.bar(x=x, height=percent_list, color=color_list, align="edge")
+    # Set munsell color values on top of value.
+    for i in range(len(x)):
+        plt.text(i, percent_list[i], munsell_color_list[i])
+    plt.show(block=False)
+
+    ax.bar(x=x, height=percent_list, color=color_list, align="edge")
+    # ax.set_xticklabels(x, fontsize=8)
+    # Set Munsell color values on top of value.
+    for i in range(len(x)):
+        plt.text(i, percent_list[i], munsell_color_list[i])
+    plt.show(block=False)
+
 
 """
 analyze will process image with the given path. It will augment the image
 by given factor of brightness and saturation before processing.
 """
+
+
 def analyze(imagePath=None, bri=1.0, sat=1.0):
-  startTime = time.time()
+    startTime = time.time()
 
-  # Detect face and show class.
-  f = Face(args.image, hdf5FileName=os.path.splitext(os.path.split(args.image)[1])[0] + ".hdf5")
+    # Detect face and show class.
+    f = Face(args.image, hdf5FileName=os.path.splitext(os.path.split(args.image)[1])[0] + ".hdf5")
 
-  f.windowName = "image"
+    print("detection time: ", time.time() - startTime)
 
-  newImg = ImageUtils.set_brightness(f.image, bri)
-  newImg = ImageUtils.set_saturation(newImg, sat)
-  f.image = newImg
+    f.windowName = "image"
 
-  print ("teeth visible: ", f.is_teeth_visible())
-  #f.show_mask(f.get_mouth_points())
+    new_img = ImageUtils.set_brightness(f.image, bri)
+    new_img = ImageUtils.set_saturation(new_img, sat)
+    f.image = new_img
 
-  # maskToProcess = f.get_face_keypoints()
-  #maskToProcess = f.get_face_until_nose_end()
-  #maskToProcess = f.get_face_mask()
-  #maskToProcess = f.get_face_mask_without_area_around_eyes()
-  maskToProcess = f.get_face_until_nose_end_without_area_around_eyes()
-  #maskToProcess = f.get_forehead_points()
-  #maskToProcess = f.get_left_cheek_keypoints()
-  #maskToProcess = f.get_mouth_points()
-  #maskToProcess = f.get_right_cheek_keypoints()
-  #maskToProcess = f.get_nose_keypoints()
+    print("teeth visible: ", f.is_teeth_visible())
+    # f.show_mask(f.get_mouth_points())
 
-  tol = 2
-  cutoffPercent = 2
-  #tol = 2
-  #cutoffPercent = 1
-  currMask = maskToProcess.copy()
-  totalPoints = np.count_nonzero(maskToProcess)
+    # maskToProcess = f.get_face_keypoints()
+    # maskToProcess = f.get_face_until_nose_end()
+    # maskToProcess = f.get_face_mask()
+    # maskToProcess = f.get_face_mask_without_area_around_eyes()
+    maskToProcess = f.get_face_until_nose_end_without_area_around_eyes()
+    # maskToProcess = f.get_forehead_points()
+    # maskToProcess = f.get_left_cheek_keypoints()
+    # maskToProcess = f.get_mouth_points()
+    # maskToProcess = f.get_right_cheek_keypoints()
+    # maskToProcess = f.get_nose_keypoints()
 
-  effectiveColorMap = {}
-  allClusterMasks = []
-  maskDirectionsList = []
-  maskPercentList = []
+    tol = 2
+    cutoff_percent = 2
+    # tol = 2
+    # cutoffPercent = 1
+    curr_mask = maskToProcess.copy()
+    total_points = np.count_nonzero(maskToProcess)
 
-  ycrcbImage = ImageUtils.to_YCrCb(f.image)
-  diff = (ycrcbImage[:, :, 0]).astype(float)
+    effective_color_map = {}
+    all_cluster_masks = []
+    mask_directions_list = []
+    mask_percent_list = []
 
-  # Divide the image into smaller clusters.
-  while True:
-    # Find brightest cluster.
-    bMask = brightest_cluster(diff, currMask, totalPoints, tol=tol, cutoffPercent=cutoffPercent)
-    # Find least saturated cluster of brightest cluster. This provides more fine grained clusters
-    # but is also more expensive. Comment it out if you want to plot "color of each cluster versus
-    # the associated munsell hue" to iterate/improve effective color mapping.
-    #bMask = brightest_cluster(255.0 -(ImageUtils.to_hsv(ycrcbImage)[:, :, 1]).astype(np.float), bMask, np.count_nonzero(bMask), tol=tol, cutoffPercent=cutoffPercent)
+    ycrcb_image = ImageUtils.to_YCrCb(f.image)
+    diff = (ycrcb_image[:, :, 0]).astype(float)
 
-    munsellColor = ImageUtils.sRGBtoMunsell(np.mean(ycrcbImage[bMask], axis=0))
-    effectiveColor = f.effective_color(munsellColor)
-    if effectiveColor not in effectiveColorMap:
-      effectiveColorMap[effectiveColor] = bMask
-    else:
-      effectiveColorMap[effectiveColor] = np.bitwise_or(effectiveColorMap[effectiveColor], bMask)
+    # Divide the image into smaller clusters.
+    while True:
+        # Find brightest cluster.
+        b_mask = brightest_cluster(diff, curr_mask, total_points, tol=tol, cutoff_percent=cutoff_percent)
+        # Find the least saturated cluster of the brightest cluster. This provides more fine-grained clusters
+        # but is also more expensive. Comment it out if you want to plot "color of each cluster versus
+        # the associated Munsell hue" to iterate/improve effective color mapping.
+        # b_mask = brightest_cluster(255.0 -(ImageUtils.to_hsv(ycrcb_image)[:, :, 1]).astype(np.float), b_mask,
+        #                          np.count_nonzero(b_mask), tol=tol, cutoffPercent=cutoff_percent)
 
-    # Store this mask for different computations.
-    allClusterMasks.append(bMask)
-    maskDirectionsList.append(f.get_mask_direction(bMask))
-    maskPercentList.append(ImageUtils.percentPoints(bMask, totalPoints))
+        munsell_color = ImageUtils.sRGBtoMunsell(np.mean(ycrcb_image[b_mask], axis=0))
+        effective_color = f.effective_color(munsell_color)
+        if effective_color not in effective_color_map:
+            effective_color_map[effective_color] = b_mask
+        else:
+            effective_color_map[effective_color] = np.bitwise_or(effective_color_map[effective_color], b_mask)
 
-    print ("effective color: ", effectiveColor, " brightness: ", round(np.mean(ycrcbImage[:, :, 0][bMask]),2), "\n")
-    #f.show(ImageUtils.plot_points_and_mask(ycrcbImage, [f.noseMiddlePoint], bMask))
+        # Store this mask for different computations.
+        all_cluster_masks.append(b_mask)
+        mask_directions_list.append(f.get_mask_direction(b_mask))
+        mask_percent_list.append(ImageUtils.percentPoints(b_mask, total_points))
 
-    currMask = np.bitwise_xor(currMask, bMask)
-    if ImageUtils.percentPoints(currMask, totalPoints) < 1:
-      break
+        print("effective color: ", effective_color, " brightness: ", round(np.mean(ycrcb_image[:, :, 0][b_mask]),
+                                                                           2), "\n")
+        # f.show(ImageUtils.plot_points_and_mask(ycrcb_image, [f.noseMiddlePoint], bMask))
 
-  print ("\n Light Direction: ", f.process_mask_directions(maskDirectionsList, maskPercentList))
+        curr_mask = np.bitwise_xor(curr_mask, b_mask)
+        if ImageUtils.percentPoints(curr_mask, total_points) < 1:
+            break
 
-  plot_color(ycrcbImage, allClusterMasks, totalPoints)
+    print("\n Light Direction: ", f.process_mask_directions(mask_directions_list, mask_percent_list))
 
-  effectiveColorMap = f.iterate_effectiveColorMap(effectiveColorMap, allClusterMasks)
-  f.print_effectiveColorMap(effectiveColorMap, totalPoints)
+    plot_color(ycrcb_image, all_cluster_masks, total_points)
 
-  combinedMasks = f.combine_masks_close_to_each_other(effectiveColorMap)
+    effective_color_map = f.iterate_effectiveColorMap(effective_color_map, all_cluster_masks)
+    f.print_effectiveColorMap(effective_color_map, total_points)
 
-  print ("\nCombined masks")
-  for m in combinedMasks:
-    print ("percent: ", ImageUtils.percentPoints(m, totalPoints))
-    f.show_mask(m)
+    combined_masks = f.combine_masks_close_to_each_other(effective_color_map)
 
-  f.show_orig_image()
+    print("\nCombined masks")
+    for m in combined_masks:
+        print("percent: ", ImageUtils.percentPoints(m, total_points))
+        f.show_mask(m)
+
+    f.show_orig_image()
 
 
 if __name__ == "__main__":
-  # Parse command line arguments
-  parser = argparse.ArgumentParser(description='Image for processing')
-  parser.add_argument('--image', required=True,metavar="path to video file")
-  parser.add_argument('--bri', required=False,metavar="bri")
-  parser.add_argument('--sat', required=False,metavar="sat")
-  args = parser.parse_args()
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Image for processing')
+    parser.add_argument('--image', required=True, metavar="path to video file")
+    parser.add_argument('--bri', required=False, metavar="bri")
+    parser.add_argument('--sat', required=False, metavar="sat")
+    args = parser.parse_args()
 
-  bri = 1.0
-  sat = 1.0
-  if args.bri is not None:
-    bri = float(args.bri)
-  if args.sat is not None:
-    sat = float(args.sat)
+    bri = 1.0
+    sat = 1.0
+    if args.bri is not None:
+        bri = float(args.bri)
+    if args.sat is not None:
+        sat = float(args.sat)
 
-  analyze(args.image, bri, sat)
+    analyze(args.image, bri, sat)

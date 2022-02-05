@@ -728,7 +728,7 @@ class ImageUtils:
   wavelength_arr returns the numpy array of wavelengths for which
   we are interested in Spectral distribution.
   """
-  def wavelength_arr():
+  def wavelength_arr(self):
     return [i for i in range(380, 731, 10)]
 
   """
@@ -784,7 +784,7 @@ class ImageUtils:
   for more details.
   Returned T is a (3,36) numpy array converting reflectance to D65 weighted linear rgb.
   """
-  def read_T_matrix():
+  def read_T_matrix(self):
     T_matrix = []
     with open("T_matrix.csv") as f:
       csv_reader = csv.reader(f, delimiter=",")
@@ -835,7 +835,7 @@ class ImageUtils:
   """
   plot_skin_spectra will read a database of skin spectra and plot it.
   """
-  def plot_skin_spectra():
+  def plot_skin_spectra(self):
     with open("skin_spectra.csv") as f:
       csv_reader = csv.reader(f, delimiter=",")
       x = None
@@ -852,7 +852,7 @@ class ImageUtils:
   save_skin_spectra_uv will convert the reflectance spectrums of skin spectra
   to uv chromaticity and save it.
   """
-  def save_skin_spectra_uv():
+  def save_skin_spectra_uv(self):
     skin_chrs = []
     with open("skin_spectra.csv") as f:
       csv_reader = csv.reader(f, delimiter=",")
@@ -918,7 +918,7 @@ class ImageUtils:
   compute_all_reflectances will compute reflectance (infinite optical depth)
   for all colors in the RGB space and store them in a JSON file.
   """
-  def compute_all_reflectances():
+  def compute_all_reflectances(self):
     d = {}
     total = 256*256*256
     print ("Total: ", total)
@@ -939,7 +939,7 @@ class ImageUtils:
   """
   random_color generates a random RGB color each time it is called.
   """
-  def random_color():
+  def random_color(self):
     return tuple(np.random.choice(range(256), size=3))
 
   """
@@ -1002,9 +1002,9 @@ class ImageUtils:
       (-1,3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_YCR_CB2RGB), (-1, 3))
 
   """
-  sRGBtoMunsell converts given sRGB array (1,3) to munsell color (string).
+  Converts given sRGB array (1,3) to munsell color (string).
   """
-  def sRGBtoMunsell(sRGB):
+  def sRGBtoMunsell(sRGB) -> np.ndarray:
     return ImageUtils.displayP3toMunsell(sRGB)
     sRGB = sRGB/255.0
     C = colour.CCS_ILLUMINANTS['cie_2_1931']['C']
@@ -1458,7 +1458,7 @@ class ImageUtils:
   The ordering of submasks returned is by decreasing mean value of diffImg.
   diffImg has dimensions (W,H).
   """
-  def Kmeans_1d(diffImg, totalPoints, mask):
+  def Kmeans_1d(diffImg, mask: np.ndarray) -> object:
     from sklearn.cluster import KMeans
 
     maskCords = np.transpose(np.nonzero(mask))
