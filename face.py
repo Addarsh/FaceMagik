@@ -16,8 +16,9 @@ from scipy.optimize import minimize
 from image_utils import ImageUtils
 from sklearn.cluster import KMeans
 from enum import Enum
-from train import FaceConfig, DATASET_DIR, CHECKPOINT_DIR, modellib, label_id_map
-from train import (
+from mrcnn.config import Config
+from mrcnn import model as modellib
+from common import (
   EYE_OPEN,
   EYEBALL,
   EYEBROW,
@@ -36,6 +37,7 @@ from train import (
   BALD_HEAD,
   EAR,
 )
+from common import FaceConfig, label_id_map
 
 class MaskDirection(Enum):
   LEFT = 1
@@ -1942,11 +1944,10 @@ class Face:
 
     # Create model
     model = modellib.MaskRCNN(mode="inference", config=config,
-                                  model_dir=CHECKPOINT_DIR)
+                                  model_dir="")
     # Select weights file to load
     weights_path = ""
     try:
-      #weights_path = model.find_last()
       weights_path = os.path.join(os.getcwd(), "model/mask_rcnn_face_0060.h5")
     except Exception as e:
       raise

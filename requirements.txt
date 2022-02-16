@@ -61,3 +61,4 @@ typing-extensions==3.7.4.3
 urllib3==1.26.2
 Werkzeug==1.0.1
 wrapt==1.12.1
+git+https://${PIP_INSTALL_GITHUB_REPO_TOKEN}@github.com/Addarsh/Mask_RCNN.git@master

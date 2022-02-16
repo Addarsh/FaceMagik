@@ -10,6 +10,8 @@ Written by Addarsh
 
 import os
 import sys
+# To add parent directory to path to ensure that file can find "common" package.
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 import datetime
 import numpy as np
@@ -21,6 +23,8 @@ import keras
 import requests
 import shutil
 from PIL import Image
+from mrcnn import model as modellib, utils
+from common import FaceConfig, label_id_map
 
 if socket.gethostname().startswith("Addarshs"):
   volume_mount_dir = "/Users/addarsh/virtualenvs/aws_train/dltraining"
@@ -34,70 +38,6 @@ CHECKPOINT_DIR = os.path.join(volume_mount_dir, "checkpoints")
 SPLIT_FILE = os.path.join(DATASET_DIR, "data_split.json")
 # Path to trained weights file
 COCO_WEIGHTS_PATH = os.path.abspath(os.path.join(volume_mount_dir, "mask_rcnn_coco.h5"))
-
-# Import Mask RCNN
-sys.path.append(ROOT_DIR)  # To find local version of the library
-from mrcnn.config import Config
-from mrcnn import model as modellib, utils
-
-# Label constants.
-EYE_OPEN = "Eye (Open)"
-EYEBALL = "Eyeball"
-EYEBROW = "Eyebrow"
-READING_GLASSES = "Reading glasses"
-SUNGLASSES = "Sunglasses"
-EYE_CLOSED = "Eye (Closed)"
-NOSE = "Nose"
-NOSTRIL = "Nostril"
-UPPER_LIP = "Upper Lip"
-LOWER_LIP = "Lower Lip"
-TEETH = "Teeth"
-TONGUE = "Tongue"
-FACIAL_HAIR = "Facial Hair"
-FACE = "Face"
-HAIR_ON_HEAD = "Hair (on head)"
-BALD_HEAD = "Bald Head"
-EAR = "Ear"
-
-# Map from label to class ID.
-label_id_map = {
-  EYE_OPEN: 1, EYEBALL: 2, EYEBROW: 3, READING_GLASSES: 4, SUNGLASSES: 5, EYE_CLOSED: 6,
-  NOSE: 7, NOSTRIL: 8, UPPER_LIP:9, LOWER_LIP:10, TEETH:11, TONGUE: 12, FACIAL_HAIR:13,
-  FACE: 14, HAIR_ON_HEAD: 15, BALD_HEAD: 16, EAR: 17
-}
-
-############################################################
-#  Configurations
-############################################################
-
-
-class FaceConfig(Config):
-    """
-    Derives from the base Config class and overrides some values.
-    """
-    # Give the configuration a recognizable name
-    NAME = "face"
-
-    # We use a GPU with 12GB memory, which can fit two images.
-    # Adjust down if you use a smaller GPU.
-    GPU_COUNT = 4
-    IMAGES_PER_GPU = 1
-
-    # Number of classes (including background)
-    NUM_CLASSES = 17 + 1  # Background + classes
-
-    # Number of training steps per epoch
-    STEPS_PER_EPOCH = 100
-
-    # Skip detections with < 90% confidence
-    DETECTION_MIN_CONFIDENCE = 0.9
-
-    # Remove mini mask to improve accuracy.
-    USE_MINI_MASK = False
-
-    # Use Resnet50 for faster training.
-    BACKBONE = "resnet50"
-
 
 ############################################################
 #  Dataset
