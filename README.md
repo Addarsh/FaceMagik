@@ -16,4 +16,6 @@ Instructions to install Tensorfow from source on Rosetta Simulator on M1 Mac.
 
 
 Other dependencies:
-You will need to include a pre-trained model (not included in this repo) under the model/ directory to perform inference.
+
+1. You will need to include a pre-trained model (not included in this repo) under the model/ directory to perform inference.
+2. Install Mask_RCNN private repo to build model to perform inference.
