@@ -15,6 +15,7 @@ from scipy import ndimage
 from scipy.optimize import minimize
 from image_utils import ImageUtils
 from sklearn.cluster import KMeans
+from enum import Enum
 from train import FaceConfig, DATASET_DIR, CHECKPOINT_DIR, modellib, label_id_map
 from train import (
   EYE_OPEN,
@@ -35,7 +36,6 @@ from train import (
   BALD_HEAD,
   EAR,
 )
-from enum import Enum
 
 class MaskDirection(Enum):
   LEFT = 1
@@ -331,7 +331,7 @@ class Face:
   """
   def detect_background(self):
     interpreter = tf.lite.Interpreter(
-      model_path="deeplabv3_1_default_1.tflite")
+      model_path="background_detection/deeplabv3_1_default_1.tflite")
 
     interpreter.allocate_tensors()
 
@@ -1946,7 +1946,8 @@ class Face:
     # Select weights file to load
     weights_path = ""
     try:
-      weights_path = model.find_last()
+      #weights_path = model.find_last()
+      weights_path = os.path.join(os.getcwd(), "model/mask_rcnn_face_0060.h5")
     except Exception as e:
       raise
 

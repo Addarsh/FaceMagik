@@ -2,23 +2,18 @@
 image_utils is has helpul functions to process
 an image.
 """
-import os
 import cv2
 import numpy as np
 import math
 import csv
 import json
 import random
-import time
-import bisect
 import colour
 import colormath
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import re
+import matplotlib.pyplot as plt
 
 from scipy.sparse import diags
-from scipy.stats import norm
 from scipy.optimize import minimize
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000

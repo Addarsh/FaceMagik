@@ -2,10 +2,15 @@
 ###################
 __pycache__/
 .ipynb_checkpoints/
+.idea/
+env/
+model/
+tensorflow/
 
 # Weird file extensions #
 ###################
 *.DS_Store
+.Python
 
 # Server data #
 ###################

@@ -62,7 +62,7 @@ by given factor of brightness and saturation before processing.
 """
 
 
-def analyze(imagePath=None, bri=1.0, sat=1.0):
+def analyze(bri=1.0, sat=1.0):
     startTime = time.time()
 
     # Detect face and show class.
@@ -167,4 +167,4 @@ if __name__ == "__main__":
     if args.sat is not None:
         sat = float(args.sat)
 
-    analyze(args.image, bri, sat)
+    analyze(bri, sat)

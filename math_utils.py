@@ -9,8 +9,7 @@ import cv2
 
 from numpy.linalg import inv, eig
 from lmfit import minimize, Parameters
-from image_utils import ImageUtils
-from scipy.interpolate import make_lsq_spline, interp1d
+from scipy.interpolate import make_lsq_spline
 
 class MathUtils:
   """
