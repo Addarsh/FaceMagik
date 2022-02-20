@@ -97,11 +97,66 @@ def plot_colors(image, mask_list, total_points):
 
 
 """
+Break given mask into smaller clusters for given YCrCb image. The Y value (brightness) of the image is used to
+perform Kmeans clustering to separate the mask into clusters. Additionally, these clusters are further combined into 
+a effective color map and returned along with the clusters.
+"""
+
+
+def make_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray) \
+        -> [int, dict]:
+    start_time = time.time()
+    diff_img = (ycrcb_image[:, :, 0]).astype(float)
+    curr_mask = mask_to_process.copy()
+    total_points = np.count_nonzero(mask_to_process)
+
+    all_cluster_masks = []
+    effective_color_map = {}
+
+    # Divide the image into smaller clusters.
+    while True:
+        # Find the brightest cluster.
+        b_mask = brightest_cluster(diff_img, curr_mask, total_points, tol=skin_config.KMEANS_TOLERANCE,
+                                   cutoff_percent=skin_config.KMEANS_MASK_PERCENT_CUTOFF)
+        # Find the least saturated cluster of the brightest cluster. This provides more fine-grained clusters
+        # but is also more expensive. Comment it out if you want to plot "color of each cluster versus
+        # the associated Munsell hue" to iterate/improve effective color mapping.
+        # b_mask = brightest_cluster(255.0 -(ImageUtils.to_hsv(ycrcb_image)[:, :, 1]).astype(np.float), b_mask,
+        #                          np.count_nonzero(b_mask), tol=skin_config.KMEANS_TOLERANCE,
+        #                           cutoff_percent=skin_config.KMEANS_MASK_PERCENT_CUTOFF)
+
+        munsell_color = ImageUtils.sRGBtoMunsell(np.mean(ycrcb_image[b_mask], axis=0))
+        effective_color = Face.effective_color(munsell_color)
+        if effective_color not in effective_color_map:
+            effective_color_map[effective_color] = b_mask
+        else:
+            effective_color_map[effective_color] = np.bitwise_or(effective_color_map[effective_color], b_mask)
+
+        # Store this mask for different computations.
+        all_cluster_masks.append(b_mask)
+
+        if skin_config.DEBUG_MODE:
+            print("effective color: ", effective_color, " brightness: ", round(np.mean(ycrcb_image[:, :, 0][b_mask]),
+                                                                               2), "\n")
+            # f.show(ImageUtils.plot_points_and_mask(ycrcb_image, [f.noseMiddlePoint], bMask))
+
+        curr_mask = np.bitwise_xor(curr_mask, b_mask)
+        if ImageUtils.percentPoints(curr_mask, total_points) < 1:
+            break
+
+    print("\nClustering latency: ", time.time() - start_time, " seconds\n")
+
+    return all_cluster_masks, effective_color_map
+
+
+"""
 Constructs a MaskRCNN model and returns it.
 """
 
 
 def construct_model():
+    start_time = time.time()
+
     # Create model
     model = model_lib.MaskRCNN(mode="inference", config=InferenceConfig(), model_dir="")
 
@@ -114,6 +169,7 @@ def construct_model():
     print("Loading weights from: ", weights_path)
     model.load_weights(weights_path, by_name=True)
 
+    print("\nModel construction time: ", time.time() - start_time, " seconds\n")
     return model
 
 
@@ -125,15 +181,13 @@ by given factor of brightness and saturation before processing.
 
 def analyze(skin_config: object):
     # Load Mask RCNN model.
-    start_time = time.time()
     maskrcnn_model = construct_model()
-    print("\nModel construction time: ", time.time() - start_time, " seconds\n")
 
     # Detect face.
-    f: Face = None
     if skin_config.IMAGE_PATH != "":
         f = Face(image_path=skin_config.IMAGE_PATH, maskrcnn_model=maskrcnn_model)
-        #f = Face(image=ImageUtils.read_rgb_image(skin_config.IMAGE_PATH), maskrcnn_model=maskrcnn_model)
+    else:
+        f = Face(image=skin_config.IMAGE, maskrcnn_model=maskrcnn_model)
 
     if skin_config.BRIGHTNESS_UPDATE_FACTOR != 1.0 or skin_config.SATURATION_UPDATE_FACTOR != 1.0:
         new_img = ImageUtils.set_brightness(f.image, skin_config.BRIGHTNESS_UPDATE_FACTOR)
@@ -148,52 +202,16 @@ def analyze(skin_config: object):
     # mask_to_process = f.get_face_until_nose_end()
     # mask_to_process = f.get_face_mask_without_area_around_eyes()
     mask_to_process = f.get_face_until_nose_end_without_area_around_eyes()
-
-    curr_mask = mask_to_process.copy()
     total_points = np.count_nonzero(mask_to_process)
-
-    effective_color_map = {}
-    all_cluster_masks = []
-    mask_directions_list = []
-    mask_percent_list = []
-
     ycrcb_image = ImageUtils.to_YCrCb(f.image)
-    diff = (ycrcb_image[:, :, 0]).astype(float)
 
-    # Divide the image into smaller clusters.
-    start_time = time.time()
-    while True:
-        # Find the brightest cluster.
-        b_mask = brightest_cluster(diff, curr_mask, total_points, tol=skin_config.KMEANS_TOLERANCE,
-                                   cutoff_percent=skin_config.KMEANS_MASK_PERCENT_CUTOFF)
-        # Find the least saturated cluster of the brightest cluster. This provides more fine-grained clusters
-        # but is also more expensive. Comment it out if you want to plot "color of each cluster versus
-        # the associated Munsell hue" to iterate/improve effective color mapping.
-        # b_mask = brightest_cluster(255.0 -(ImageUtils.to_hsv(ycrcb_image)[:, :, 1]).astype(np.float), b_mask,
-        #                          np.count_nonzero(b_mask), tol=tol, cutoffPercent=cutoff_percent)
+    # Make clusters.
+    all_cluster_masks, effective_color_map = make_clusters(ycrcb_image, mask_to_process)
 
-        munsell_color = ImageUtils.sRGBtoMunsell(np.mean(ycrcb_image[b_mask], axis=0))
-        effective_color = f.effective_color(munsell_color)
-        if effective_color not in effective_color_map:
-            effective_color_map[effective_color] = b_mask
-        else:
-            effective_color_map[effective_color] = np.bitwise_or(effective_color_map[effective_color], b_mask)
-
-        # Store this mask for different computations.
-        all_cluster_masks.append(b_mask)
-        mask_directions_list.append(f.get_mask_direction(b_mask, show_debug_info=skin_config.DEBUG_MODE))
-        mask_percent_list.append(ImageUtils.percentPoints(b_mask, total_points))
-
-        if skin_config.DEBUG_MODE:
-            print("effective color: ", effective_color, " brightness: ", round(np.mean(ycrcb_image[:, :, 0][b_mask]),
-                                                                               2), "\n")
-            # f.show(ImageUtils.plot_points_and_mask(ycrcb_image, [f.noseMiddlePoint], bMask))
-
-        curr_mask = np.bitwise_xor(curr_mask, b_mask)
-        if ImageUtils.percentPoints(curr_mask, total_points) < 1:
-            break
-
-    print("\nClustering latency: ", time.time() - start_time, " seconds\n")
+    # Get light direction from face mask clusters.
+    mask_directions_list = [f.get_mask_direction(b_mask, show_debug_info=skin_config.DEBUG_MODE) for b_mask in
+                            all_cluster_masks]
+    mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
 
     final_light_direction = Face.process_mask_directions(mask_directions_list, mask_percent_list)
     print("\nFinal Light Direction: ", final_light_direction)
@@ -201,17 +219,14 @@ def analyze(skin_config: object):
     if skin_config.DEBUG_MODE:
         plot_colors(ycrcb_image, all_cluster_masks, total_points)
 
-    start_time = time.time()
-    effective_color_map = f.iterate_effectiveColorMap(effective_color_map, all_cluster_masks)
-    print("\ncolor map iteration time: ", time.time() - start_time, " seconds\n")
+    # Iterate to optimize final clusters.
+    effective_color_map = f.iterate_effective_color_map(effective_color_map, all_cluster_masks)
 
     if skin_config.DEBUG_MODE:
         f.print_effective_color_map(effective_color_map, total_points)
 
     if skin_config.COMBINE_MASKS:
-        start_time = time.time()
         combined_masks = f.combine_masks_close_to_each_other(effective_color_map)
-        print ("\n combining masks time: ", time.time() - start_time, " seconds\n")
 
         if skin_config.DEBUG_MODE:
             print("\nCombined masks")
@@ -234,7 +249,7 @@ if __name__ == "__main__":
     skin_config = SkinDetectionConfig()
     skin_config.IMAGE_PATH = args.image
     skin_config.COMBINE_MASKS = True
-    skin_config.DEBUG_MODE = False
+    skin_config.DEBUG_MODE = True
 
     if args.bri is not None:
         skin_config.BRIGHTNESS_UPDATE_FACTOR = float(args.bri)

@@ -1180,7 +1180,7 @@ class Face:
         # from the final result that are less than 5% in size.
         combined_mask_direction_list = []
         percent_per_direction: dict[MaskDirection, ] = {}
-        min_percent = 5
+        min_percent = 3
         direction = mask_directions_list[0]
         total_percent = 0
         for i in range(1, len(mask_directions_list)):
@@ -1328,163 +1328,171 @@ class Face:
     compared with the cluster's color to determine it's new cluster (based on smallest delta_cie).
     """
 
-    def iterate_effectiveColorMap(self, effectiveColorMap, allClusterMasks):
-        ycrcbImage = ImageUtils.to_YCrCb(self.image)
-        resultColorMap = effectiveColorMap.copy()
+    def iterate_effective_color_map(self, effective_color_map: dict, all_cluster_masks: list):
+        start_time = time.time()
+        ycrcb_image = ImageUtils.to_YCrCb(self.image)
+        result_color_map = effective_color_map.copy()
         for i in range(5):
-            tempColorMap = {}
-            for m in allClusterMasks:
+            temp_color_map = {}
+            for m in all_cluster_masks:
                 min_dte = 1000.0
                 best_hue = ""
-                for mHue in resultColorMap:
-                    cbMask = resultColorMap[mHue]
-                    dte = ImageUtils.delta_cie2000(np.mean(ycrcbImage[cbMask], axis=0), np.mean(ycrcbImage[m], axis=0))
+                for mHue in result_color_map:
+                    cb_mask = result_color_map[mHue]
+                    dte = ImageUtils.delta_cie2000(np.mean(ycrcb_image[cb_mask], axis=0), np.mean(ycrcb_image[m],
+                                                                                                  axis=0))
                     if dte < min_dte:
                         min_dte = dte
                         best_hue = mHue
 
-                if best_hue not in tempColorMap:
-                    tempColorMap[best_hue] = m
+                if best_hue not in temp_color_map:
+                    temp_color_map[best_hue] = m
                 else:
-                    tempColorMap[best_hue] = np.bitwise_or(tempColorMap[best_hue], m)
-            resultColorMap = tempColorMap.copy()
-        return resultColorMap
+                    temp_color_map[best_hue] = np.bitwise_or(temp_color_map[best_hue], m)
+            result_color_map = temp_color_map.copy()
+
+        print("\ncolor map iteration time: ", time.time() - start_time, " seconds\n")
+        return result_color_map
 
     """
     Combine masks that are close to each other and may have delta_cie small enough that they can be merged in a 
     single cluster. Returns the new list of masks.
     """
 
-    def combine_masks_close_to_each_other(self, effectiveColorMap):
-        stillRem = True
-        tempCloseMasks = sorted([effectiveColorMap[e] for e in effectiveColorMap],
-                                key=lambda m: 255.0 - np.mean(self.to_brightImage(self.image)[m], axis=0)[2])
-        ycrcbImage = ImageUtils.to_YCrCb(self.image)
-        while stillRem:
-            stillRem = False
-            for i in range(1, len(tempCloseMasks)):
-                prev_delta_cie = ImageUtils.delta_cie2000(np.mean(ycrcbImage[tempCloseMasks[i]], axis=0),
-                                                          np.mean(ycrcbImage[tempCloseMasks[i - 1]], axis=0))
-                next_delta_cie = 100 if i == len(tempCloseMasks) - 1 else ImageUtils.delta_cie2000(
-                    np.mean(ycrcbImage[tempCloseMasks[i]], axis=0), np.mean(ycrcbImage[tempCloseMasks[i + 1]], axis=0))
+    def combine_masks_close_to_each_other(self, effective_color_map):
+        start_time = time.time()
+        still_rem = True
+        temp_close_masks = sorted([effective_color_map[e] for e in effective_color_map],
+                                  key=lambda m: 255.0 - np.mean(self.to_brightImage(self.image)[m], axis=0)[2])
+        ycrcb_image = ImageUtils.to_YCrCb(self.image)
+        while still_rem:
+            still_rem = False
+            for i in range(1, len(temp_close_masks)):
+                prev_delta_cie = ImageUtils.delta_cie2000(np.mean(ycrcb_image[temp_close_masks[i]], axis=0),
+                                                          np.mean(ycrcb_image[temp_close_masks[i - 1]], axis=0))
+                next_delta_cie = 100 if i == len(temp_close_masks) - 1 else ImageUtils.delta_cie2000(
+                    np.mean(ycrcb_image[temp_close_masks[i]], axis=0), np.mean(ycrcb_image[temp_close_masks[i + 1]],
+                                                                               axis=0))
                 if prev_delta_cie >= 5 or next_delta_cie < prev_delta_cie:
                     # Check merge in the next index.
                     continue
 
                 # Merge with previous mask.
-                nowMasks = []
+                now_masks = []
                 for j in range(i - 1):
-                    nowMasks.append(tempCloseMasks[j])
-                nowMasks.append(np.bitwise_or(tempCloseMasks[i - 1], tempCloseMasks[i]))
-                for j in range(i + 1, len(tempCloseMasks)):
-                    nowMasks.append(tempCloseMasks[j])
-                tempCloseMasks = nowMasks.copy()
-                stillRem = True
+                    now_masks.append(temp_close_masks[j])
+                now_masks.append(np.bitwise_or(temp_close_masks[i - 1], temp_close_masks[i]))
+                for j in range(i + 1, len(temp_close_masks)):
+                    now_masks.append(temp_close_masks[j])
+                temp_close_masks = now_masks.copy()
+                still_rem = True
                 break
 
-        return tempCloseMasks
+        print("\n combining masks time: ", time.time() - start_time, " seconds\n")
+        return temp_close_masks
 
     """
-    The mapping from munsell Hue to known color is a hueristic obtained by viewing many images and determining which 
-    munsell hues cluster together into a known color like "Orange" or "LightGreen". These clustered colors are then 
-    used to ascertain image brightness. This kind of clustering can only work if the munsell hue determines the final
+    The mapping from Munsell Hue to known color is a hueristic obtained by viewing many images and determining which 
+    Munsell hues cluster together into a known color like "Orange" or "LightGreen". These clustered colors are then 
+    used to ascertain image brightness. This kind of clustering can only work if the Munsell hue determines the final
     color of the pixel to a large extent. It is also likely that there can be better mapping to cluster colors.
     """
 
-    def effective_color(self, munsellColor):
-        pinkRed = "PinkRed"
+    @staticmethod
+    def effective_color(munsell_color: str):
+        pink_red = "PinkRed"
         maroon = "Maroon"
         orange = "Orange"
-        orangeYellow = "OrangeYellow"
-        yellowGreen = "YellowishGreen"
-        middleGreen = "MiddleGreen"
-        greenYellow = "GreenishYellow"
-        lightGreen = "LightGreen"
+        orange_yellow = "OrangeYellow"
+        yellow_green = "YellowishGreen"
+        middle_green = "MiddleGreen"
+        green_yellow = "GreenishYellow"
+        light_green = "LightGreen"
         green = "Green"
-        blueGreen = "BluishGreen"
-        greenBlue = "GreenishBlue"
+        blue_green = "BluishGreen"
+        green_blue = "GreenishBlue"
         blue = "Blue"
         none = "None"
 
-        if munsellColor == none:
+        if munsell_color == none:
             return none
 
-        munsellHue = munsellColor.split(" ")[0]
-        hueLetter = ImageUtils.munsell_hue_letter(munsellHue)
-        hueNumber = ImageUtils.munsell_hue_number(munsellHue)
+        munsell_hue = munsell_color.split(" ")[0]
+        hue_letter = ImageUtils.munsell_hue_letter(munsell_hue)
+        hue_number = ImageUtils.munsell_hue_number(munsell_hue)
 
         delta = 0.5
 
-        if hueLetter == "R":
-            if hueNumber < 7.5 - delta:
-                return pinkRed
+        if hue_letter == "R":
+            if hue_number < 7.5 - delta:
+                return pink_red
             return maroon
-        elif hueLetter == "YR":
-            if hueNumber < 2.5 - delta:
+        elif hue_letter == "YR":
+            if hue_number < 2.5 - delta:
                 return maroon
-            elif hueNumber < 9 - delta:
+            elif hue_number < 9 - delta:
                 return orange
-            return orangeYellow
-        elif hueLetter == "Y":
-            if hueNumber < 2.5 - delta:
-                return orangeYellow
+            return orange_yellow
+        elif hue_letter == "Y":
+            if hue_number < 2.5 - delta:
+                return orange_yellow
             # if hueNumber < 3 - delta:
             #  return orangeYellow
-            elif hueNumber < 7.5 - delta:
-                return yellowGreen
-            return middleGreen
+            elif hue_number < 7.5 - delta:
+                return yellow_green
+            return middle_green
             # if hueNumber < 5 - delta:
             #  return orangeYellow
-            return yellowGreen
-        elif hueLetter == "GY":
-            if hueNumber < 2.5 - delta:
-                return middleGreen
-                return yellowGreen
-            elif hueNumber < 7.5 - delta:
-                return greenYellow
-            return lightGreen
-        elif hueLetter == "G":
-            if hueNumber < 2 - delta:
-                return lightGreen
-            elif hueNumber < 4.5 - delta:
+            return yellow_green
+        elif hue_letter == "GY":
+            if hue_number < 2.5 - delta:
+                return middle_green
+                return yellow_green
+            elif hue_number < 7.5 - delta:
+                return green_yellow
+            return light_green
+        elif hue_letter == "G":
+            if hue_number < 2 - delta:
+                return light_green
+            elif hue_number < 4.5 - delta:
                 return green
-            elif hueNumber < 9 - delta:
-                return greenBlue
-            return blueGreen
-        elif hueLetter == "BG":
-            if hueNumber < 2.5 - delta:
-                return blueGreen
+            elif hue_number < 9 - delta:
+                return green_blue
+            return blue_green
+        elif hue_letter == "BG":
+            if hue_number < 2.5 - delta:
+                return blue_green
             return blue
 
         # Old mapping. Deprecated.
-        if hueLetter == "R":
-            if hueNumber < 7.5 - delta:
-                return pinkRed
+        if hue_letter == "R":
+            if hue_number < 7.5 - delta:
+                return pink_red
             return maroon
-        elif hueLetter == "YR":
-            if hueNumber < 2.5 - delta:
+        elif hue_letter == "YR":
+            if hue_number < 2.5 - delta:
                 return maroon
             return orange
-        elif hueLetter == "Y":
-            if hueNumber < 7.5 - delta:
-                return orangeYellow
-            return yellowGreen
-        elif hueLetter == "GY":
-            if hueNumber < 2.5 - delta:
-                return yellowGreen
-            elif hueNumber < 7.5 - delta:
-                return greenYellow
-            return lightGreen
-        elif hueLetter == "G":
-            if hueNumber < 2 - delta:
-                return lightGreen
-            elif hueNumber < 4.5 - delta:
+        elif hue_letter == "Y":
+            if hue_number < 7.5 - delta:
+                return orange_yellow
+            return yellow_green
+        elif hue_letter == "GY":
+            if hue_number < 2.5 - delta:
+                return yellow_green
+            elif hue_number < 7.5 - delta:
+                return green_yellow
+            return light_green
+        elif hue_letter == "G":
+            if hue_number < 2 - delta:
+                return light_green
+            elif hue_number < 4.5 - delta:
                 return green
-            elif hueNumber < 9 - delta:
-                return greenBlue
-            return blueGreen
-        elif hueLetter == "BG":
-            return blueGreen
+            elif hue_number < 9 - delta:
+                return green_blue
+            return blue_green
+        elif hue_letter == "BG":
+            return blue_green
 
     """
     good_face_points returns a mask containing points that are usually good to sample for skin tone. It excludes 
