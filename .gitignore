@@ -4,7 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 .idea/
 env/
-model/
+maskrcnn_model/
 tensorflow/
 
 # Weird file extensions #

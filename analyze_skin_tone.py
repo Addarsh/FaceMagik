@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import time
 
 from face import Face
+from common import InferenceConfig
+from mrcnn import model as model_lib
 
 """
 Repeatedly divides mask into clusters using kmeans until difference between
@@ -49,12 +51,31 @@ def plot_color(image, mask_list, total_points):
     plt.show(block=False)
 
     ax.bar(x=x, height=percent_list, color=color_list, align="edge")
-    # ax.set_xticklabels(x, fontsize=8)
     # Set Munsell color values on top of value.
     for i in range(len(x)):
         plt.text(i, percent_list[i], munsell_color_list[i])
     plt.show(block=False)
 
+
+"""
+construct_model constructs a MaskRCNN model and returns it.
+"""
+
+
+def construct_model():
+    # Create model
+    model = model_lib.MaskRCNN(mode="inference", config=InferenceConfig(),
+                              model_dir="")
+    # Select weights file to load
+    try:
+        weights_path = os.path.join(os.getcwd(), "maskrcnn_model/mask_rcnn_face_0060.h5")
+    except Exception as e:
+        raise
+
+    print("Loading weights from: ", weights_path)
+    model.load_weights(weights_path, by_name=True)
+
+    return model
 
 """
 analyze will process image with the given path. It will augment the image
@@ -63,12 +84,14 @@ by given factor of brightness and saturation before processing.
 
 
 def analyze(bri=1.0, sat=1.0):
-    startTime = time.time()
+    # Load Mask RCNN model.
+    start_time = time.time()
+    maskrcnn_model = construct_model()
+    print("\nModel construction time: ", time.time() - start_time, " seconds\n")
 
-    # Detect face and show class.
-    f = Face(args.image, hdf5FileName=os.path.splitext(os.path.split(args.image)[1])[0] + ".hdf5")
-
-    print("detection time: ", time.time() - startTime)
+    # Detect face.
+    #f = Face(image_path=args.image, maskrcnn_model=maskrcnn_model)
+    f = Face(image=ImageUtils.read_rgb_image(args.image), maskrcnn_model=maskrcnn_model)
 
     f.windowName = "image"
 
@@ -81,14 +104,8 @@ def analyze(bri=1.0, sat=1.0):
 
     # maskToProcess = f.get_face_keypoints()
     # maskToProcess = f.get_face_until_nose_end()
-    # maskToProcess = f.get_face_mask()
     # maskToProcess = f.get_face_mask_without_area_around_eyes()
     maskToProcess = f.get_face_until_nose_end_without_area_around_eyes()
-    # maskToProcess = f.get_forehead_points()
-    # maskToProcess = f.get_left_cheek_keypoints()
-    # maskToProcess = f.get_mouth_points()
-    # maskToProcess = f.get_right_cheek_keypoints()
-    # maskToProcess = f.get_nose_keypoints()
 
     tol = 2
     cutoff_percent = 2
@@ -106,8 +123,9 @@ def analyze(bri=1.0, sat=1.0):
     diff = (ycrcb_image[:, :, 0]).astype(float)
 
     # Divide the image into smaller clusters.
+    start_time = time.time()
     while True:
-        # Find brightest cluster.
+        # Find the brightest cluster.
         b_mask = brightest_cluster(diff, curr_mask, total_points, tol=tol, cutoff_percent=cutoff_percent)
         # Find the least saturated cluster of the brightest cluster. This provides more fine-grained clusters
         # but is also more expensive. Comment it out if you want to plot "color of each cluster versus
@@ -135,11 +153,16 @@ def analyze(bri=1.0, sat=1.0):
         if ImageUtils.percentPoints(curr_mask, total_points) < 1:
             break
 
-    print("\n Light Direction: ", f.process_mask_directions(mask_directions_list, mask_percent_list))
+    print("\nClustering latency: ", time.time() - start_time, " seconds\n")
+
+    final_light_direction = f.process_mask_directions(mask_directions_list, mask_percent_list)
+    print("\nFinal Light Direction: ", final_light_direction)
 
     plot_color(ycrcb_image, all_cluster_masks, total_points)
 
+    start_time = time.time()
     effective_color_map = f.iterate_effectiveColorMap(effective_color_map, all_cluster_masks)
+    print("\ncolor map iteration time: ", time.time() - start_time, " seconds\n")
     f.print_effectiveColorMap(effective_color_map, total_points)
 
     combined_masks = f.combine_masks_close_to_each_other(effective_color_map)
