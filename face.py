@@ -79,7 +79,7 @@ class Face:
         if image is None:
             self.preds = self.detect_face(image_path, maskrcnn_model)
         else:
-            print ("MAKE PREDICTIONS")
+            print("MAKE PREDICTIONS")
             self.preds = self.make_predictions(maskrcnn_model)
 
         self.faceMask = self.get_face_mask()
@@ -102,7 +102,10 @@ class Face:
             # Constants array from Ramamoorthi's paper.
             self.c = np.array([0.429043, 0.511664, 0.743125, 0.886227, 0.247708])
 
-        self.windowName = image_path
+        if image_path != "":
+            self.windowName = image_path
+        else:
+            self.windowName = "image"
 
     """
     show_gray will show grayscale of RGB image.
@@ -215,7 +218,7 @@ class Face:
     dictionary.
     """
 
-    def detect_face(self, image_path, maskrcnn_model):
+    def detect_face(self, image_path: str, maskrcnn_model) -> list:
         face_mask_dir_path, image_name = os.path.split(image_path)
         hdf5_file_name = os.path.splitext(image_name)[0] + ".hdf5"
         hdf5_full_path = os.path.join(face_mask_dir_path, hdf5_file_name)
@@ -247,9 +250,10 @@ class Face:
         return preds
 
     """
-    Makes preductions using given Mask RCNN model on image.
+    Makes predictions using given Mask RCNN model on image.
     """
-    def make_predictions(self, maskrcnn_model):
+
+    def make_predictions(self, maskrcnn_model) -> list:
         start_time = time.time()
         preds = maskrcnn_model.detect([self.image], verbose=1)[0]
         print("\nModel detection time: ", time.time() - start_time, " seconds\n")
@@ -322,7 +326,7 @@ class Face:
             axis=(0, 1)) / np.count_nonzero(surrMask)
 
         fun = lambda k: ((domVals - surrVals) - k * (domBetaVals - surrBetaVals)) @ (
-                    (domVals - surrVals) - k * (domBetaVals - surrBetaVals))
+                (domVals - surrVals) - k * (domBetaVals - surrBetaVals))
         res = minimize(fun, [0.6], method="SLSQP")
         return res.x
 
@@ -618,10 +622,10 @@ class Face:
             flipZ = True
             flipY = True
             flipX = True if ((self.cntXpos >= self.cntXneg and L[3] < 0) or (
-                        self.cntXpos < self.cntXneg and L[3] >= 0)) else False
+                    self.cntXpos < self.cntXneg and L[3] >= 0)) else False
         else:
             flipZ = True if ((self.cntZpos >= self.cntZneg and L[2] < 0) or (
-                        self.cntZpos < self.cntZneg and L[2] >= 0)) else False
+                    self.cntZpos < self.cntZneg and L[2] >= 0)) else False
             flipZ = True
             flipY = True
             flipX = True
@@ -936,7 +940,7 @@ class Face:
 
         leftEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] <= self.bbox(eyeMasks[1])[1] else eyeMasks[1]
         leftEyebrowMask = eyebrowMasks[0] if self.bbox(eyebrowMasks[0])[1] <= self.bbox(eyebrowMasks[1])[1] else \
-        eyebrowMasks[1]
+            eyebrowMasks[1]
 
         eyeRowMin, eyeColMin, eyeWidth, eyeHeight = self.bbox(leftEyeMask)
         eyebrowRowMin, eyebrowColMin, eyebrowWidth, eyebrowHeight = self.bbox(leftEyebrowMask)
@@ -963,7 +967,7 @@ class Face:
 
         rightEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] >= self.bbox(eyeMasks[1])[1] else eyeMasks[1]
         rightEyebrowMask = eyebrowMasks[0] if self.bbox(eyebrowMasks[0])[1] >= self.bbox(eyebrowMasks[1])[1] else \
-        eyebrowMasks[1]
+            eyebrowMasks[1]
 
         eyeRowMin, eyeColMin, eyeWidth, eyeHeight = self.bbox(rightEyeMask)
         eyebrowRowMin, eyebrowColMin, eyebrowWidth, eyebrowHeight = self.bbox(rightEyebrowMask)
@@ -1060,146 +1064,150 @@ class Face:
 
     """
     Returns mask direction by calculating the number of points to the left and right of the nose center of the given 
-    mask. The calculation uses a coordinate system whose X axis is parallel to the line segement between the eyes.
+    mask. The calculation uses a coordinate system whose X axis is parallel to the line segment between the eyes.
     """
 
-    def get_mask_direction(self, mask):
-        maskCoordinates = np.argwhere(mask)
-        relPointsArr = maskCoordinates - self.noseMiddlePoint
-        relPointsArr = (self.rotMatrix @ relPointsArr.T).T
+    def get_mask_direction(self, mask: np.ndarray, show_debug_info: bool) -> MaskDirection:
+        mask_coordinates = np.argwhere(mask)
+        rel_points_arr = mask_coordinates - self.noseMiddlePoint
+        rel_points_arr = (self.rotMatrix @ rel_points_arr.T).T
 
-        numPointsToLeft = np.count_nonzero(relPointsArr[:, 1] < 0)
-        numPointsToRight = np.count_nonzero(relPointsArr[:, 1] > 0)
-        numPointsInCenter = np.count_nonzero(relPointsArr[:, 1] == 0)
-        if numPointsToLeft <= numPointsToRight:
-            numPointsToLeft += numPointsInCenter
+        num_points_to_left = np.count_nonzero(rel_points_arr[:, 1] < 0)
+        num_points_to_right = np.count_nonzero(rel_points_arr[:, 1] > 0)
+        num_points_in_center = np.count_nonzero(rel_points_arr[:, 1] == 0)
+        if num_points_to_left <= num_points_to_right:
+            num_points_to_left += num_points_in_center
         else:
-            numPointsToRight += numPointsInCenter
+            num_points_to_right += num_points_in_center
 
         RATIO_MAX_VALUE = 100000
 
-        rightToLeftPointsRatio = RATIO_MAX_VALUE if numPointsToLeft == 0 else float(numPointsToRight) / float(
-            numPointsToLeft)
-        leftToRightPointsRatio = RATIO_MAX_VALUE if numPointsToRight == 0 else float(numPointsToLeft) / float(
-            numPointsToRight)
+        right_to_left_points_ratio = RATIO_MAX_VALUE if num_points_to_left == 0 else float(num_points_to_right) / float(
+            num_points_to_left)
+        left_to_right_points_ratio = RATIO_MAX_VALUE if num_points_to_right == 0 else float(num_points_to_left) / float(
+            num_points_to_right)
 
         md = MaskDirection.CENTER
-        if leftToRightPointsRatio >= 3:
+        if left_to_right_points_ratio >= 3:
             md = MaskDirection.LEFT
-        elif rightToLeftPointsRatio >= 3:
+        elif right_to_left_points_ratio >= 3:
             md = MaskDirection.RIGHT
-        print("Mask direction: ", md, " toLeftRatio: ", round(leftToRightPointsRatio, 2), " toRightRatio: ",
-              round(rightToLeftPointsRatio, 2))
+
+        if show_debug_info:
+            print("Mask direction: ", md, " toLeftRatio: ", round(left_to_right_points_ratio, 2), " toRightRatio: ",
+                  round(right_to_left_points_ratio, 2))
         return md
 
     """
-    Returns the light direction for the given mask directions and count percentage per mask direction.
+    Class encapsulating face mask results and other aspects of input image.
     """
 
-    def get_light_direction(self, maskDirectionList, percentPerDirection):
+    @staticmethod
+    def get_light_direction(mask_direction_list: list, percent_per_direction) -> LightDirection:
 
         # From the mask results, find the light direction.
         # The algorithm determines direction of the light based on percentPerDirection
         # and order of mask directions in the maskDirectionList.
-        startDirection = maskDirectionList[0]
-        endDirection = MaskDirection.CENTER
-        if startDirection == MaskDirection.LEFT and MaskDirection.RIGHT in percentPerDirection:
-            endDirection = MaskDirection.RIGHT
-        elif startDirection == MaskDirection.RIGHT and MaskDirection.LEFT in percentPerDirection:
-            endDirection = MaskDirection.LEFT
-        elif startDirection == MaskDirection.CENTER:
-            # Find the first non CENTER direction while iterating from the end.
-            endDirection = MaskDirection.CENTER
-            for i in range(len(maskDirectionList) - 1, -1, -1):
-                dir = maskDirectionList[i]
-                if dir != MaskDirection.CENTER:
-                    endDirection = dir
+        start_direction = mask_direction_list[0]
+        end_direction = MaskDirection.CENTER
+        if start_direction == MaskDirection.LEFT and MaskDirection.RIGHT in percent_per_direction:
+            end_direction = MaskDirection.RIGHT
+        elif start_direction == MaskDirection.RIGHT and MaskDirection.LEFT in percent_per_direction:
+            end_direction = MaskDirection.LEFT
+        elif start_direction == MaskDirection.CENTER:
+            # Find the first non-CENTER direction while iterating from the end.
+            end_direction = MaskDirection.CENTER
+            for i in range(len(mask_direction_list) - 1, -1, -1):
+                direction = mask_direction_list[i]
+                if direction != MaskDirection.CENTER:
+                    end_direction = direction
                     break
 
-        print("star direction: ", startDirection)
-        print("end direction: ", endDirection)
-        leftPercent = 0 if MaskDirection.LEFT not in percentPerDirection else percentPerDirection[MaskDirection.LEFT]
-        centerPercent = 0 if MaskDirection.CENTER not in percentPerDirection else percentPerDirection[
+        print("star direction: ", start_direction)
+        print("end direction: ", end_direction)
+        left_percent = 0 if MaskDirection.LEFT not in percent_per_direction else percent_per_direction[
+            MaskDirection.LEFT]
+        center_percent = 0 if MaskDirection.CENTER not in percent_per_direction else percent_per_direction[
             MaskDirection.CENTER]
-        rightPercent = 0 if MaskDirection.RIGHT not in percentPerDirection else percentPerDirection[MaskDirection.RIGHT]
+        right_percent = 0 if MaskDirection.RIGHT not in percent_per_direction else percent_per_direction[
+            MaskDirection.RIGHT]
 
-        maxPercent = max(leftPercent, centerPercent, rightPercent)
-        if maxPercent == centerPercent:
+        max_percent = max(left_percent, center_percent, right_percent)
+        if max_percent == center_percent:
             # Light is predominantly in the direction or behind the person.
-            if startDirection == MaskDirection.CENTER:
-                if endDirection == MaskDirection.CENTER:
+            if start_direction == MaskDirection.CENTER:
+                if end_direction == MaskDirection.CENTER:
                     return LightDirection.CENTER
-                return LightDirection.CENTER_LEFT if endDirection == MaskDirection.LEFT else LightDirection.CENTER_RIGHT
+                return LightDirection.CENTER_LEFT if end_direction == MaskDirection.LEFT else \
+                    LightDirection.CENTER_RIGHT
 
-            if startDirection == MaskDirection.LEFT:
-                if endDirection == MaskDirection.CENTER:
+            if start_direction == MaskDirection.LEFT:
+                if end_direction == MaskDirection.CENTER:
                     return LightDirection.LEFT_CENTER
 
-                if maxPercent >= 50:
+                if max_percent >= 50:
                     return LightDirection.LEFT_CENTER_RIGHT
 
                 return LightDirection.LEFT_TO_RIGHT
 
             # Start direction is right.
-            if endDirection == MaskDirection.CENTER:
+            if end_direction == MaskDirection.CENTER:
                 return LightDirection.RIGHT_CENTER
 
-            if maxPercent >= 50:
+            if max_percent >= 50:
                 return LightDirection.RIGHT_CENTER_LEFT
 
             return LightDirection.RIGHT_TO_LEFT
 
-        if startDirection == MaskDirection.LEFT:
-            return LightDirection.LEFT_CENTER if endDirection == MaskDirection.CENTER else LightDirection.LEFT_TO_RIGHT
+        if start_direction == MaskDirection.LEFT:
+            return LightDirection.LEFT_CENTER if end_direction == MaskDirection.CENTER else LightDirection.LEFT_TO_RIGHT
 
-        return LightDirection.RIGHT_CENTER if endDirection == MaskDirection.CENTER else LightDirection.RIGHT_TO_LEFT
+        return LightDirection.RIGHT_CENTER if end_direction == MaskDirection.CENTER else LightDirection.RIGHT_TO_LEFT
 
     """
     Processes sorted list of mask directions and maskPercentList and returns the light direction. maskPercentList is 
     the list of percent count of each mask in the maskDirectionsList. Both elements should be in the same order.
     """
 
-    def process_mask_directions(self, maskDirectionsList, maskPercentList):
-        assert len(maskDirectionsList) > 0, "Mask directions list cannot be empty!"
-        assert len(maskPercentList) == len(
-            maskDirectionsList), "Mask Percent list and direction list should be the same length!"
+    @staticmethod
+    def process_mask_directions(mask_directions_list: list, mask_percent_list: list) -> LightDirection:
+        assert len(mask_directions_list) > 0, "Mask directions list cannot be empty!"
+        assert len(mask_percent_list) == len(
+            mask_directions_list), "Mask Percent list and direction list should be the same length!"
 
-        # Coaleasce consective masks in the same direction. Count the mask
+        # Coalesce consecutive masks in the same direction. Count the mask
         # percent for each direction and store in a map. Skip coalesced masks
         # from the final result that are less than 5% in size.
-        combinedMaskDirectionList = []
-        percentPerDirection = {}
-        minPercent = 5
-        direction = maskDirectionsList[0]
-        totalPercent = 0
-        for i in range(1, len(maskDirectionsList)):
-            if maskDirectionsList[i] == direction:
-                totalPercent += maskPercentList[i]
+        combined_mask_direction_list = []
+        percent_per_direction: dict[MaskDirection, ] = {}
+        min_percent = 5
+        direction = mask_directions_list[0]
+        total_percent = 0
+        for i in range(1, len(mask_directions_list)):
+            if mask_directions_list[i] == direction:
+                total_percent += mask_percent_list[i]
                 continue
 
-            if totalPercent >= minPercent:
-                combinedMaskDirectionList.append(direction)
-                if direction not in percentPerDirection:
-                    percentPerDirection[direction] = round(totalPercent)
+            if total_percent >= min_percent:
+                combined_mask_direction_list.append(direction)
+                if direction not in percent_per_direction:
+                    percent_per_direction[direction] = round(total_percent)
                 else:
-                    percentPerDirection[direction] += round(totalPercent)
+                    percent_per_direction[direction] += round(total_percent)
 
-            direction = maskDirectionsList[i]
-            totalPercent = maskPercentList[i]
+            direction = mask_directions_list[i]
+            total_percent = mask_percent_list[i]
 
-        if totalPercent >= minPercent:
-            combinedMaskDirectionList.append(direction)
-            if direction not in percentPerDirection:
-                percentPerDirection[direction] = round(totalPercent)
+        if total_percent >= min_percent:
+            combined_mask_direction_list.append(direction)
+            if direction not in percent_per_direction:
+                percent_per_direction[direction] = round(total_percent)
             else:
-                percentPerDirection[direction] += round(totalPercent)
+                percent_per_direction[direction] += round(total_percent)
 
-        print("percentPerDirection: ", percentPerDirection)
+        print("percentPerDirection: ", percent_per_direction)
 
-        lightDirection = self.get_light_direction(combinedMaskDirectionList, percentPerDirection)
-        self.lightDirection = lightDirection
-
-        return lightDirection
+        return Face.get_light_direction(combined_mask_direction_list, percent_per_direction)
 
     """
     get_left_forehead_points returns left half points on the forehead.
@@ -1287,33 +1295,33 @@ class Face:
         return mouthMask
 
     """
-    Prints the given effectiveColorMap for debugging.
+    Prints the given effective color map for debugging.
     """
 
-    def print_effectiveColorMap(self, effectiveColorMap, totalPoints):
+    def print_effective_color_map(self, effective_color_map, total_points):
         print("\nEffective Color Map: ")
-        ycrcbImage = ImageUtils.to_YCrCb(self.image)
-        prevMask = np.zeros(ycrcbImage.shape[:2], dtype=bool)
-        sortedEffectiveColorMap = sorted(effectiveColorMap, key=lambda h: 255.0 - np.mean(
-            self.to_brightImage(self.image)[effectiveColorMap[h]], axis=0)[2])
-        for mHue in sortedEffectiveColorMap:
-            combMask = effectiveColorMap[mHue]
-            prev_delta_cie = 0 if np.count_nonzero(prevMask) == 0 else ImageUtils.delta_cie2000(
-                np.mean(ycrcbImage[combMask], axis=0), np.mean(ycrcbImage[prevMask], axis=0))
+        ycrcb_image = ImageUtils.to_YCrCb(self.image)
+        prev_mask = np.zeros(ycrcb_image.shape[:2], dtype=bool)
+        sorted_effective_color_map = sorted(effective_color_map, key=lambda h: 255.0 - np.mean(
+            self.to_brightImage(self.image)[effective_color_map[h]], axis=0)[2])
+        for mHue in sorted_effective_color_map:
+            comb_mask = effective_color_map[mHue]
+            prev_delta_cie = 0 if np.count_nonzero(prev_mask) == 0 else ImageUtils.delta_cie2000(
+                np.mean(ycrcb_image[comb_mask], axis=0), np.mean(ycrcb_image[prev_mask], axis=0))
 
-            print("\npercent: ", ImageUtils.percentPoints(combMask, totalPoints), "munsell hue: ", mHue,
-                  " musell sat: ",
-                  round(np.mean(self.to_satImage(ycrcbImage)[combMask], axis=0)[1] * (100.0 / 255.0), 2),
-                  " brightness: ", round(np.mean(np.max(self.image, axis=2)[combMask]), 2), " mean + std: ",
-                  round(np.mean(np.max(self.image, axis=2)[combMask]) + np.std(np.max(self.image, axis=2)[combMask]),
-                        2), " hue: ", round(ImageUtils.sRGBtoHSV(np.mean(self.image[combMask], axis=0))[0, 0] * 2, 2),
-                  " sat: ", round(np.mean(self.to_satImage(self.image)[combMask], axis=0)[1] * (100.0 / 255.0), 2),
-                  " red: ", round(np.mean(self.image[combMask][:, 0]), 2), " green: ",
-                  round(np.mean(self.image[combMask][:, 1]), 2), " blue: ",
-                  round(np.mean(self.image[combMask][:, 2]), 2), " prev delta: ", round(prev_delta_cie, 2))
+            print("\npercent: ", ImageUtils.percentPoints(comb_mask, total_points), "Munsell hue: ", mHue,
+                  " Musell sat: ",
+                  round(np.mean(self.to_satImage(ycrcb_image)[comb_mask], axis=0)[1] * (100.0 / 255.0), 2),
+                  " brightness: ", round(np.mean(np.max(self.image, axis=2)[comb_mask]), 2), " mean + std: ",
+                  round(np.mean(np.max(self.image, axis=2)[comb_mask]) + np.std(np.max(self.image, axis=2)[comb_mask]),
+                        2), " hue: ", round(ImageUtils.sRGBtoHSV(np.mean(self.image[comb_mask], axis=0))[0, 0] * 2, 2),
+                  " sat: ", round(np.mean(self.to_satImage(self.image)[comb_mask], axis=0)[1] * (100.0 / 255.0), 2),
+                  " red: ", round(np.mean(self.image[comb_mask][:, 0]), 2), " green: ",
+                  round(np.mean(self.image[comb_mask][:, 1]), 2), " blue: ",
+                  round(np.mean(self.image[comb_mask][:, 2]), 2), " prev delta: ", round(prev_delta_cie, 2))
 
-            self.show_mask_with_image(ycrcbImage, combMask)
-            prevMask = combMask
+            self.show_mask_with_image(ycrcb_image, comb_mask)
+            prev_mask = comb_mask
 
     """
     Iterate effectiveColorMap to make each cluster for each color to be more accurate. Each mask's delta_cie is 
@@ -1849,7 +1857,7 @@ class Face:
         higherBriMask, lowerBriMask = self.biclustering_Kmeans_mod(self.brightImage, mask,
                                                                    func=lambda img, m1, m2: (m1, m2) if np.mean(
                                                                        img[m1][:, 2]) >= np.mean(img[m2][:, 2]) else (
-                                                                   m2, m1))
+                                                                       m2, m1))
         if show_masks_info:
             self.masks_info(higherBriMask, lowerBriMask)
         return higherBriMask, lowerBriMask
