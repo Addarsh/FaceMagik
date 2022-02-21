@@ -1247,9 +1247,13 @@ class Face:
             eMask = np.bitwise_xor(eMask, m)
         return eMask
 
+    """
+    Return true if teeth are visible in image and false otherwise.
+    """
+
     def is_teeth_visible(self):
-        teethMasks = self.get_attr_masks(TEETH)
-        return len(teethMasks) > 0
+        teeth_masks = self.get_attr_masks(TEETH)
+        return len(teeth_masks) > 0
 
     """
     get_mouth_points returns mask of mouth.
