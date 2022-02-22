@@ -24,8 +24,11 @@ class SkinDetectionConfig:
     # Minimum Kmeans difference value until repeated Kmeans clustering is performed.
     KMEANS_TOLERANCE: float = 2.0
 
-    # Minimum mask percent until which repeated Kmeans clustering is performed.
-    KMEANS_MASK_PERCENT_CUTOFF: float = 2.0
+    # Minimum mask percent until which repeated Kmeans clustering is performed on teeth mask.
+    KMEANS_TEETH_MASK_PERCENT_CUTOFF: float = 5.0
+
+    # Minimum mask percent until which repeated Kmeans clustering is performed on face mask.
+    KMEANS_FACE_MASK_PERCENT_CUTOFF: float = 2.0
 
     # If true, iterate teeth clusters for fine-grained results. Defaults to false.
     ITERATE_TEETH_CLUSTERS = False
@@ -152,7 +155,7 @@ class SkinToneAnalyzer:
     """
 
     @staticmethod
-    def make_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray) \
+    def make_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray, cutoff_percent: float) \
             -> [int, dict]:
         start_time = time.time()
         diff_img = (ycrcb_image[:, :, 0]).astype(float)
@@ -167,7 +170,7 @@ class SkinToneAnalyzer:
             # Find the brightest cluster.
             b_mask = SkinToneAnalyzer.brightest_cluster(diff_img, curr_mask, total_points,
                                                         tol=skin_config.KMEANS_TOLERANCE,
-                                                        cutoff_percent=skin_config.KMEANS_MASK_PERCENT_CUTOFF)
+                                                        cutoff_percent=cutoff_percent)
             # Find the least saturated cluster of the brightest cluster. This provides more fine-grained clusters
             # but is also more expensive. Comment it out if you want to plot "color of each cluster versus
             # the associated Munsell hue" to iterate/improve effective color mapping.
@@ -213,7 +216,8 @@ class SkinToneAnalyzer:
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
 
         # Make clusters.
-        all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process)
+        all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
+                                                                                self.skin_config.KMEANS_TEETH_MASK_PERCENT_CUTOFF)
 
         if self.skin_config.ITERATE_TEETH_CLUSTERS:
             # Iterate to optimize final clusters.
@@ -260,7 +264,8 @@ class SkinToneAnalyzer:
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
 
         # Make clusters.
-        all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process)
+        all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
+                                                                                self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF)
 
         # Get light direction from face mask clusters.
         mask_directions_list = [self.face.get_mask_direction(b_mask, show_debug_info=skin_config.DEBUG_MODE) for
@@ -430,5 +435,5 @@ if __name__ == "__main__":
         skin_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
     analyzer = SkinToneAnalyzer(skin_config)
-    #analyzer.process_skin_tone()
-    print("Brightness value: ", analyzer.determine_brightness())
+    analyzer.process_skin_tone()
+    #print("Brightness value: ", analyzer.determine_brightness())
