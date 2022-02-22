@@ -36,25 +36,7 @@ from common import (
     BALD_HEAD,
     EAR,
 )
-from common import label_id_map
-
-
-class MaskDirection(Enum):
-    LEFT = 1
-    CENTER = 2
-    RIGHT = 3
-
-
-class LightDirection(Enum):
-    CENTER = 1  # Light is either exactly facing or exactly opposite the person.
-    CENTER_LEFT = 2  # Largely facing the user but also drifts to the left with maybe a slight shadow.
-    CENTER_RIGHT = 3  # Largely facing the user but also drifts to the right with maybe a slight shadow.
-    LEFT_CENTER_RIGHT = 4  # Center dominates but there is a bright region on the left and some shadow on the right.
-    RIGHT_CENTER_LEFT = 5  # Center dominates but there is a bright region on the right and some shadow on the left.
-    LEFT_CENTER = 6  # Light starts from the left and then falls to center. May nor may not be a shadow at center.
-    LEFT_TO_RIGHT = 7  # Usually indicates there is a shadow in the scene.
-    RIGHT_CENTER = 8  # Light starts from the right and then falls to center. May nor may not be a shadow at center.
-    RIGHT_TO_LEFT = 9  # Usually indicates there is a shadow in the scene.
+from common import label_id_map, MaskDirection, LightDirection
 
 
 class Face:
@@ -1256,22 +1238,21 @@ class Face:
         return len(teeth_masks) > 0
 
     """
-    get_mouth_points returns mask of mouth.
+    Returns mask of mouth including teeth and tongue and excluding upper and lower lips.
     """
 
     def get_mouth_points(self):
-        lipMask = np.zeros(self.faceMask.shape, dtype=bool)
-        ulipMasks = self.get_attr_masks(UPPER_LIP)
-        llipMasks = self.get_attr_masks(LOWER_LIP)
-        assert len(ulipMasks) == 1, "Want 1 upper lip mask"
-        assert len(llipMasks) == 1, "Want 1 lower lip mask"
-        ulipMask = ulipMasks[0]
-        llipMask = llipMasks[0]
-        rmin_ulip, cmin_ulip, w_ulip, h_ulip = self.bbox(ulipMask)
-        rmin_llip, cmin_llip, w_llip, h_llip = self.bbox(llipMask)
+        ulip_masks = self.get_attr_masks(UPPER_LIP)
+        llip_masks = self.get_attr_masks(LOWER_LIP)
+        assert len(ulip_masks) == 1, "Want 1 upper lip mask"
+        assert len(llip_masks) == 1, "Want 1 lower lip mask"
+        ulip_mask = ulip_masks[0]
+        llip_mask = llip_masks[0]
+        rmin_ulip, cmin_ulip, w_ulip, h_ulip = self.bbox(ulip_mask)
+        rmin_llip, cmin_llip, w_llip, h_llip = self.bbox(llip_mask)
 
         # Find mask that encompasses lips and mouth. Determine (ymin, ymax) for each x.
-        lipsAndMouthMask = np.zeros(self.faceMask.shape, dtype=bool)
+        lips_and_mouth_mask = np.zeros(self.faceMask.shape, dtype=bool)
         cmin = min(cmin_ulip, cmin_llip)
         cmax = max(cmin_ulip + w_ulip, cmin_llip + w_llip) + 1
         rmax_ulip = rmin_ulip + h_ulip
@@ -1279,24 +1260,21 @@ class Face:
         for x in range(cmin, cmax):
             # Upper lip ymin point.
             ymin = rmin_ulip
-            while ymin <= rmax_ulip and not ulipMask[ymin, x]:
+            while ymin <= rmax_ulip and not ulip_mask[ymin, x]:
                 ymin = ymin + 1
             if ymin > rmax_ulip:
                 continue
             ymax = rmax_llip
-            while ymax >= rmin_llip and not llipMask[ymax, x]:
+            while ymax >= rmin_llip and not llip_mask[ymax, x]:
                 ymax = ymax - 1
             if ymax < rmin_llip:
                 continue
 
-            lipsAndMouthMask[ymin:ymax + 1, x] = True
+            lips_and_mouth_mask[ymin:ymax + 1, x] = True
 
-        mouthMask = np.bitwise_xor(lipsAndMouthMask,
-                                   np.bitwise_and(lipsAndMouthMask, np.bitwise_or(ulipMask, llipMask)))
-        print("mouth mask percent: ",
-              (np.count_nonzero(mouthMask) / np.count_nonzero(np.bitwise_or(ulipMask, llipMask))) * 100.0)
-
-        return mouthMask
+        # Find mouth mask by excluding lips from "lips and mouth" mask.
+        return np.bitwise_xor(lips_and_mouth_mask,
+                                   np.bitwise_and(lips_and_mouth_mask, np.bitwise_or(ulip_mask, llip_mask)))
 
     """
     Prints the given effective color map for debugging.
@@ -1394,109 +1372,6 @@ class Face:
 
         print("\n combining masks time: ", time.time() - start_time, " seconds\n")
         return temp_close_masks
-
-    """
-    The mapping from Munsell Hue to known color is a hueristic obtained by viewing many images and determining which 
-    Munsell hues cluster together into a known color like "Orange" or "LightGreen". These clustered colors are then 
-    used to ascertain image brightness. This kind of clustering can only work if the Munsell hue determines the final
-    color of the pixel to a large extent. It is also likely that there can be better mapping to cluster colors.
-    """
-
-    @staticmethod
-    def effective_color(munsell_color: str):
-        pink_red = "PinkRed"
-        maroon = "Maroon"
-        orange = "Orange"
-        orange_yellow = "OrangeYellow"
-        yellow_green = "YellowishGreen"
-        middle_green = "MiddleGreen"
-        green_yellow = "GreenishYellow"
-        light_green = "LightGreen"
-        green = "Green"
-        blue_green = "BluishGreen"
-        green_blue = "GreenishBlue"
-        blue = "Blue"
-        none = "None"
-
-        if munsell_color == none:
-            return none
-
-        munsell_hue = munsell_color.split(" ")[0]
-        hue_letter = ImageUtils.munsell_hue_letter(munsell_hue)
-        hue_number = ImageUtils.munsell_hue_number(munsell_hue)
-
-        delta = 0.5
-
-        if hue_letter == "R":
-            if hue_number < 7.5 - delta:
-                return pink_red
-            return maroon
-        elif hue_letter == "YR":
-            if hue_number < 2.5 - delta:
-                return maroon
-            elif hue_number < 9 - delta:
-                return orange
-            return orange_yellow
-        elif hue_letter == "Y":
-            if hue_number < 2.5 - delta:
-                return orange_yellow
-            # if hueNumber < 3 - delta:
-            #  return orangeYellow
-            elif hue_number < 7.5 - delta:
-                return yellow_green
-            return middle_green
-            # if hueNumber < 5 - delta:
-            #  return orangeYellow
-            return yellow_green
-        elif hue_letter == "GY":
-            if hue_number < 2.5 - delta:
-                return middle_green
-                return yellow_green
-            elif hue_number < 7.5 - delta:
-                return green_yellow
-            return light_green
-        elif hue_letter == "G":
-            if hue_number < 2 - delta:
-                return light_green
-            elif hue_number < 4.5 - delta:
-                return green
-            elif hue_number < 9 - delta:
-                return green_blue
-            return blue_green
-        elif hue_letter == "BG":
-            if hue_number < 2.5 - delta:
-                return blue_green
-            return blue
-
-        # Old mapping. Deprecated.
-        if hue_letter == "R":
-            if hue_number < 7.5 - delta:
-                return pink_red
-            return maroon
-        elif hue_letter == "YR":
-            if hue_number < 2.5 - delta:
-                return maroon
-            return orange
-        elif hue_letter == "Y":
-            if hue_number < 7.5 - delta:
-                return orange_yellow
-            return yellow_green
-        elif hue_letter == "GY":
-            if hue_number < 2.5 - delta:
-                return yellow_green
-            elif hue_number < 7.5 - delta:
-                return green_yellow
-            return light_green
-        elif hue_letter == "G":
-            if hue_number < 2 - delta:
-                return light_green
-            elif hue_number < 4.5 - delta:
-                return green
-            elif hue_number < 9 - delta:
-                return green_blue
-            return blue_green
-        elif hue_letter == "BG":
-            return blue_green
 
     """
     good_face_points returns a mask containing points that are usually good to sample for skin tone. It excludes 

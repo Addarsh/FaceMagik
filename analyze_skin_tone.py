@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import time
 
 from face import Face
-from common import InferenceConfig
+from common import InferenceConfig, SceneBrightness
 from mrcnn import model as model_lib
 
 """
@@ -21,17 +21,17 @@ class SkinDetectionConfig:
     # Numpy array of image that needs to be processed. Leave as None if fetching image from local absolute path.
     IMAGE: np.ndarray = None
 
-    # If true, analyze teeth to determine brightness of scene.
-    ANALYZE_TEETH = False
-
-    # If true, analyze skin to determine skin tone.
-    ANALYZE_SKIN = False
-
     # Minimum Kmeans difference value until repeated Kmeans clustering is performed.
     KMEANS_TOLERANCE: float = 2.0
 
     # Minimum mask percent until which repeated Kmeans clustering is performed.
     KMEANS_MASK_PERCENT_CUTOFF: float = 2.0
+
+    # If true, iterate teeth clusters for fine-grained results. Defaults to false.
+    ITERATE_TEETH_CLUSTERS = False
+
+    # If true, iterate face clusters for fine-grained results. Defaults to true.
+    ITERATE_FACE_CLUSTERS = True
 
     # Factor to multiple image's per pixel brightness value. Should always be a positive value, defaults to 1.
     BRIGHTNESS_UPDATE_FACTOR: float = 1.0
@@ -48,6 +48,13 @@ class SkinDetectionConfig:
     def __init__(self):
         pass
 
+    def __repr__(self):
+        return "SkinDetectionConfig(IMAGE_PATH: {0})".format(self.IMAGE_PATH)
+
+
+class TeethNotVisibleException(ValueError):
+    pass
+
 
 """
 Class to analyze skin tone from a image of a face.
@@ -55,6 +62,24 @@ Class to analyze skin tone from a image of a face.
 
 
 class SkinToneAnalyzer:
+    # Effective colors.
+    pink_red = "PinkRed"
+    maroon = "Maroon"
+    orange = "Orange"
+    orange_yellow = "OrangeYellow"
+    yellow_green = "YellowishGreen"
+    middle_green = "MiddleGreen"
+    green_yellow = "GreenishYellow"
+    light_green = "LightGreen"
+    green = "Green"
+    blue_green = "BluishGreen"
+    green_blue = "GreenishBlue"
+    blue = "Blue"
+    none = "None"
+
+    # Minimum teeth coverage for brightness detection.
+    TEETH_MIN_COVERAGE_PERCENT = 30
+
     def __init__(self, skin_config: object):
         # Load Mask RCNN model.
         maskrcnn_model = SkinToneAnalyzer.construct_model()
@@ -71,10 +96,7 @@ class SkinToneAnalyzer:
             face.image = new_img
 
         self.face = face
-
-        if skin_config.DEBUG_MODE:
-            print("teeth visible: ", self.face.is_teeth_visible())
-            # f.show_mask(self.face.get_mouth_points())
+        self.skin_config = skin_config
 
     """
     Constructs a MaskRCNN model and returns it.
@@ -145,16 +167,16 @@ class SkinToneAnalyzer:
             # Find the brightest cluster.
             b_mask = SkinToneAnalyzer.brightest_cluster(diff_img, curr_mask, total_points,
                                                         tol=skin_config.KMEANS_TOLERANCE,
-                                       cutoff_percent=skin_config.KMEANS_MASK_PERCENT_CUTOFF)
+                                                        cutoff_percent=skin_config.KMEANS_MASK_PERCENT_CUTOFF)
             # Find the least saturated cluster of the brightest cluster. This provides more fine-grained clusters
             # but is also more expensive. Comment it out if you want to plot "color of each cluster versus
             # the associated Munsell hue" to iterate/improve effective color mapping.
-            #b_mask = SkinToneAnalyzer.brightest_cluster(255.0 -(ImageUtils.to_hsv(ycrcb_image)[:, :, 1]).astype(
+            # b_mask = SkinToneAnalyzer.brightest_cluster(255.0 -(ImageUtils.to_hsv(ycrcb_image)[:, :, 1]).astype(
             #    np.float), b_mask, np.count_nonzero(b_mask), tol=skin_config.KMEANS_TOLERANCE,
             #                                            cutoff_percent=skin_config.KMEANS_MASK_PERCENT_CUTOFF)
 
             munsell_color = ImageUtils.sRGBtoMunsell(np.mean(ycrcb_image[b_mask], axis=0))
-            effective_color = Face.effective_color(munsell_color)
+            effective_color = SkinToneAnalyzer.effective_color(munsell_color)
             if effective_color not in effective_color_map:
                 effective_color_map[effective_color] = b_mask
             else:
@@ -176,6 +198,54 @@ class SkinToneAnalyzer:
         print("\nClustering latency: ", time.time() - start_time, " seconds\n")
 
         return all_cluster_masks, effective_color_map
+
+    """
+    Processes image to determine brightness of the scene. The person in the image is expected to be smiling.
+    """
+
+    def determine_brightness(self) -> SceneBrightness:
+        if not self.face.is_teeth_visible():
+            raise TeethNotVisibleException("Teeth not visible for config: " +
+                                           str(self.skin_config))
+
+        mask_to_process = self.face.get_mouth_points()
+        total_points = np.count_nonzero(mask_to_process)
+        ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
+
+        # Make clusters.
+        all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process)
+
+        if self.skin_config.ITERATE_TEETH_CLUSTERS:
+            # Iterate to optimize final clusters.
+            effective_color_map = self.face.iterate_effective_color_map(effective_color_map, all_cluster_masks)
+
+        if skin_config.DEBUG_MODE:
+            self.face.print_effective_color_map(effective_color_map, total_points)
+
+        # Check mean brightness minimum coverage of the teeth.
+        final_mask = np.zeros(self.face.faceMask.shape, dtype=bool)
+        for effective_color in effective_color_map:
+            mask = effective_color_map[effective_color]
+            final_mask = np.bitwise_or(final_mask, mask)
+
+            if round(ImageUtils.percentPoints(final_mask, total_points)) >= SkinToneAnalyzer.TEETH_MIN_COVERAGE_PERCENT:
+                break
+
+        mean_brightness = round(np.mean(np.max(self.face.image, axis=2)[final_mask]))
+        if self.skin_config.DEBUG_MODE:
+            print("\nMean brightness value: ", mean_brightness, " with percent: ", ImageUtils.percentPoints(final_mask,
+                                                                                                            total_points
+                                                                                                            ), "\n")
+
+        # Map to brightness value.
+        if mean_brightness < 200:
+            return SceneBrightness.DARK_SHADOW
+        elif mean_brightness < 210:
+            return SceneBrightness.SOFT_SHADOW
+        elif mean_brightness > 225:
+            return SceneBrightness.TOO_BRIGHT
+
+        return SceneBrightness.NEUTRAL_LIGHTING
 
     """
     Process skin tone for given image.
@@ -204,8 +274,9 @@ class SkinToneAnalyzer:
         if skin_config.DEBUG_MODE:
             SkinToneAnalyzer.plot_colors(ycrcb_image, all_cluster_masks, total_points)
 
-        # Iterate to optimize final clusters.
-        effective_color_map = self.face.iterate_effective_color_map(effective_color_map, all_cluster_masks)
+        if self.skin_config.ITERATE_FACE_CLUSTERS:
+            # Iterate to optimize final clusters.
+            effective_color_map = self.face.iterate_effective_color_map(effective_color_map, all_cluster_masks)
 
         if skin_config.DEBUG_MODE:
             self.face.print_effective_color_map(effective_color_map, total_points)
@@ -221,6 +292,95 @@ class SkinToneAnalyzer:
 
         if skin_config.DEBUG_MODE:
             self.face.show_orig_image()
+
+    """
+    The mapping from Munsell Hue to known color is a hueristic obtained by viewing many images and determining which 
+    Munsell hues cluster together into a known color like "Orange" or "LightGreen". These clustered colors are then 
+    used to ascertain image brightness. This kind of clustering can only work if the Munsell hue determines the final
+    color of the pixel to a large extent. It is also likely that there can be better mapping to cluster colors.
+    """
+
+    @staticmethod
+    def effective_color(munsell_color: str):
+        if munsell_color == SkinToneAnalyzer.none:
+            return SkinToneAnalyzer.none
+
+        munsell_hue = munsell_color.split(" ")[0]
+        hue_letter = ImageUtils.munsell_hue_letter(munsell_hue)
+        hue_number = ImageUtils.munsell_hue_number(munsell_hue)
+
+        delta = 0.5
+
+        if hue_letter == "R":
+            if hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.pink_red
+            return SkinToneAnalyzer.maroon
+        elif hue_letter == "YR":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.maroon
+            elif hue_number < 9 - delta:
+                return SkinToneAnalyzer.orange
+            return SkinToneAnalyzer.orange_yellow
+        elif hue_letter == "Y":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.orange_yellow
+            # if hueNumber < 3 - delta:
+            #  return SkinToneAnalyzer.orangeYellow
+            elif hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.yellow_green
+            return SkinToneAnalyzer.middle_green
+            # if hueNumber < 5 - delta:
+            #  return SkinToneAnalyzer.orangeYellow
+            return SkinToneAnalyzer.yellow_green
+        elif hue_letter == "GY":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.middle_green
+                return SkinToneAnalyzer.yellow_green
+            elif hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.green_yellow
+            return SkinToneAnalyzer.light_green
+        elif hue_letter == "G":
+            if hue_number < 2 - delta:
+                return SkinToneAnalyzer.light_green
+            elif hue_number < 4.5 - delta:
+                return SkinToneAnalyzer.green
+            elif hue_number < 9 - delta:
+                return SkinToneAnalyzer.green_blue
+            return SkinToneAnalyzer.blue_green
+        elif hue_letter == "BG":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.blue_green
+            return SkinToneAnalyzer.blue
+
+        # Old mapping. Deprecated.
+        if hue_letter == "R":
+            if hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.pink_red
+            return SkinToneAnalyzer.maroon
+        elif hue_letter == "YR":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.maroon
+            return SkinToneAnalyzer.orange
+        elif hue_letter == "Y":
+            if hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.orange_yellow
+            return SkinToneAnalyzer.yellow_green
+        elif hue_letter == "GY":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.yellow_green
+            elif hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.green_yellow
+            return SkinToneAnalyzer.light_green
+        elif hue_letter == "G":
+            if hue_number < 2 - delta:
+                return SkinToneAnalyzer.light_green
+            elif hue_number < 4.5 - delta:
+                return SkinToneAnalyzer.green
+            elif hue_number < 9 - delta:
+                return SkinToneAnalyzer.green_blue
+            return SkinToneAnalyzer.blue_green
+        elif hue_letter == "BG":
+            return SkinToneAnalyzer.blue_green
 
     """
     Plots a figure with each cluster's color and Munsell value. Primary use for analysis of similar colors.
@@ -262,6 +422,7 @@ if __name__ == "__main__":
     skin_config.IMAGE_PATH = args.image
     skin_config.COMBINE_MASKS = True
     skin_config.DEBUG_MODE = True
+    skin_config.ITERATE_TEETH_CLUSTERS = True
 
     if args.bri is not None:
         skin_config.BRIGHTNESS_UPDATE_FACTOR = float(args.bri)
@@ -269,4 +430,5 @@ if __name__ == "__main__":
         skin_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
     analyzer = SkinToneAnalyzer(skin_config)
-    analyzer.process_skin_tone()
+    #analyzer.process_skin_tone()
+    print("Brightness value: ", analyzer.determine_brightness())

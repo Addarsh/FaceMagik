@@ -2,6 +2,7 @@
 Constants and configurations used by both training and inference scripts.
 """
 from mrcnn.config import Config
+from enum import Enum
 
 # Label constants.
 EYE_OPEN = "Eye (Open)"
@@ -28,6 +29,50 @@ label_id_map = {
     NOSE: 7, NOSTRIL: 8, UPPER_LIP: 9, LOWER_LIP: 10, TEETH: 11, TONGUE: 12, FACIAL_HAIR: 13,
     FACE: 14, HAIR_ON_HEAD: 15, BALD_HEAD: 16, EAR: 17
 }
+
+"""
+Enum to describe scene brightness level.
+"""
+
+
+class SceneBrightness(Enum):
+    DARK_SHADOW = 1
+    SOFT_SHADOW = 2
+    NEUTRAL_LIGHTING = 3
+    TOO_BRIGHT = 4
+
+
+"""
+Direction of mask relative to nose center point of the face.
+"""
+
+
+class MaskDirection(Enum):
+    LEFT = 1
+    CENTER = 2
+    RIGHT = 3
+
+
+"""
+Direction of light falling on the face.
+"""
+
+
+class LightDirection(Enum):
+    CENTER = 1  # Light is either exactly facing or exactly opposite the person.
+    CENTER_LEFT = 2  # Largely facing the user but also drifts to the left with maybe a slight shadow.
+    CENTER_RIGHT = 3  # Largely facing the user but also drifts to the right with maybe a slight shadow.
+    LEFT_CENTER_RIGHT = 4  # Center dominates but there is a bright region on the left and some shadow on the right.
+    RIGHT_CENTER_LEFT = 5  # Center dominates but there is a bright region on the right and some shadow on the left.
+    LEFT_CENTER = 6  # Light starts from the left and then falls to center. May nor may not be a shadow at center.
+    LEFT_TO_RIGHT = 7  # Usually indicates there is a shadow in the scene.
+    RIGHT_CENTER = 8  # Light starts from the right and then falls to center. May nor may not be a shadow at center.
+    RIGHT_TO_LEFT = 9  # Usually indicates there is a shadow in the scene.
+
+
+"""
+Base Configuration for Mask RCNN model inference.
+"""
 
 
 class FaceConfig(Config):
@@ -56,6 +101,11 @@ class FaceConfig(Config):
 
     # Use Resnet50 for faster training.
     BACKBONE = "resnet50"
+
+
+"""
+Inference configuration for Mask RCNN Model.
+"""
 
 
 class InferenceConfig(FaceConfig):
