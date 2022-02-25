@@ -80,9 +80,6 @@ class SkinToneAnalyzer:
     blue = "Blue"
     none = "None"
 
-    # Minimum teeth coverage for brightness detection.
-    TEETH_MIN_COVERAGE_PERCENT = 30
-
     def __init__(self, skin_config: object):
         # Load Mask RCNN model.
         maskrcnn_model = SkinToneAnalyzer.construct_model()
@@ -228,11 +225,13 @@ class SkinToneAnalyzer:
 
         # Check mean brightness minimum coverage of the teeth.
         final_mask = np.zeros(self.face.faceMask.shape, dtype=bool)
-        for effective_color in effective_color_map:
-            mask = effective_color_map[effective_color]
-            final_mask = np.bitwise_or(final_mask, mask)
 
-            if round(ImageUtils.percentPoints(final_mask, total_points)) >= SkinToneAnalyzer.TEETH_MIN_COVERAGE_PERCENT:
+        # Find mean brightness of first two masks in decreasing order of brightness.
+        count = 0
+        for effective_color in effective_color_map:
+            final_mask = np.bitwise_or(final_mask, effective_color_map[effective_color])
+            count += 1
+            if count == 2:
                 break
 
         mean_brightness = round(np.mean(np.max(self.face.image, axis=2)[final_mask]))
@@ -240,16 +239,39 @@ class SkinToneAnalyzer:
             print("\nMean brightness value: ", mean_brightness, " with percent: ", ImageUtils.percentPoints(final_mask,
                                                                                                             total_points
                                                                                                             ), "\n")
-
+        if skin_config.DEBUG_MODE:
+            self.face.show_orig_image()
+            
         # Map to brightness value.
         if mean_brightness < 200:
             return SceneBrightness.DARK_SHADOW
-        elif mean_brightness < 210:
+        elif mean_brightness < 220:
             return SceneBrightness.SOFT_SHADOW
         elif mean_brightness > 225:
             return SceneBrightness.TOO_BRIGHT
 
         return SceneBrightness.NEUTRAL_LIGHTING
+
+    """
+    Returns light direction for given Face image.
+    """
+
+    def get_light_direction(self):
+        mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
+        total_points = np.count_nonzero(mask_to_process)
+        ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
+
+        # Make clusters.
+        all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
+                                                                                self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF)
+
+        # Get light direction from face mask clusters.
+        mask_directions_list = [self.face.get_mask_direction(b_mask, show_debug_info=skin_config.DEBUG_MODE) for
+                                b_mask in
+                                all_cluster_masks]
+        mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
+
+        return Face.process_mask_directions(mask_directions_list, mask_percent_list)
 
     """
     Process skin tone for given image.
@@ -435,5 +457,6 @@ if __name__ == "__main__":
         skin_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
     analyzer = SkinToneAnalyzer(skin_config)
-    analyzer.process_skin_tone()
-    #print("Brightness value: ", analyzer.determine_brightness())
+    #analyzer.process_skin_tone()
+    #print ("Light direction: ", analyzer.get_light_direction())
+    print("Brightness value: ", analyzer.determine_brightness())
