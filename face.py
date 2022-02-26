@@ -1045,42 +1045,6 @@ class Face:
         return rotMatrix
 
     """
-    Returns mask direction by calculating the number of points to the left and right of the nose center of the given 
-    mask. The calculation uses a coordinate system whose X axis is parallel to the line segment between the eyes.
-    """
-
-    def get_mask_direction(self, mask: np.ndarray, show_debug_info: bool) -> MaskDirection:
-        mask_coordinates = np.argwhere(mask)
-        rel_points_arr = mask_coordinates - self.noseMiddlePoint
-        rel_points_arr = (self.rotMatrix @ rel_points_arr.T).T
-
-        num_points_to_left = np.count_nonzero(rel_points_arr[:, 1] < 0)
-        num_points_to_right = np.count_nonzero(rel_points_arr[:, 1] > 0)
-        num_points_in_center = np.count_nonzero(rel_points_arr[:, 1] == 0)
-        if num_points_to_left <= num_points_to_right:
-            num_points_to_left += num_points_in_center
-        else:
-            num_points_to_right += num_points_in_center
-
-        RATIO_MAX_VALUE = 100000
-
-        right_to_left_points_ratio = RATIO_MAX_VALUE if num_points_to_left == 0 else float(num_points_to_right) / float(
-            num_points_to_left)
-        left_to_right_points_ratio = RATIO_MAX_VALUE if num_points_to_right == 0 else float(num_points_to_left) / float(
-            num_points_to_right)
-
-        md = MaskDirection.CENTER
-        if left_to_right_points_ratio >= 3:
-            md = MaskDirection.LEFT
-        elif right_to_left_points_ratio >= 3:
-            md = MaskDirection.RIGHT
-
-        if show_debug_info:
-            print("Mask direction: ", md, " toLeftRatio: ", round(left_to_right_points_ratio, 2), " toRightRatio: ",
-                  round(right_to_left_points_ratio, 2))
-        return md
-
-    """
     Class encapsulating face mask results and other aspects of input image.
     """
 

@@ -17,6 +17,7 @@ from scipy.optimize import minimize
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
 from colormath import color_diff_matrix
+from common import MaskDirection
 
 
 class ImageUtils:
@@ -1583,7 +1584,45 @@ class ImageUtils:
         f2Mask[xArr, yArr] = True
 
         return ((f1Mask, c1), (f2Mask, c2)) if np.mean(diffImg[f1Mask]) > np.mean(diffImg[f2Mask]) else (
-        (f2Mask, c2), (f1Mask, c1))
+            (f2Mask, c2), (f1Mask, c1))
+
+    """
+    Returns mask direction by calculating the number of points to the left and right of the nose center of the given 
+    mask. The calculation uses a coordinate system whose X axis is parallel to the line segment between the eyes.
+    """
+
+    @staticmethod
+    def get_mask_direction(mask: np.ndarray, node_middle_point: np.ndarray, rotation_matrix: np.ndarray,
+                           debug_mode: bool) -> MaskDirection:
+        mask_coordinates = np.argwhere(mask)
+        rel_points_arr = mask_coordinates - node_middle_point
+        rel_points_arr = (rotation_matrix @ rel_points_arr.T).T
+
+        num_points_to_left = np.count_nonzero(rel_points_arr[:, 1] < 0)
+        num_points_to_right = np.count_nonzero(rel_points_arr[:, 1] > 0)
+        num_points_in_center = np.count_nonzero(rel_points_arr[:, 1] == 0)
+        if num_points_to_left <= num_points_to_right:
+            num_points_to_left += num_points_in_center
+        else:
+            num_points_to_right += num_points_in_center
+
+        RATIO_MAX_VALUE = 100000
+
+        right_to_left_points_ratio = RATIO_MAX_VALUE if num_points_to_left == 0 else float(num_points_to_right) / float(
+            num_points_to_left)
+        left_to_right_points_ratio = RATIO_MAX_VALUE if num_points_to_right == 0 else float(num_points_to_left) / float(
+            num_points_to_right)
+
+        md = MaskDirection.CENTER
+        if left_to_right_points_ratio >= 3:
+            md = MaskDirection.LEFT
+        elif right_to_left_points_ratio >= 3:
+            md = MaskDirection.RIGHT
+
+        if debug_mode:
+            print("Mask direction: ", md, " toLeftRatio: ", round(left_to_right_points_ratio, 2), " toRightRatio: ",
+                  round(right_to_left_points_ratio, 2))
+        return md
 
     """
     Returns the mean coordinates of the given image mask.
@@ -1725,7 +1764,7 @@ class ImageUtils:
 
     def cct(sRGB):
         n = (0.23881 * sRGB[0] + 0.25499 * sRGB[1] - 0.58291 * sRGB[2]) / (
-                    0.11109 * sRGB[0] - 0.85406 * sRGB[1] + 0.52289 * sRGB[2])
+                0.11109 * sRGB[0] - 0.85406 * sRGB[1] + 0.52289 * sRGB[2])
         return 449 * math.pow(n, 3) + 3525 * math.pow(n, 2) + 6823.3 * n + 5520.33
 
     def print_lab_to_rgb(lab):

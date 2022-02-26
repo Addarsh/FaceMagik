@@ -4,6 +4,7 @@ import numpy as np
 from image_utils import ImageUtils
 import matplotlib.pyplot as plt
 import time
+import multiprocessing as mp
 
 from face import Face
 from common import InferenceConfig, SceneBrightness
@@ -153,7 +154,7 @@ class SkinToneAnalyzer:
 
     @staticmethod
     def make_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray, kmeans_tolerance: float, cutoff_percent:
-        float, debug_mode: bool) \
+    float, debug_mode: bool) \
             -> [int, dict]:
         start_time = time.time()
         diff_img = (ycrcb_image[:, :, 0]).astype(float)
@@ -244,7 +245,7 @@ class SkinToneAnalyzer:
                                                                                                             ), "\n")
         if self.skin_config.DEBUG_MODE:
             self.face.show_orig_image()
-            
+
         # Map to brightness value.
         if mean_brightness < 200:
             return SceneBrightness.DARK_SHADOW
@@ -256,27 +257,69 @@ class SkinToneAnalyzer:
         return SceneBrightness.NEUTRAL_LIGHTING
 
     """
-    Returns light direction for given Face image.
+    Static method that returns Primary light direction. Used for parallel execution.
     """
 
-    def get_light_direction(self):
-        mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
+    @staticmethod
+    def get_primary_light_direction(ycrcb_image: np.ndarray, mask_to_process: np.ndarray,
+                                    nose_middle_point: np.ndarray, rotation_matrix: np.ndarray, skin_config:
+            SkinDetectionConfig):
         total_points = np.count_nonzero(mask_to_process)
-        ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
 
         # Make clusters.
         all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
-                                                                                self.skin_config.KMEANS_TOLERANCE,
-                                                                                self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF,
-                                                                                self.skin_config.DEBUG_MODE)
+                                                                                skin_config.KMEANS_TOLERANCE,
+                                                                                skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF,
+                                                                                skin_config.DEBUG_MODE)
 
         # Get light direction from face mask clusters.
-        mask_directions_list = [self.face.get_mask_direction(b_mask, show_debug_info=self.skin_config.DEBUG_MODE) for
+        mask_directions_list = [ImageUtils.get_mask_direction(b_mask, nose_middle_point, rotation_matrix,
+                                                              skin_config.DEBUG_MODE)
+                                for
                                 b_mask in
                                 all_cluster_masks]
         mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
 
-        return Face.process_mask_directions(mask_directions_list, mask_percent_list)
+        primary_light_direction = Face.process_mask_directions(mask_directions_list, mask_percent_list)
+        print("Primary Light direction: ", primary_light_direction)
+        return primary_light_direction
+
+    """
+    Instance method that returns primary light direction. Used for sequential execution.
+    """
+
+    def get_light_direction(self):
+        ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
+        mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
+        node_middle_point = self.face.noseMiddlePoint
+        rotation_matrix = self.face.rotMatrix
+
+        return SkinToneAnalyzer.get_primary_light_direction(ycrcb_image, mask_to_process, node_middle_point,
+                                                            rotation_matrix, self.skin_config)
+
+    """
+    Returns Scene Brightness and Primary Light Direction.
+    """
+
+    def get_scene_brightness_and_primary_light_direction(self):
+        start_time = time.time()
+        self.skin_config.DEBUG_MODE = False
+        mp.set_start_method('fork')
+
+        ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
+        mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
+        node_middle_point = self.face.noseMiddlePoint
+        rotation_matrix = self.face.rotMatrix
+        p = mp.Process(target=SkinToneAnalyzer.get_primary_light_direction, args=(ycrcb_image, mask_to_process,
+                                                                               node_middle_point, rotation_matrix,
+                                                                               self.skin_config))
+        p.start()
+
+        scene_brightness = self.determine_brightness()
+        print("Scene Brightness: ", scene_brightness)
+
+        p.join()
+        print("Scene brightness and primary light direction detection latency: ", time.time() - start_time)
 
     """
     Process skin tone for given image.
@@ -297,7 +340,8 @@ class SkinToneAnalyzer:
                                                                                 self.skin_config.DEBUG_MODE)
 
         # Get light direction from face mask clusters.
-        mask_directions_list = [self.face.get_mask_direction(b_mask, show_debug_info=self.skin_config.DEBUG_MODE) for
+        mask_directions_list = [ImageUtils.get_mask_direction(b_mask, self.face.noseMiddlePoint, self.face.rotMatrix,
+                                                              self.skin_config.DEBUG_MODE) for
                                 b_mask in
                                 all_cluster_masks]
         mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
@@ -464,6 +508,7 @@ if __name__ == "__main__":
         skin_detection_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
     analyzer = SkinToneAnalyzer(skin_detection_config)
-    analyzer.process_skin_tone()
-    #print ("Light direction: ", analyzer.get_light_direction())
-    #print("Brightness value: ", analyzer.determine_brightness())
+    #analyzer.process_skin_tone()
+    # print("Brightness value: ", analyzer.determine_brightness())
+    #print ("Primary light direction: ", analyzer.get_light_direction())
+    analyzer.get_scene_brightness_and_primary_light_direction()
