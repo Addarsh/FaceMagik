@@ -152,7 +152,8 @@ class SkinToneAnalyzer:
     """
 
     @staticmethod
-    def make_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray, cutoff_percent: float) \
+    def make_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray, kmeans_tolerance: float, cutoff_percent:
+        float, debug_mode: bool) \
             -> [int, dict]:
         start_time = time.time()
         diff_img = (ycrcb_image[:, :, 0]).astype(float)
@@ -166,7 +167,7 @@ class SkinToneAnalyzer:
         while True:
             # Find the brightest cluster.
             b_mask = SkinToneAnalyzer.brightest_cluster(diff_img, curr_mask, total_points,
-                                                        tol=skin_config.KMEANS_TOLERANCE,
+                                                        tol=kmeans_tolerance,
                                                         cutoff_percent=cutoff_percent)
             # Find the least saturated cluster of the brightest cluster. This provides more fine-grained clusters
             # but is also more expensive. Comment it out if you want to plot "color of each cluster versus
@@ -185,7 +186,7 @@ class SkinToneAnalyzer:
             # Store this mask for different computations.
             all_cluster_masks.append(b_mask)
 
-            if skin_config.DEBUG_MODE:
+            if debug_mode:
                 print("effective color: ", effective_color, " brightness: ",
                       round(np.mean(ycrcb_image[:, :, 0][b_mask]),
                             2), "\n")
@@ -214,13 +215,15 @@ class SkinToneAnalyzer:
 
         # Make clusters.
         all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
-                                                                                self.skin_config.KMEANS_TEETH_MASK_PERCENT_CUTOFF)
+                                                                                self.skin_config.KMEANS_TOLERANCE,
+                                                                                self.skin_config.KMEANS_TEETH_MASK_PERCENT_CUTOFF,
+                                                                                self.skin_config.DEBUG_MODE)
 
         if self.skin_config.ITERATE_TEETH_CLUSTERS:
             # Iterate to optimize final clusters.
             effective_color_map = self.face.iterate_effective_color_map(effective_color_map, all_cluster_masks)
 
-        if skin_config.DEBUG_MODE:
+        if self.skin_config.DEBUG_MODE:
             self.face.print_effective_color_map(effective_color_map, total_points)
 
         # Check mean brightness minimum coverage of the teeth.
@@ -239,7 +242,7 @@ class SkinToneAnalyzer:
             print("\nMean brightness value: ", mean_brightness, " with percent: ", ImageUtils.percentPoints(final_mask,
                                                                                                             total_points
                                                                                                             ), "\n")
-        if skin_config.DEBUG_MODE:
+        if self.skin_config.DEBUG_MODE:
             self.face.show_orig_image()
             
         # Map to brightness value.
@@ -263,10 +266,12 @@ class SkinToneAnalyzer:
 
         # Make clusters.
         all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
-                                                                                self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF)
+                                                                                self.skin_config.KMEANS_TOLERANCE,
+                                                                                self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF,
+                                                                                self.skin_config.DEBUG_MODE)
 
         # Get light direction from face mask clusters.
-        mask_directions_list = [self.face.get_mask_direction(b_mask, show_debug_info=skin_config.DEBUG_MODE) for
+        mask_directions_list = [self.face.get_mask_direction(b_mask, show_debug_info=self.skin_config.DEBUG_MODE) for
                                 b_mask in
                                 all_cluster_masks]
         mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
@@ -287,10 +292,12 @@ class SkinToneAnalyzer:
 
         # Make clusters.
         all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
-                                                                                self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF)
+                                                                                self.skin_config.KMEANS_TOLERANCE,
+                                                                                self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF,
+                                                                                self.skin_config.DEBUG_MODE)
 
         # Get light direction from face mask clusters.
-        mask_directions_list = [self.face.get_mask_direction(b_mask, show_debug_info=skin_config.DEBUG_MODE) for
+        mask_directions_list = [self.face.get_mask_direction(b_mask, show_debug_info=self.skin_config.DEBUG_MODE) for
                                 b_mask in
                                 all_cluster_masks]
         mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
@@ -298,26 +305,26 @@ class SkinToneAnalyzer:
         final_light_direction = Face.process_mask_directions(mask_directions_list, mask_percent_list)
         print("\nFinal Light Direction: ", final_light_direction)
 
-        if skin_config.DEBUG_MODE:
+        if self.skin_config.DEBUG_MODE:
             SkinToneAnalyzer.plot_colors(ycrcb_image, all_cluster_masks, total_points)
 
         if self.skin_config.ITERATE_FACE_CLUSTERS:
             # Iterate to optimize final clusters.
             effective_color_map = self.face.iterate_effective_color_map(effective_color_map, all_cluster_masks)
 
-        if skin_config.DEBUG_MODE:
+        if self.skin_config.DEBUG_MODE:
             self.face.print_effective_color_map(effective_color_map, total_points)
 
-        if skin_config.COMBINE_MASKS:
+        if self.skin_config.COMBINE_MASKS:
             combined_masks = self.face.combine_masks_close_to_each_other(effective_color_map)
 
-            if skin_config.DEBUG_MODE:
+            if self.skin_config.DEBUG_MODE:
                 print("\nCombined masks")
                 for m in combined_masks:
                     print("percent: ", ImageUtils.percentPoints(m, total_points))
                     self.face.show_mask(m)
 
-        if skin_config.DEBUG_MODE:
+        if self.skin_config.DEBUG_MODE:
             self.face.show_orig_image()
 
     """
@@ -445,18 +452,18 @@ if __name__ == "__main__":
     parser.add_argument('--sat', required=False, metavar="sat")
     args = parser.parse_args()
 
-    skin_config = SkinDetectionConfig()
-    skin_config.IMAGE_PATH = args.image
-    skin_config.COMBINE_MASKS = True
-    skin_config.DEBUG_MODE = True
-    skin_config.ITERATE_TEETH_CLUSTERS = True
+    skin_detection_config = SkinDetectionConfig()
+    skin_detection_config.IMAGE_PATH = args.image
+    skin_detection_config.COMBINE_MASKS = True
+    skin_detection_config.DEBUG_MODE = True
+    skin_detection_config.ITERATE_TEETH_CLUSTERS = True
 
     if args.bri is not None:
-        skin_config.BRIGHTNESS_UPDATE_FACTOR = float(args.bri)
+        skin_detection_config.BRIGHTNESS_UPDATE_FACTOR = float(args.bri)
     if args.sat is not None:
-        skin_config.SATURATION_UPDATE_FACTOR = float(args.sat)
+        skin_detection_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
-    analyzer = SkinToneAnalyzer(skin_config)
-    #analyzer.process_skin_tone()
+    analyzer = SkinToneAnalyzer(skin_detection_config)
+    analyzer.process_skin_tone()
     #print ("Light direction: ", analyzer.get_light_direction())
-    print("Brightness value: ", analyzer.determine_brightness())
+    #print("Brightness value: ", analyzer.determine_brightness())
