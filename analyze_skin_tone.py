@@ -131,6 +131,122 @@ class SkinToneAnalyzer:
         self.skin_config = skin_config
 
     """
+    Plots a figure with each cluster's color and Munsell value. Primary use for analysis of similar colors.
+    """
+
+    @staticmethod
+    def plot_colors(image: np.ndarray, mask_list: [list], total_points: int) -> None:
+        if len(mask_list) > 1:
+            plt.close()
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+        x = [i for i in range(len(mask_list))]
+        percent_list = [ImageUtils.percentPoints(mask, total_points) for mask in mask_list]
+        color_list = [np.mean(image[mask], axis=0) / 255.0 for mask in mask_list]
+        munsell_color_list = [ImageUtils.sRGBtoMunsell(np.mean(image[mask], axis=0)) for mask in mask_list]
+        ax.bar(x=x, height=percent_list, color=color_list, align="edge")
+        # Set munsell color values on top of value.
+        for i in range(len(x)):
+            plt.text(i, percent_list[i], munsell_color_list[i])
+        plt.show(block=False)
+
+        ax.bar(x=x, height=percent_list, color=color_list, align="edge")
+        # Set Munsell color values on top of value.
+        for i in range(len(x)):
+            plt.text(i, percent_list[i], munsell_color_list[i])
+        plt.show(block=False)
+
+    """
+    The mapping from Munsell Hue to known color is a hueristic obtained by viewing many images and determining which 
+    Munsell hues cluster together into a known color like "Orange" or "LightGreen". These clustered colors are then 
+    used to ascertain image brightness. This kind of clustering can only work if the Munsell hue determines the final
+    color of the pixel to a large extent. It is also likely that there can be better mapping to cluster colors.
+    """
+
+    @staticmethod
+    def effective_color(munsell_color: str):
+        if munsell_color == SkinToneAnalyzer.none:
+            return SkinToneAnalyzer.none
+
+        munsell_hue = munsell_color.split(" ")[0]
+        hue_letter = ImageUtils.munsell_hue_letter(munsell_hue)
+        hue_number = ImageUtils.munsell_hue_number(munsell_hue)
+
+        delta = 0.5
+
+        if hue_letter == "R":
+            if hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.pink_red
+            return SkinToneAnalyzer.maroon
+        elif hue_letter == "YR":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.maroon
+            elif hue_number < 9 - delta:
+                return SkinToneAnalyzer.orange
+            return SkinToneAnalyzer.orange_yellow
+        elif hue_letter == "Y":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.orange_yellow
+            # if hueNumber < 3 - delta:
+            #  return SkinToneAnalyzer.orangeYellow
+            elif hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.yellow_green
+            return SkinToneAnalyzer.middle_green
+            # if hueNumber < 5 - delta:
+            #  return SkinToneAnalyzer.orangeYellow
+            return SkinToneAnalyzer.yellow_green
+        elif hue_letter == "GY":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.middle_green
+                return SkinToneAnalyzer.yellow_green
+            elif hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.green_yellow
+            return SkinToneAnalyzer.light_green
+        elif hue_letter == "G":
+            if hue_number < 2 - delta:
+                return SkinToneAnalyzer.light_green
+            elif hue_number < 4.5 - delta:
+                return SkinToneAnalyzer.green
+            elif hue_number < 9 - delta:
+                return SkinToneAnalyzer.green_blue
+            return SkinToneAnalyzer.blue_green
+        elif hue_letter == "BG":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.blue_green
+            return SkinToneAnalyzer.blue
+
+        # Old mapping. Deprecated.
+        if hue_letter == "R":
+            if hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.pink_red
+            return SkinToneAnalyzer.maroon
+        elif hue_letter == "YR":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.maroon
+            return SkinToneAnalyzer.orange
+        elif hue_letter == "Y":
+            if hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.orange_yellow
+            return SkinToneAnalyzer.yellow_green
+        elif hue_letter == "GY":
+            if hue_number < 2.5 - delta:
+                return SkinToneAnalyzer.yellow_green
+            elif hue_number < 7.5 - delta:
+                return SkinToneAnalyzer.green_yellow
+            return SkinToneAnalyzer.light_green
+        elif hue_letter == "G":
+            if hue_number < 2 - delta:
+                return SkinToneAnalyzer.light_green
+            elif hue_number < 4.5 - delta:
+                return SkinToneAnalyzer.green
+            elif hue_number < 9 - delta:
+                return SkinToneAnalyzer.green_blue
+            return SkinToneAnalyzer.blue_green
+        elif hue_letter == "BG":
+            return SkinToneAnalyzer.blue_green
+
+    """
     Constructs a MaskRCNN model and returns it.
     """
 
@@ -451,122 +567,6 @@ class SkinToneAnalyzer:
 
         if self.skin_config.DEBUG_MODE:
             self.face.show_orig_image()
-
-    """
-    The mapping from Munsell Hue to known color is a hueristic obtained by viewing many images and determining which 
-    Munsell hues cluster together into a known color like "Orange" or "LightGreen". These clustered colors are then 
-    used to ascertain image brightness. This kind of clustering can only work if the Munsell hue determines the final
-    color of the pixel to a large extent. It is also likely that there can be better mapping to cluster colors.
-    """
-
-    @staticmethod
-    def effective_color(munsell_color: str):
-        if munsell_color == SkinToneAnalyzer.none:
-            return SkinToneAnalyzer.none
-
-        munsell_hue = munsell_color.split(" ")[0]
-        hue_letter = ImageUtils.munsell_hue_letter(munsell_hue)
-        hue_number = ImageUtils.munsell_hue_number(munsell_hue)
-
-        delta = 0.5
-
-        if hue_letter == "R":
-            if hue_number < 7.5 - delta:
-                return SkinToneAnalyzer.pink_red
-            return SkinToneAnalyzer.maroon
-        elif hue_letter == "YR":
-            if hue_number < 2.5 - delta:
-                return SkinToneAnalyzer.maroon
-            elif hue_number < 9 - delta:
-                return SkinToneAnalyzer.orange
-            return SkinToneAnalyzer.orange_yellow
-        elif hue_letter == "Y":
-            if hue_number < 2.5 - delta:
-                return SkinToneAnalyzer.orange_yellow
-            # if hueNumber < 3 - delta:
-            #  return SkinToneAnalyzer.orangeYellow
-            elif hue_number < 7.5 - delta:
-                return SkinToneAnalyzer.yellow_green
-            return SkinToneAnalyzer.middle_green
-            # if hueNumber < 5 - delta:
-            #  return SkinToneAnalyzer.orangeYellow
-            return SkinToneAnalyzer.yellow_green
-        elif hue_letter == "GY":
-            if hue_number < 2.5 - delta:
-                return SkinToneAnalyzer.middle_green
-                return SkinToneAnalyzer.yellow_green
-            elif hue_number < 7.5 - delta:
-                return SkinToneAnalyzer.green_yellow
-            return SkinToneAnalyzer.light_green
-        elif hue_letter == "G":
-            if hue_number < 2 - delta:
-                return SkinToneAnalyzer.light_green
-            elif hue_number < 4.5 - delta:
-                return SkinToneAnalyzer.green
-            elif hue_number < 9 - delta:
-                return SkinToneAnalyzer.green_blue
-            return SkinToneAnalyzer.blue_green
-        elif hue_letter == "BG":
-            if hue_number < 2.5 - delta:
-                return SkinToneAnalyzer.blue_green
-            return SkinToneAnalyzer.blue
-
-        # Old mapping. Deprecated.
-        if hue_letter == "R":
-            if hue_number < 7.5 - delta:
-                return SkinToneAnalyzer.pink_red
-            return SkinToneAnalyzer.maroon
-        elif hue_letter == "YR":
-            if hue_number < 2.5 - delta:
-                return SkinToneAnalyzer.maroon
-            return SkinToneAnalyzer.orange
-        elif hue_letter == "Y":
-            if hue_number < 7.5 - delta:
-                return SkinToneAnalyzer.orange_yellow
-            return SkinToneAnalyzer.yellow_green
-        elif hue_letter == "GY":
-            if hue_number < 2.5 - delta:
-                return SkinToneAnalyzer.yellow_green
-            elif hue_number < 7.5 - delta:
-                return SkinToneAnalyzer.green_yellow
-            return SkinToneAnalyzer.light_green
-        elif hue_letter == "G":
-            if hue_number < 2 - delta:
-                return SkinToneAnalyzer.light_green
-            elif hue_number < 4.5 - delta:
-                return SkinToneAnalyzer.green
-            elif hue_number < 9 - delta:
-                return SkinToneAnalyzer.green_blue
-            return SkinToneAnalyzer.blue_green
-        elif hue_letter == "BG":
-            return SkinToneAnalyzer.blue_green
-
-    """
-    Plots a figure with each cluster's color and Munsell value. Primary use for analysis of similar colors.
-    """
-
-    @staticmethod
-    def plot_colors(image: np.ndarray, mask_list: [list], total_points: int) -> None:
-        if len(mask_list) > 1:
-            plt.close()
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-
-        x = [i for i in range(len(mask_list))]
-        percent_list = [ImageUtils.percentPoints(mask, total_points) for mask in mask_list]
-        color_list = [np.mean(image[mask], axis=0) / 255.0 for mask in mask_list]
-        munsell_color_list = [ImageUtils.sRGBtoMunsell(np.mean(image[mask], axis=0)) for mask in mask_list]
-        ax.bar(x=x, height=percent_list, color=color_list, align="edge")
-        # Set munsell color values on top of value.
-        for i in range(len(x)):
-            plt.text(i, percent_list[i], munsell_color_list[i])
-        plt.show(block=False)
-
-        ax.bar(x=x, height=percent_list, color=color_list, align="edge")
-        # Set Munsell color values on top of value.
-        for i in range(len(x)):
-            plt.text(i, percent_list[i], munsell_color_list[i])
-        plt.show(block=False)
 
 
 if __name__ == "__main__":
