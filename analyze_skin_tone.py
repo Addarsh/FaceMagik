@@ -25,6 +25,9 @@ class SkinDetectionConfig:
     # Numpy array of image that needs to be processed. Leave as None if fetching image from local absolute path.
     IMAGE: np.ndarray = None
 
+    # If true, use new clustering algorithm else use older algorithm.
+    USE_NEW_CLUSTERING_ALGORITHM: bool = False
+
     # Minimum Kmeans difference value until repeated Kmeans clustering is performed.
     KMEANS_TOLERANCE: float = 2.0
 
@@ -76,6 +79,7 @@ class SceneBrightnessAndDirection:
     """
     Returns scene brightness enum based on brightness value.
     """
+
     def scene_brightness(self) -> SceneBrightness:
         if self.scene_brightness_value < 200:
             return SceneBrightness.DARK_SHADOW
@@ -229,6 +233,44 @@ class SkinToneAnalyzer:
         return all_cluster_masks, effective_color_map
 
     """
+    Break given mask into smaller clusters for given YCrCb image. The Y value (brightness) of the image is used to
+    create these clusters. Additionally, these clusters are further combined into a effective color map and returned 
+    along with the clusters.
+    """
+
+    @staticmethod
+    def make_new_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray):
+        start_time = time.time()
+        diff_img = (ycrcb_image[:, :, 0]).astype(float)
+
+        max_brightness = int(np.max(diff_img[mask_to_process]))
+        min_brightness = int(np.min(diff_img[mask_to_process]))
+        mask_clusters = []
+        curr_mask = np.zeros(diff_img.shape, dtype=bool)
+        curr_max_brightness = max_brightness
+        for brightness in range(max_brightness, min_brightness - 1, -1):
+            curr_mask = np.bitwise_or(curr_mask, np.bitwise_and(diff_img == brightness, mask_to_process))
+            if curr_max_brightness - brightness >= 5:
+                mask_clusters.append(curr_mask)
+                curr_mask = np.zeros(diff_img.shape, dtype=bool)
+                curr_max_brightness = brightness - 1
+
+        if np.count_nonzero(curr_mask) > 0:
+            mask_clusters.append(curr_mask)
+
+        effective_color_map = {}
+        for m in mask_clusters:
+            munsell_color = ImageUtils.sRGBtoMunsell(np.mean(ycrcb_image[m], axis=0))
+            effective_color = SkinToneAnalyzer.effective_color(munsell_color)
+            if effective_color not in effective_color_map:
+                effective_color_map[effective_color] = m
+            else:
+                effective_color_map[effective_color] = np.bitwise_or(effective_color_map[effective_color], m)
+
+        print("NEW CLUSTERING LATENCY: ", time.time() - start_time)
+        return mask_clusters, effective_color_map
+
+    """
     Computes average brightness of the scene. The person in the image is expected to be smiling with teeth 
     visible else an exception is thrown.
     """
@@ -243,10 +285,16 @@ class SkinToneAnalyzer:
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
 
         # Make clusters.
-        all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
-                                                                                self.skin_config.KMEANS_TOLERANCE,
-                                                                                self.skin_config.KMEANS_TEETH_MASK_PERCENT_CUTOFF,
-                                                                                self.skin_config.DEBUG_MODE)
+        if self.skin_config.USE_NEW_CLUSTERING_ALGORITHM:
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_new_clusters(ycrcb_image, mask_to_process)
+            # Filter masks that are larger than 5% in size.
+            effective_color_map = dict(filter(lambda elem: ImageUtils.percentPoints(elem[1], total_points) >= 5,
+                                              effective_color_map.items()))
+        else:
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
+                                                                                    self.skin_config.KMEANS_TOLERANCE,
+                                                                                    self.skin_config.KMEANS_TEETH_MASK_PERCENT_CUTOFF,
+                                                                                    self.skin_config.DEBUG_MODE)
 
         if self.skin_config.ITERATE_TEETH_CLUSTERS:
             # Iterate to optimize final clusters.
@@ -287,10 +335,13 @@ class SkinToneAnalyzer:
         total_points = np.count_nonzero(mask_to_process)
 
         # Make clusters.
-        all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
-                                                                                skin_config.KMEANS_TOLERANCE,
-                                                                                skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF,
-                                                                                skin_config.DEBUG_MODE)
+        if skin_config.USE_NEW_CLUSTERING_ALGORITHM:
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_new_clusters(ycrcb_image, mask_to_process)
+        else:
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
+                                                                                    skin_config.KMEANS_TOLERANCE,
+                                                                                    skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF,
+                                                                                    skin_config.DEBUG_MODE)
 
         # Get light direction from face mask clusters.
         mask_directions_list = [ImageUtils.get_mask_direction(b_mask, nose_middle_point, rotation_matrix,
@@ -361,10 +412,13 @@ class SkinToneAnalyzer:
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
 
         # Make clusters.
-        all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
-                                                                                self.skin_config.KMEANS_TOLERANCE,
-                                                                                self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF,
-                                                                                self.skin_config.DEBUG_MODE)
+        if self.skin_config.USE_NEW_CLUSTERING_ALGORITHM:
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_new_clusters(ycrcb_image, mask_to_process)
+        else:
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
+                                                                                    self.skin_config.KMEANS_TOLERANCE,
+                                                                                    self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF,
+                                                                                    self.skin_config.DEBUG_MODE)
 
         # Get light direction from face mask clusters.
         mask_directions_list = [ImageUtils.get_mask_direction(b_mask, self.face.noseMiddlePoint, self.face.rotMatrix,
@@ -527,7 +581,8 @@ if __name__ == "__main__":
     skin_detection_config.IMAGE_PATH = args.image
     skin_detection_config.COMBINE_MASKS = True
     skin_detection_config.DEBUG_MODE = True
-    skin_detection_config.ITERATE_TEETH_CLUSTERS = True
+    skin_detection_config.ITERATE_TEETH_CLUSTERS = False
+    skin_detection_config.USE_NEW_CLUSTERING_ALGORITHM = True
 
     if args.bri is not None:
         skin_detection_config.BRIGHTNESS_UPDATE_FACTOR = float(args.bri)
@@ -536,6 +591,6 @@ if __name__ == "__main__":
 
     analyzer = SkinToneAnalyzer(skin_detection_config)
     # analyzer.process_skin_tone()
-    #print("Brightness value: ", analyzer.determine_brightness())
-    #print ("Primary light direction: ", analyzer.get_light_direction())
+    # print("Brightness value: ", analyzer.determine_brightness())
+    # print ("Primary light direction: ", analyzer.get_light_direction())
     print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
