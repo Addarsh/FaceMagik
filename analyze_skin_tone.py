@@ -1,3 +1,4 @@
+import multiprocessing.sharedctypes
 import os
 import argparse
 import numpy as np
@@ -7,8 +8,10 @@ import time
 import multiprocessing as mp
 
 from face import Face
-from common import InferenceConfig, SceneBrightness
+from common import InferenceConfig, SceneBrightness, LightDirection
 from mrcnn import model as model_lib
+from dataclasses import dataclass
+from multiprocessing import Queue
 
 """
 Configuration details associated with skin detection algorithm.
@@ -58,6 +61,30 @@ class SkinDetectionConfig:
 
 class TeethNotVisibleException(ValueError):
     pass
+
+
+"""
+Container class for computed scene brightness and light direction.
+"""
+
+
+@dataclass
+class SceneBrightnessAndDirection:
+    scene_brightness_value: int
+    primary_light_direction: LightDirection
+
+    """
+    Returns scene brightness enum based on brightness value.
+    """
+    def scene_brightness(self) -> SceneBrightness:
+        if self.scene_brightness_value < 200:
+            return SceneBrightness.DARK_SHADOW
+        elif self.scene_brightness_value < 220:
+            return SceneBrightness.SOFT_SHADOW
+        elif self.scene_brightness_value > 225:
+            return SceneBrightness.TOO_BRIGHT
+
+        return SceneBrightness.NEUTRAL_LIGHTING
 
 
 """
@@ -202,10 +229,11 @@ class SkinToneAnalyzer:
         return all_cluster_masks, effective_color_map
 
     """
-    Processes image to determine brightness of the scene. The person in the image is expected to be smiling.
+    Computes average brightness of the scene. The person in the image is expected to be smiling with teeth 
+    visible else an exception is thrown.
     """
 
-    def determine_brightness(self) -> SceneBrightness:
+    def determine_brightness(self) -> int:
         if not self.face.is_teeth_visible():
             raise TeethNotVisibleException("Teeth not visible for config: " +
                                            str(self.skin_config))
@@ -246,15 +274,7 @@ class SkinToneAnalyzer:
         if self.skin_config.DEBUG_MODE:
             self.face.show_orig_image()
 
-        # Map to brightness value.
-        if mean_brightness < 200:
-            return SceneBrightness.DARK_SHADOW
-        elif mean_brightness < 220:
-            return SceneBrightness.SOFT_SHADOW
-        elif mean_brightness > 225:
-            return SceneBrightness.TOO_BRIGHT
-
-        return SceneBrightness.NEUTRAL_LIGHTING
+        return mean_brightness
 
     """
     Static method that returns Primary light direction. Used for parallel execution.
@@ -263,7 +283,7 @@ class SkinToneAnalyzer:
     @staticmethod
     def get_primary_light_direction(ycrcb_image: np.ndarray, mask_to_process: np.ndarray,
                                     nose_middle_point: np.ndarray, rotation_matrix: np.ndarray, skin_config:
-            SkinDetectionConfig):
+            SkinDetectionConfig, light_direction_queue: multiprocessing.Queue) -> LightDirection:
         total_points = np.count_nonzero(mask_to_process)
 
         # Make clusters.
@@ -281,27 +301,29 @@ class SkinToneAnalyzer:
         mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
 
         primary_light_direction = Face.process_mask_directions(mask_directions_list, mask_percent_list)
-        print("Primary Light direction: ", primary_light_direction)
+        if light_direction_queue is not None:
+            light_direction_queue.put(primary_light_direction)
         return primary_light_direction
 
     """
     Instance method that returns primary light direction. Used for sequential execution.
     """
 
-    def get_light_direction(self):
+    def get_light_direction(self) -> LightDirection:
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
         mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
         node_middle_point = self.face.noseMiddlePoint
         rotation_matrix = self.face.rotMatrix
 
         return SkinToneAnalyzer.get_primary_light_direction(ycrcb_image, mask_to_process, node_middle_point,
-                                                            rotation_matrix, self.skin_config)
+                                                            rotation_matrix, self.skin_config,
+                                                            None)
 
     """
     Returns Scene Brightness and Primary Light Direction.
     """
 
-    def get_scene_brightness_and_primary_light_direction(self):
+    def get_scene_brightness_and_primary_light_direction(self) -> SceneBrightnessAndDirection:
         start_time = time.time()
         self.skin_config.DEBUG_MODE = False
         mp.set_start_method('fork')
@@ -310,16 +332,21 @@ class SkinToneAnalyzer:
         mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
         node_middle_point = self.face.noseMiddlePoint
         rotation_matrix = self.face.rotMatrix
+        light_direction_queue = Queue()
         p = mp.Process(target=SkinToneAnalyzer.get_primary_light_direction, args=(ycrcb_image, mask_to_process,
-                                                                               node_middle_point, rotation_matrix,
-                                                                               self.skin_config))
+                                                                                  node_middle_point, rotation_matrix,
+                                                                                  self.skin_config,
+                                                                                  light_direction_queue))
         p.start()
 
-        scene_brightness = self.determine_brightness()
-        print("Scene Brightness: ", scene_brightness)
+        scene_brightness_value = self.determine_brightness()
 
         p.join()
+        primary_light_direction = light_direction_queue.get()
+
         print("Scene brightness and primary light direction detection latency: ", time.time() - start_time)
+
+        return SceneBrightnessAndDirection(scene_brightness_value, primary_light_direction)
 
     """
     Process skin tone for given image.
@@ -508,7 +535,7 @@ if __name__ == "__main__":
         skin_detection_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
     analyzer = SkinToneAnalyzer(skin_detection_config)
-    #analyzer.process_skin_tone()
-    # print("Brightness value: ", analyzer.determine_brightness())
+    # analyzer.process_skin_tone()
+    #print("Brightness value: ", analyzer.determine_brightness())
     #print ("Primary light direction: ", analyzer.get_light_direction())
-    analyzer.get_scene_brightness_and_primary_light_direction()
+    print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
