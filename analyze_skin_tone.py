@@ -526,10 +526,10 @@ class SkinToneAnalyzer:
         return SceneBrightnessAndDirection(scene_brightness_value, primary_light_direction)
 
     """
-    Process skin tone for given image.
+    Detects skin tone for given face image.
     """
 
-    def process_skin_tone(self) -> None:
+    def detect_skin_tone(self) -> None:
         # mask_to_process = self.face.get_face_keypoints()
         # mask_to_process = self.face.get_face_until_nose_end()
         # mask_to_process = self.face.get_face_mask_without_area_around_eyes()
@@ -589,7 +589,6 @@ if __name__ == "__main__":
 
     skin_detection_config = SkinDetectionConfig()
     skin_detection_config.IMAGE_PATH = args.image
-    skin_detection_config.COMBINE_MASKS = True
     skin_detection_config.DEBUG_MODE = True
     skin_detection_config.USE_NEW_CLUSTERING_ALGORITHM = True
 
@@ -599,7 +598,7 @@ if __name__ == "__main__":
         skin_detection_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
     analyzer = SkinToneAnalyzer(skin_detection_config)
-    #analyzer.process_skin_tone()
     #print("Brightness value: ", analyzer.determine_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction())
-    print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
+    #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
+    analyzer.detect_skin_tone()
