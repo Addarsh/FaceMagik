@@ -11,7 +11,7 @@ from face import Face
 from common import InferenceConfig, SceneBrightness, LightDirection
 from mrcnn import model as model_lib
 from dataclasses import dataclass
-from multiprocessing import Queue
+from multiprocessing import Queue, Pool
 
 """
 Configuration details associated with skin detection algorithm.
@@ -41,7 +41,7 @@ class SkinDetectionConfig:
     ITERATE_TEETH_CLUSTERS = False
 
     # If true, iterate face clusters for fine-grained results. Defaults to true.
-    ITERATE_FACE_CLUSTERS = True
+    ITERATE_FACE_CLUSTERS = False
 
     # Factor to multiple image's per pixel brightness value. Should always be a positive value, defaults to 1.
     BRIGHTNESS_UPDATE_FACTOR: float = 1.0
@@ -129,6 +129,9 @@ class SkinToneAnalyzer:
 
         self.face = face
         self.skin_config = skin_config
+
+        # Multiprocessing library should use fork mode.
+        mp.set_start_method('fork')
 
     """
     Plots a figure with each cluster's color and Munsell value. Primary use for analysis of similar colors.
@@ -359,6 +362,7 @@ class SkinToneAnalyzer:
         start_time = time.time()
         diff_img = (ycrcb_image[:, :, 0]).astype(float)
 
+        # Break mask into smaller clusters.
         max_brightness = int(np.max(diff_img[mask_to_process]))
         min_brightness = int(np.min(diff_img[mask_to_process]))
         mask_clusters = []
@@ -374,16 +378,23 @@ class SkinToneAnalyzer:
         if np.count_nonzero(curr_mask) > 0:
             mask_clusters.append(curr_mask)
 
-        effective_color_map = {}
-        for m in mask_clusters:
-            munsell_color = ImageUtils.sRGBtoMunsell(np.mean(ycrcb_image[m], axis=0))
-            effective_color = SkinToneAnalyzer.effective_color(munsell_color)
-            if effective_color not in effective_color_map:
-                effective_color_map[effective_color] = m
-            else:
-                effective_color_map[effective_color] = np.bitwise_or(effective_color_map[effective_color], m)
+        # Compute effective color of each cluster mask and group them.
+        with Pool(processes=mp.cpu_count()) as pool:
+            results = [pool.apply_async(ImageUtils.sRGBtoMunsell, (np.mean(ycrcb_image[m], axis=0),)) for m in
+                       mask_clusters]
+            munsell_color_list = [result.get() for result in results]
+            effective_color_list = [SkinToneAnalyzer.effective_color(munsell_color) for munsell_color in
+                                    munsell_color_list]
 
-        print("NEW CLUSTERING LATENCY: ", time.time() - start_time)
+        effective_color_map = {}
+        for effective_color, mask in zip(effective_color_list, mask_clusters):
+            if effective_color not in effective_color_map:
+                effective_color_map[effective_color] = mask
+            else:
+                effective_color_map[effective_color] = np.bitwise_or(effective_color_map[effective_color], mask)
+
+        print("New Clustering latency: ", time.time()-start_time)
+
         return mask_clusters, effective_color_map
 
     """
@@ -493,7 +504,6 @@ class SkinToneAnalyzer:
     def get_scene_brightness_and_primary_light_direction(self) -> SceneBrightnessAndDirection:
         start_time = time.time()
         self.skin_config.DEBUG_MODE = False
-        mp.set_start_method('fork')
 
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
         mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
@@ -581,7 +591,6 @@ if __name__ == "__main__":
     skin_detection_config.IMAGE_PATH = args.image
     skin_detection_config.COMBINE_MASKS = True
     skin_detection_config.DEBUG_MODE = True
-    skin_detection_config.ITERATE_TEETH_CLUSTERS = False
     skin_detection_config.USE_NEW_CLUSTERING_ALGORITHM = True
 
     if args.bri is not None:
@@ -590,7 +599,7 @@ if __name__ == "__main__":
         skin_detection_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
     analyzer = SkinToneAnalyzer(skin_detection_config)
-    # analyzer.process_skin_tone()
-    # print("Brightness value: ", analyzer.determine_brightness())
+    #analyzer.process_skin_tone()
+    #print("Brightness value: ", analyzer.determine_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction())
     print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
