@@ -112,9 +112,7 @@ class SkinToneAnalyzer:
     blue = "Blue"
     none = "None"
 
-    def __init__(self, skin_config: object):
-        # Load Mask RCNN model.
-        maskrcnn_model = SkinToneAnalyzer.construct_model()
+    def __init__(self, maskrcnn_model, skin_config: object):
 
         # Detect face.
         if skin_config.IMAGE_PATH != "":
@@ -254,7 +252,7 @@ class SkinToneAnalyzer:
     """
 
     @staticmethod
-    def construct_model():
+    def construct_model(weights_relative_path):
         start_time = time.time()
 
         # Create model
@@ -262,7 +260,7 @@ class SkinToneAnalyzer:
 
         # Select weights file to load
         try:
-            weights_path = os.path.join(os.getcwd(), "../maskrcnn_model/mask_rcnn_face_0060.h5")
+            weights_path = os.path.join(os.getcwd(), weights_relative_path)
         except Exception as e:
             raise
 
@@ -597,7 +595,10 @@ if __name__ == "__main__":
     if args.sat is not None:
         skin_detection_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
-    analyzer = SkinToneAnalyzer(skin_detection_config)
+    # Load Mask RCNN model.
+    maskrcnn_model = SkinToneAnalyzer.construct_model( "maskrcnn_model/mask_rcnn_face_0060.h5")
+
+    analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config)
     #print("Brightness value: ", analyzer.determine_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction())
     #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
