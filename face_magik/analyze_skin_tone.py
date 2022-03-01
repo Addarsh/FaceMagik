@@ -262,7 +262,7 @@ class SkinToneAnalyzer:
 
         # Select weights file to load
         try:
-            weights_path = os.path.join(os.getcwd(), "maskrcnn_model/mask_rcnn_face_0060.h5")
+            weights_path = os.path.join(os.getcwd(), "../maskrcnn_model/mask_rcnn_face_0060.h5")
         except Exception as e:
             raise
 

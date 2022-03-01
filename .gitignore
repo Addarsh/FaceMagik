@@ -6,6 +6,8 @@ __pycache__/
 env/
 maskrcnn_model/
 tensorflow/
+dist/
+face_magik/face_magik_addarsh.egg-info/
 
 # Weird file extensions #
 ###################
