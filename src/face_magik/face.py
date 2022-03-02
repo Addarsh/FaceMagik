@@ -16,8 +16,7 @@ from scipy import ndimage
 from scipy.optimize import minimize
 from image_utils import ImageUtils
 from sklearn.cluster import KMeans
-from enum import Enum
-from common import (
+from common.common import (
     EYE_OPEN,
     EYEBALL,
     EYEBROW,
@@ -36,7 +35,7 @@ from common import (
     BALD_HEAD,
     EAR,
 )
-from common import label_id_map, MaskDirection, LightDirection
+from common.common import label_id_map, MaskDirection, LightDirection
 
 
 class Face:

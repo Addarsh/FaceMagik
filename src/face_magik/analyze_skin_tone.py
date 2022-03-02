@@ -2,16 +2,16 @@ import multiprocessing.sharedctypes
 import os
 import argparse
 import numpy as np
-from image_utils import ImageUtils
 import matplotlib.pyplot as plt
 import time
 import multiprocessing as mp
 
 from face import Face
-from common import InferenceConfig, SceneBrightness, LightDirection
+from common.common import InferenceConfig, SceneBrightness, LightDirection
 from mrcnn import model as model_lib
 from dataclasses import dataclass
 from multiprocessing import Queue, Pool
+from image_utils import ImageUtils
 
 """
 Configuration details associated with skin detection algorithm.
@@ -596,7 +596,7 @@ if __name__ == "__main__":
         skin_detection_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
     # Load Mask RCNN model.
-    maskrcnn_model = SkinToneAnalyzer.construct_model( "maskrcnn_model/mask_rcnn_face_0060.h5")
+    maskrcnn_model = SkinToneAnalyzer.construct_model("maskrcnn_model/mask_rcnn_face_0060.h5")
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config)
     #print("Brightness value: ", analyzer.determine_brightness())

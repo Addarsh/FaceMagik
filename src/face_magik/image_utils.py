@@ -17,7 +17,7 @@ from scipy.optimize import minimize
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
 from colormath import color_diff_matrix
-from common import MaskDirection
+from common.common import MaskDirection
 
 
 class ImageUtils:
