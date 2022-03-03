@@ -579,7 +579,7 @@ class SkinToneAnalyzer:
 
 if __name__ == "__main__":
     # Run this script from parent directory level (face_magik) of this module.
-    # Example: python -m face_magik.skintone --image <image_path>
+    # Example: python -m facemagik.skintone --image <image_path>
     # Stack Overflow answer: https://stackoverflow.com/questions/47319423
 
     # Parse command line arguments

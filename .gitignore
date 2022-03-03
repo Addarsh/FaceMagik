@@ -7,7 +7,7 @@ env/
 maskrcnn_model/
 tensorflow/
 dist/
-src/face_magik_addarsh.egg-info/
+src/facemagik_addarsh.egg-info/
 
 # Weird file extensions #
 ###################
