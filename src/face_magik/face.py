@@ -15,7 +15,7 @@ import math
 from scipy import ndimage
 from scipy.optimize import minimize
 from sklearn.cluster import KMeans
-from .image_utils import ImageUtils
+from .utils import ImageUtils
 from .common import (
     EYE_OPEN,
     EYEBALL,

@@ -9,7 +9,7 @@ import multiprocessing as mp
 from mrcnn import model as model_lib
 from dataclasses import dataclass
 from multiprocessing import Queue, Pool
-from .image_utils import ImageUtils
+from .utils import ImageUtils
 from .face import Face
 from .common import InferenceConfig, SceneBrightness, LightDirection
 
@@ -579,7 +579,7 @@ class SkinToneAnalyzer:
 
 if __name__ == "__main__":
     # Run this script from parent directory level (face_magik) of this module.
-    # Example: python -m face_magik.analyze_skin_tone --image <image_path>
+    # Example: python -m face_magik.skintone --image <image_path>
     # Stack Overflow answer: https://stackoverflow.com/questions/47319423
 
     # Parse command line arguments
