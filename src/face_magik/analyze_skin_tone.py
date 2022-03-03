@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 import time
 import multiprocessing as mp
 
-from face import Face
-from common.common import InferenceConfig, SceneBrightness, LightDirection
 from mrcnn import model as model_lib
 from dataclasses import dataclass
 from multiprocessing import Queue, Pool
-from image_utils import ImageUtils
+from .image_utils import ImageUtils
+from .face import Face
+from .common import InferenceConfig, SceneBrightness, LightDirection
 
 """
 Configuration details associated with skin detection algorithm.
@@ -578,6 +578,10 @@ class SkinToneAnalyzer:
 
 
 if __name__ == "__main__":
+    # Run this script from parent directory level (face_magik) of this module.
+    # Example: python -m face_magik.analyze_skin_tone --image <image_path>
+    # Stack Overflow answer: https://stackoverflow.com/questions/47319423
+
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Image for processing')
     parser.add_argument('--image', required=True, metavar="path to video file")
@@ -595,8 +599,8 @@ if __name__ == "__main__":
     if args.sat is not None:
         skin_detection_config.SATURATION_UPDATE_FACTOR = float(args.sat)
 
-    # Load Mask RCNN model.
-    maskrcnn_model = SkinToneAnalyzer.construct_model("maskrcnn_model/mask_rcnn_face_0060.h5")
+    # Load Mask RCNN model. maskrcnn_model directory is located one level above where this script is run.
+    maskrcnn_model = SkinToneAnalyzer.construct_model("../maskrcnn_model/mask_rcnn_face_0060.h5")
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config)
     #print("Brightness value: ", analyzer.determine_brightness())
