@@ -92,6 +92,19 @@ class SceneBrightnessAndDirection:
 
 
 """
+Container class for skin color.
+"""
+
+
+@dataclass
+class SkinColor:
+    rgb: np.ndarray
+
+    def brightness(self):
+        return np.max(self.rgb)
+
+
+"""
 Class to analyze skin tone from a image of a face.
 """
 
@@ -356,7 +369,7 @@ class SkinToneAnalyzer:
     """
 
     @staticmethod
-    def make_new_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray):
+    def make_new_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray) -> (list, dict):
         start_time = time.time()
         diff_img = (ycrcb_image[:, :, 0]).astype(float)
 
@@ -391,7 +404,7 @@ class SkinToneAnalyzer:
             else:
                 effective_color_map[effective_color] = np.bitwise_or(effective_color_map[effective_color], mask)
 
-        print("New Clustering latency: ", time.time()-start_time)
+        print("New Clustering latency: ", time.time() - start_time)
 
         return mask_clusters, effective_color_map
 
@@ -524,10 +537,10 @@ class SkinToneAnalyzer:
         return SceneBrightnessAndDirection(scene_brightness_value, primary_light_direction)
 
     """
-    Detects skin tone for given face image.
+    Detects skin tones for given face image.
     """
 
-    def detect_skin_tone(self) -> None:
+    def detect_skin_tones(self) -> list:
         # mask_to_process = self.face.get_face_keypoints()
         # mask_to_process = self.face.get_face_until_nose_end()
         # mask_to_process = self.face.get_face_mask_without_area_around_eyes()
@@ -576,6 +589,9 @@ class SkinToneAnalyzer:
         if self.skin_config.DEBUG_MODE:
             self.face.show_orig_image()
 
+        # Return list of skin colors.
+        return [SkinColor(np.round(np.mean(self.face.image[mask], axis=0))) for mask in effective_color_map.values()]
+
 
 if __name__ == "__main__":
     # Run this script from parent directory level (face_magik) of this module.
@@ -603,7 +619,7 @@ if __name__ == "__main__":
     maskrcnn_model = SkinToneAnalyzer.construct_model("../maskrcnn_model/mask_rcnn_face_0060.h5")
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config)
-    #print("Brightness value: ", analyzer.determine_brightness())
+    # print("Brightness value: ", analyzer.determine_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction())
-    #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    analyzer.detect_skin_tone()
+    # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
+    print("Skin colors: ", analyzer.detect_skin_tones())
