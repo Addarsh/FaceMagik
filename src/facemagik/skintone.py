@@ -141,9 +141,6 @@ class SkinToneAnalyzer:
         self.face = face
         self.skin_config = skin_config
 
-        # Multiprocessing library should use fork mode.
-        mp.set_start_method('fork')
-
     """
     Plots a figure with each cluster's color and Munsell value. Primary use for analysis of similar colors.
     """
@@ -604,6 +601,9 @@ if __name__ == "__main__":
     parser.add_argument('--bri', required=False, metavar="bri")
     parser.add_argument('--sat', required=False, metavar="sat")
     args = parser.parse_args()
+
+    # Multiprocessing library should use fork mode.
+    mp.set_start_method('fork')
 
     skin_detection_config = SkinDetectionConfig()
     skin_detection_config.IMAGE_PATH = args.image
