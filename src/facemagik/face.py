@@ -1077,6 +1077,7 @@ class Face:
         right_percent = 0 if MaskDirection.RIGHT not in percent_per_direction else percent_per_direction[
             MaskDirection.RIGHT]
 
+        left_center_right_cutoff_percent: int = 70
         max_percent = max(left_percent, center_percent, right_percent)
         if max_percent == center_percent:
             # Light is predominantly in the direction or behind the person.
@@ -1090,7 +1091,7 @@ class Face:
                 if end_direction == MaskDirection.CENTER:
                     return LightDirection.LEFT_CENTER
 
-                if max_percent >= 50:
+                if max_percent >= left_center_right_cutoff_percent:
                     return LightDirection.LEFT_CENTER_RIGHT
 
                 return LightDirection.LEFT_TO_RIGHT
@@ -1099,7 +1100,7 @@ class Face:
             if end_direction == MaskDirection.CENTER:
                 return LightDirection.RIGHT_CENTER
 
-            if max_percent >= 50:
+            if max_percent >= left_center_right_cutoff_percent:
                 return LightDirection.RIGHT_CENTER_LEFT
 
             return LightDirection.RIGHT_TO_LEFT
@@ -1152,7 +1153,7 @@ class Face:
 
         print("percentPerDirection: ", percent_per_direction)
 
-        return Face.get_light_direction(combined_mask_direction_list, percent_per_direction)
+        return Face.get_light_direction(combined_mask_direction_list, percent_per_direction), percent_per_direction
 
     """
     get_left_forehead_points returns left half points on the forehead.

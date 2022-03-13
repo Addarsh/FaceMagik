@@ -75,6 +75,8 @@ Container class for computed scene brightness and light direction.
 class SceneBrightnessAndDirection:
     scene_brightness_value: int
     primary_light_direction: LightDirection
+    # Percentage of face mask that is in given mask direction (LEFT, CENTER or RIGHT).
+    percent_per_direction: dict
 
     """
     Returns scene brightness enum based on brightness value.
@@ -486,10 +488,11 @@ class SkinToneAnalyzer:
                                 all_cluster_masks]
         mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
 
-        primary_light_direction = Face.process_mask_directions(mask_directions_list, mask_percent_list)
+        primary_light_direction, percent_per_direction = Face.process_mask_directions(mask_directions_list,
+                                                                                 mask_percent_list)
         if light_direction_queue is not None:
-            light_direction_queue.put(primary_light_direction)
-        return primary_light_direction
+            light_direction_queue.put((primary_light_direction, percent_per_direction))
+        return primary_light_direction, percent_per_direction
 
     """
     Instance method that returns primary light direction. Used for sequential execution.
@@ -527,11 +530,11 @@ class SkinToneAnalyzer:
         scene_brightness_value = self.determine_brightness()
 
         p.join()
-        primary_light_direction = light_direction_queue.get()
+        primary_light_direction, percent_per_direction = light_direction_queue.get()
 
         print("Scene brightness and primary light direction detection latency: ", time.time() - start_time)
 
-        return SceneBrightnessAndDirection(scene_brightness_value, primary_light_direction)
+        return SceneBrightnessAndDirection(scene_brightness_value, primary_light_direction, percent_per_direction)
 
     """
     Detects skin tones for given face image.
@@ -561,8 +564,9 @@ class SkinToneAnalyzer:
                                 all_cluster_masks]
         mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
 
-        final_light_direction = Face.process_mask_directions(mask_directions_list, mask_percent_list)
-        print("\nFinal Light Direction: ", final_light_direction)
+        final_light_direction, percent_per_direction = Face.process_mask_directions(mask_directions_list,
+                                                                                    mask_percent_list)
+        print("\nFinal Light Direction: ", final_light_direction, " percent per direction: ", percent_per_direction)
 
         if self.skin_config.DEBUG_MODE:
             SkinToneAnalyzer.plot_colors(ycrcb_image, all_cluster_masks, total_points)
@@ -620,6 +624,6 @@ if __name__ == "__main__":
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config)
     # print("Brightness value: ", analyzer.determine_brightness())
-    # print ("Primary light direction: ", analyzer.get_light_direction())
-    # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    print("Skin colors: ", analyzer.detect_skin_tones())
+    print ("Primary light direction: ", analyzer.get_light_direction())
+    #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
+    #print("Skin colors: ", analyzer.detect_skin_tones())
