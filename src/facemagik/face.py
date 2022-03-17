@@ -1078,17 +1078,24 @@ class Face:
             MaskDirection.RIGHT]
 
         left_center_right_cutoff_percent: int = 70
+        left_or_right_center_cutoff_percent: int = 90
         max_percent = max(left_percent, center_percent, right_percent)
         if max_percent == center_percent:
             # Light is predominantly in the direction or behind the person.
             if start_direction == MaskDirection.CENTER:
                 if end_direction == MaskDirection.CENTER:
                     return LightDirection.CENTER
+                if center_percent >= left_or_right_center_cutoff_percent:
+                    # Direction as good as center.
+                    return LightDirection.CENTER
                 return LightDirection.CENTER_LEFT if end_direction == MaskDirection.LEFT else \
                     LightDirection.CENTER_RIGHT
 
             if start_direction == MaskDirection.LEFT:
                 if end_direction == MaskDirection.CENTER:
+                    if center_percent >= left_or_right_center_cutoff_percent:
+                        # Direction is as good as center.
+                        return LightDirection.CENTER
                     return LightDirection.LEFT_CENTER
 
                 if max_percent >= left_center_right_cutoff_percent:
@@ -1098,6 +1105,9 @@ class Face:
 
             # Start direction is right.
             if end_direction == MaskDirection.CENTER:
+                if center_percent >= left_or_right_center_cutoff_percent:
+                    # Direction is as good as center.
+                    return LightDirection.CENTER
                 return LightDirection.RIGHT_CENTER
 
             if max_percent >= left_center_right_cutoff_percent:
@@ -1125,7 +1135,7 @@ class Face:
         # percent for each direction and store in a map. Skip coalesced masks
         # from the final result that are less than 5% in size.
         combined_mask_direction_list = []
-        percent_per_direction: dict[MaskDirection, ] = {}
+        percent_per_direction = {}
         min_percent = 3
         direction = mask_directions_list[0]
         total_percent = 0
