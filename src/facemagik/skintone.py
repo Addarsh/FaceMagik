@@ -100,10 +100,22 @@ Container class for skin color.
 
 @dataclass
 class SkinColor:
+    DISPLAY_P3 = "displayP3"
+
     rgb: np.ndarray
+    percent_of_face_mask: int
+    profile: str
 
     def brightness(self):
         return np.max(self.rgb)
+
+"""
+Container class for Skin Tone which contains all skin colors.
+"""
+
+@dataclass
+class SkinTone:
+    skin_colors: []
 
 
 """
@@ -590,8 +602,17 @@ class SkinToneAnalyzer:
         if self.skin_config.DEBUG_MODE:
             self.face.show_orig_image()
 
-        # Return list of skin colors.
-        return [SkinColor(np.round(np.mean(self.face.image[mask], axis=0))) for mask in effective_color_map.values()]
+        # Return list of skin colors than are more than 10% in size.
+        skin_colors = []
+        skin_tone_percent_cutoff = 10
+        for mask in effective_color_map.values():
+            percent_of_face_mask = ImageUtils.percentPoints(mask, total_points)
+            if percent_of_face_mask >= skin_tone_percent_cutoff:
+                mean_color = np.round(np.mean(self.face.image[mask], axis=0))
+                skin_color = SkinColor(mean_color, round(percent_of_face_mask), SkinColor.DISPLAY_P3)
+                skin_colors.append(skin_color)
+
+        return SkinTone(skin_colors)
 
 
 if __name__ == "__main__":
@@ -624,6 +645,6 @@ if __name__ == "__main__":
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config)
     # print("Brightness value: ", analyzer.determine_brightness())
-    print ("Primary light direction: ", analyzer.get_light_direction())
+    #print ("Primary light direction: ", analyzer.get_light_direction())
     #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    #print("Skin colors: ", analyzer.detect_skin_tones())
+    print("Skin colors: ", analyzer.detect_skin_tones())
