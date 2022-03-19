@@ -94,12 +94,12 @@ class SceneBrightnessAndDirection:
 
 
 """
-Container class for skin color.
+Container class for skin tone.
 """
 
 
 @dataclass
-class SkinColor:
+class SkinTone:
     DISPLAY_P3 = "displayP3"
 
     rgb: np.ndarray
@@ -108,14 +108,6 @@ class SkinColor:
 
     def brightness(self):
         return np.max(self.rgb)
-
-"""
-Container class for Skin Tone which contains all skin colors.
-"""
-
-@dataclass
-class SkinTone:
-    skin_colors: []
 
 
 """
@@ -153,6 +145,9 @@ class SkinToneAnalyzer:
             face.image = new_img
 
         self.face = face
+        self.face_mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
+        self.mouth_mask_to_process = self.face.get_mouth_points()
+        self.face_mask_effective_color_map = {}
         self.skin_config = skin_config
 
     """
@@ -380,7 +375,7 @@ class SkinToneAnalyzer:
     """
 
     @staticmethod
-    def make_new_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray) -> (list, dict):
+    def __make_new_clusters(ycrcb_image: np.ndarray, mask_to_process: np.ndarray) -> (list, dict):
         start_time = time.time()
         diff_img = (ycrcb_image[:, :, 0]).astype(float)
 
@@ -420,6 +415,48 @@ class SkinToneAnalyzer:
         return mask_clusters, effective_color_map
 
     """
+    Static method that computes brightness of scene. Used in parallel execution.
+    """
+
+    @staticmethod
+    def get_brightness(rgb_image: np.ndarray, ycrcb_image: np.ndarray, mask_to_process: np.ndarray, skin_config:
+    SkinDetectionConfig, brightness_queue: multiprocessing.Queue):
+        total_points = np.count_nonzero(mask_to_process)
+
+        # Make clusters.
+        if skin_config.USE_NEW_CLUSTERING_ALGORITHM:
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.__make_new_clusters(ycrcb_image, mask_to_process)
+            # Filter masks that are larger than 5% in size.
+            effective_color_map = dict(filter(lambda elem: ImageUtils.percentPoints(elem[1], total_points) >= 5,
+                                              effective_color_map.items()))
+        else:
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
+                                                                                    skin_config.KMEANS_TOLERANCE,
+                                                                                    skin_config.KMEANS_TEETH_MASK_PERCENT_CUTOFF,
+                                                                                    skin_config.DEBUG_MODE)
+
+        # Check mean brightness minimum coverage of the teeth.
+        final_mask = np.zeros(mask_to_process.shape, dtype=bool)
+
+        # Find mean brightness of first two masks in decreasing order of brightness.
+        count = 0
+        for effective_color in effective_color_map:
+            final_mask = np.bitwise_or(final_mask, effective_color_map[effective_color])
+            count += 1
+            if count == 2:
+                break
+
+        mean_brightness = round(np.mean(np.max(rgb_image, axis=2)[final_mask]))
+        if skin_config.DEBUG_MODE:
+            print("\nMean brightness value: ", mean_brightness, " with percent: ", ImageUtils.percentPoints(
+                final_mask, total_points), "\n")
+
+        if brightness_queue is not None:
+            brightness_queue.put(mean_brightness)
+
+        return mean_brightness
+
+    """
     Computes average brightness of the scene. The person in the image is expected to be smiling with teeth 
     visible else an exception is thrown.
     """
@@ -429,13 +466,13 @@ class SkinToneAnalyzer:
             raise TeethNotVisibleException("Teeth not visible for config: " +
                                            str(self.skin_config))
 
-        mask_to_process = self.face.get_mouth_points()
+        mask_to_process = self.mouth_mask_to_process
         total_points = np.count_nonzero(mask_to_process)
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
 
         # Make clusters.
         if self.skin_config.USE_NEW_CLUSTERING_ALGORITHM:
-            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_new_clusters(ycrcb_image, mask_to_process)
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.__make_new_clusters(ycrcb_image, mask_to_process)
             # Filter masks that are larger than 5% in size.
             effective_color_map = dict(filter(lambda elem: ImageUtils.percentPoints(elem[1], total_points) >= 5,
                                               effective_color_map.items()))
@@ -485,7 +522,7 @@ class SkinToneAnalyzer:
 
         # Make clusters.
         if skin_config.USE_NEW_CLUSTERING_ALGORITHM:
-            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_new_clusters(ycrcb_image, mask_to_process)
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.__make_new_clusters(ycrcb_image, mask_to_process)
         else:
             all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
                                                                                     skin_config.KMEANS_TOLERANCE,
@@ -501,10 +538,11 @@ class SkinToneAnalyzer:
         mask_percent_list = [ImageUtils.percentPoints(b_mask, total_points) for b_mask in all_cluster_masks]
 
         primary_light_direction, percent_per_direction = Face.process_mask_directions(mask_directions_list,
-                                                                                 mask_percent_list)
+                                                                                      mask_percent_list)
         if light_direction_queue is not None:
             light_direction_queue.put((primary_light_direction, percent_per_direction))
-        return primary_light_direction, percent_per_direction
+
+        return primary_light_direction, percent_per_direction, effective_color_map
 
     """
     Instance method that returns primary light direction. Used for sequential execution.
@@ -512,7 +550,7 @@ class SkinToneAnalyzer:
 
     def get_light_direction(self) -> LightDirection:
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
-        mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
+        mask_to_process = self.face_mask_to_process
         node_middle_point = self.face.noseMiddlePoint
         rotation_matrix = self.face.rotMatrix
 
@@ -521,7 +559,8 @@ class SkinToneAnalyzer:
                                                             None)
 
     """
-    Returns Scene Brightness and Primary Light Direction.
+    Computes Scene Brightness and Primary Light Direction. Primary light direction is executed in a separate process 
+    to parallelize compute.
     """
 
     def get_scene_brightness_and_primary_light_direction(self) -> SceneBrightnessAndDirection:
@@ -529,7 +568,7 @@ class SkinToneAnalyzer:
         self.skin_config.DEBUG_MODE = False
 
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
-        mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
+        mask_to_process = self.face_mask_to_process
         node_middle_point = self.face.noseMiddlePoint
         rotation_matrix = self.face.rotMatrix
         light_direction_queue = Queue()
@@ -542,6 +581,7 @@ class SkinToneAnalyzer:
         scene_brightness_value = self.determine_brightness()
 
         p.join()
+
         primary_light_direction, percent_per_direction = light_direction_queue.get()
 
         print("Scene brightness and primary light direction detection latency: ", time.time() - start_time)
@@ -549,22 +589,70 @@ class SkinToneAnalyzer:
         return SceneBrightnessAndDirection(scene_brightness_value, primary_light_direction, percent_per_direction)
 
     """
-    Detects skin tones for given face image.
+    Computes Scene Brightness and Primary Light Direction. Scene brightness is executed in a separate process to 
+    parallelize compute.
     """
 
-    def detect_skin_tones(self) -> list:
-        # mask_to_process = self.face.get_face_keypoints()
-        # mask_to_process = self.face.get_face_until_nose_end()
-        # mask_to_process = self.face.get_face_mask_without_area_around_eyes()
-        mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
-        total_points = np.count_nonzero(mask_to_process)
+    def get_primary_light_direction_and_scene_brightness(self) -> SceneBrightnessAndDirection:
+        if not self.face.is_teeth_visible():
+            raise TeethNotVisibleException("Teeth not visible for config: " +
+                                           str(self.skin_config))
+
+        start_time = time.time()
+        self.skin_config.DEBUG_MODE = False
+
+        rgb_image = self.face.image
+        ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
+        mask_to_process = self.mouth_mask_to_process
+        brightness_queue = Queue()
+        p = mp.Process(target=SkinToneAnalyzer.get_brightness, args=(rgb_image, ycrcb_image, mask_to_process,
+                                                                     self.skin_config, brightness_queue))
+        p.start()
+
+        primary_light_direction, percent_per_direction, effective_color_map = self.get_light_direction()
+
+        p.join()
+
+        # Store effective color map of face mask.
+        self.face_mask_effective_color_map = effective_color_map
+
+        scene_brightness_value = brightness_queue.get()
+
+        print("Primary light direction detection and Scene brightness latency: ", time.time() - start_time)
+
+        return SceneBrightnessAndDirection(scene_brightness_value, primary_light_direction, percent_per_direction)
+
+    """
+    Computes skin tones associated with the face.
+    """
+
+    def get_skin_tones(self):
+        total_points = np.count_nonzero(self.face_mask_to_process)
+        ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
+
+        if len(self.face_mask_effective_color_map) == 0:
+            _, effective_color_map = SkinToneAnalyzer.__make_new_clusters(ycrcb_image, self.face_mask_to_process)
+        else:
+            effective_color_map = self.face_mask_effective_color_map
+
+        return SkinToneAnalyzer.__get_skin_tones(self.face.image, effective_color_map, total_points)
+
+    """
+    Detects skin tone and primary light direction for given face image. Only used for debugging purposes. Do nto use 
+    in production code.
+    """
+
+    def detect_skin_tone_and_light_direction(self) -> list:
+        total_points = np.count_nonzero(self.face_mask_to_process)
         ycrcb_image = ImageUtils.to_YCrCb(self.face.image)
 
         # Make clusters.
         if self.skin_config.USE_NEW_CLUSTERING_ALGORITHM:
-            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_new_clusters(ycrcb_image, mask_to_process)
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.__make_new_clusters(ycrcb_image,
+                                                                                          self.face_mask_to_process)
         else:
-            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image, mask_to_process,
+            all_cluster_masks, effective_color_map = SkinToneAnalyzer.make_clusters(ycrcb_image,
+                                                                                    self.face_mask_to_process,
                                                                                     self.skin_config.KMEANS_TOLERANCE,
                                                                                     self.skin_config.KMEANS_FACE_MASK_PERCENT_CUTOFF,
                                                                                     self.skin_config.DEBUG_MODE)
@@ -602,17 +690,25 @@ class SkinToneAnalyzer:
         if self.skin_config.DEBUG_MODE:
             self.face.show_orig_image()
 
-        # Return list of skin colors than are more than 10% in size.
-        skin_colors = []
+        return SkinToneAnalyzer.__get_skin_tones(self.face.image, effective_color_map, total_points)
+
+    """
+    Returns skin tones for given effective color map and total face mask points.
+    """
+
+    @staticmethod
+    def __get_skin_tones(rgb_image, effective_color_map, total_points):
+        # Return list of skin tones than are more than 10% in size.
+        skin_tones = []
         skin_tone_percent_cutoff = 10
         for mask in effective_color_map.values():
             percent_of_face_mask = ImageUtils.percentPoints(mask, total_points)
             if percent_of_face_mask >= skin_tone_percent_cutoff:
-                mean_color = np.round(np.mean(self.face.image[mask], axis=0))
-                skin_color = SkinColor(mean_color, round(percent_of_face_mask), SkinColor.DISPLAY_P3)
-                skin_colors.append(skin_color)
+                mean_color = np.round(np.mean(rgb_image[mask], axis=0))
+                skin_tone = SkinTone(mean_color, round(percent_of_face_mask), SkinTone.DISPLAY_P3)
+                skin_tones.append(skin_tone)
 
-        return SkinTone(skin_colors)
+        return skin_tones
 
 
 if __name__ == "__main__":
@@ -645,6 +741,8 @@ if __name__ == "__main__":
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config)
     # print("Brightness value: ", analyzer.determine_brightness())
-    #print ("Primary light direction: ", analyzer.get_light_direction())
-    #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    print("Skin colors: ", analyzer.detect_skin_tones())
+    # print ("Primary light direction: ", analyzer.get_light_direction()[:2])
+    # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
+    print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
+    # print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
+    #print("Skin Tones production: ", analyzer.get_skin_tones())
