@@ -148,6 +148,9 @@ class SkinToneAnalyzer:
         self.image = self.face.image
         self.face_mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
         self.mouth_mask_to_process = self.face.get_mouth_points()
+        self.nose_middle_point = self.face.noseMiddlePoint
+        self.rotation_matrix = self.face.rotMatrix
+        self.is_teeth_visible = self.face.is_teeth_visible()
         self.face_mask_effective_color_map = {}
         self.skin_config = skin_config
 
@@ -463,7 +466,7 @@ class SkinToneAnalyzer:
     """
 
     def determine_brightness(self) -> int:
-        if not self.face.is_teeth_visible():
+        if not self.is_teeth_visible:
             raise TeethNotVisibleException("Teeth not visible for config: " +
                                            str(self.skin_config))
 
@@ -553,8 +556,8 @@ class SkinToneAnalyzer:
     def get_light_direction(self) -> LightDirection:
         ycrcb_image = ImageUtils.to_YCrCb(self.image)
         mask_to_process = self.face_mask_to_process
-        node_middle_point = self.face.noseMiddlePoint
-        rotation_matrix = self.face.rotMatrix
+        node_middle_point = self.nose_middle_point
+        rotation_matrix = self.rotation_matrix
 
         return SkinToneAnalyzer.get_primary_light_direction(ycrcb_image, mask_to_process, node_middle_point,
                                                             rotation_matrix, self.skin_config,
@@ -571,8 +574,8 @@ class SkinToneAnalyzer:
 
         ycrcb_image = ImageUtils.to_YCrCb(self.image)
         mask_to_process = self.face_mask_to_process
-        node_middle_point = self.face.noseMiddlePoint
-        rotation_matrix = self.face.rotMatrix
+        node_middle_point = self.nose_middle_point
+        rotation_matrix = self.rotation_matrix
         light_direction_queue = Queue()
         p = mp.Process(target=SkinToneAnalyzer.get_primary_light_direction, args=(ycrcb_image, mask_to_process,
                                                                                   node_middle_point, rotation_matrix,
@@ -596,7 +599,7 @@ class SkinToneAnalyzer:
     """
 
     def get_primary_light_direction_and_scene_brightness(self) -> SceneBrightnessAndDirection:
-        if not self.face.is_teeth_visible():
+        if not self.is_teeth_visible:
             raise TeethNotVisibleException("Teeth not visible for config: " +
                                            str(self.skin_config))
 
@@ -660,7 +663,7 @@ class SkinToneAnalyzer:
                                                                                     self.skin_config.DEBUG_MODE)
 
         # Get light direction from face mask clusters.
-        mask_directions_list = [ImageUtils.get_mask_direction(b_mask, self.face.noseMiddlePoint, self.face.rotMatrix,
+        mask_directions_list = [ImageUtils.get_mask_direction(b_mask, self.nose_middle_point, self.rotation_matrix,
                                                               self.skin_config.DEBUG_MODE) for
                                 b_mask in
                                 all_cluster_masks]
@@ -690,7 +693,7 @@ class SkinToneAnalyzer:
                     print("percent: ", ImageUtils.percentPoints(m, total_points))
                     ImageUtils.face.show_mask(self.image, m)
 
-        img = ImageUtils.plot_points_new(self.image, [self.face.noseMiddlePoint])
+        img = ImageUtils.plot_points_new(self.image, [self.nose_middle_point])
         ImageUtils.show(img)
 
         if self.skin_config.DEBUG_MODE:
