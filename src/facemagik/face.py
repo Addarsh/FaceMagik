@@ -979,34 +979,6 @@ class Face:
         return mask
 
     """
-    Returns the rotation matrix to transform from original coordinates to one that is perpendicular to the line 
-    segment joining the eyes.
-    """
-
-    def rotation_matrix(self):
-        eye_masks = self.get_attr_masks(EYE_OPEN)
-        assert len(eye_masks) == 2, "Want 2 masks for eye!"
-
-        # Eye line.
-        left_eye_mask = eye_masks[0] if ImageUtils.bbox(eye_masks[0])[1] <= ImageUtils.bbox(eye_masks[1])[1] else eye_masks[1]
-        right_eye_mask = eye_masks[0] if ImageUtils.bbox(eye_masks[0])[1] > ImageUtils.bbox(eye_masks[1])[1] else eye_masks[1]
-
-        left_eye_cords = np.argwhere(left_eye_mask)
-        xmax_index = np.argmax(left_eye_cords, axis=0)[1]
-        left_max_cord = left_eye_cords[xmax_index]
-
-        right_eye_cords = np.argwhere(right_eye_mask)
-        xmin_index = np.argmin(right_eye_cords, axis=0)[1]
-        right_min_cord = right_eye_cords[xmin_index]
-
-        left_y, left_x = left_max_cord[0], left_max_cord[1]
-        right_y, right_x = right_min_cord[0], right_min_cord[1]
-        theta = math.atan(float(left_y - right_y) / float(right_x - left_x))
-        rot_matrix = np.array([[math.cos(theta), math.sin(theta)], [-math.sin(theta), math.cos(theta)]])
-
-        return rot_matrix
-
-    """
     Class encapsulating face mask results and other aspects of input image.
     """
 
@@ -1165,6 +1137,14 @@ class Face:
         for m in ebMasks:
             eMask = np.bitwise_xor(eMask, m)
         return eMask
+
+    """
+    Returns open eye masks associated with given face.
+    """
+    def get_eye_masks(self):
+        eye_masks = self.get_attr_masks(EYE_OPEN)
+        assert len(eye_masks) == 2, "Want 2 masks for eye!"
+        return eye_masks
 
     """
     Return true if teeth are visible in image and false otherwise.
