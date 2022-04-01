@@ -136,16 +136,7 @@ class Face:
         res = np.zeros(self.faceMask.shape, dtype=bool)
         for m in masks:
             res = np.bitwise_or(res, m)
-        return self.show_mask(res)
-
-    """
-    show_mask will display given mask.
-    """
-
-    def show_mask(self, mask, color=[0, 255, 0]):
-        clone = self.image.copy()
-        clone[mask] = np.array(color)
-        return ImageUtils.show(clone)
+        return ImageUtils.show_mask(self.image, res)
 
     """
     show_mask_with_image will display given mask with given image.
@@ -763,7 +754,7 @@ class Face:
             print("Mean brightness: ", np.mean(self.brightImage[m[0]], axis=0)[2] * (100.0 / 255.0), "percent: ",
                   (np.count_nonzero(m[0]) / np.count_nonzero(whiteMask)) * 100.0)
             maxBrightness = max(maxBrightness, np.mean(self.brightImage[m[0]], axis=0)[2] * (100.0 / 255.0))
-            self.show_mask(m[0])
+            ImageUtils.show_mask(self.image, m[0])
 
         return maxBrightness
 
@@ -1591,14 +1582,14 @@ class Face:
         print("Mask percent: ", np.count_nonzero(goodMask) / np.count_nonzero(self.faceMask))
 
         # Divide by Hue and then find brightness.
-        self.show_mask(goodMask)
+        ImageUtils.show_mask(self.image, goodMask)
 
         allSkinTones = []
         allHueMasks = self.divide_all_hue(goodMask)
         for m in allHueMasks:
             print("HUE: ", np.mean(self.to_hueImage(self.image)[m], axis=0)[0], " Mask percent: ",
                   (np.count_nonzero(m) / np.count_nonzero(goodMask)) * 100.0)
-            self.show_mask(m)
+            ImageUtils.show_mask(self.image, m)
             if np.count_nonzero(m) / np.count_nonzero(goodMask) < 0.05:
                 print("Skipped because mask size too small\n")
                 continue

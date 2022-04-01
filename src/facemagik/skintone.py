@@ -688,7 +688,7 @@ class SkinToneAnalyzer:
                 print("\nCombined masks")
                 for m in combined_masks:
                     print("percent: ", ImageUtils.percentPoints(m, total_points))
-                    self.face.show_mask(m)
+                    ImageUtils.face.show_mask(self.image, m)
 
         img = ImageUtils.plot_points_new(self.image, [self.face.noseMiddlePoint])
         ImageUtils.show(img)

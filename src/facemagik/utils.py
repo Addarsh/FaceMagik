@@ -1650,12 +1650,23 @@ class ImageUtils:
     show is an internal helper function to display given RGB image.
     """
 
+    @staticmethod
     def show(image, windowName="image"):
         # cv2.namedWindow(self.windowName, cv2.WINDOW_NORMAL)
         # cv2.resizeWindow(self.windowName, (100, 100))
         # cv2.imshow(self.windowName, cv2.cvtColor(ImageUtils.ResizeWithAspectRatio(image, width=600), cv2.COLOR_RGB2BGR))
         cv2.imshow(windowName, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         return cv2.waitKey(0) & 0xFF
+
+    """
+    show_mask will display given mask.
+    """
+
+    @staticmethod
+    def show_mask(image, mask, color=[0, 255, 0]):
+        clone = image.copy()
+        clone[mask] = np.array(color)
+        return ImageUtils.show(clone)
 
 
     """
