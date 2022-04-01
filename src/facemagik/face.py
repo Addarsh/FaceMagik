@@ -63,7 +63,6 @@ class Face:
             self.preds = self.make_predictions(maskrcnn_model)
 
         self.faceMask = self.get_face_mask()
-        self.rotMatrix = self.rotation_matrix()
         self.noseMiddlePoint = ImageUtils.mean_coordinate(self.get_nose_keypoints())
 
         if image_path.startswith("server/data") or image_path.startswith("server/video"):
@@ -985,27 +984,27 @@ class Face:
     """
 
     def rotation_matrix(self):
-        eyeMasks = self.get_attr_masks(EYE_OPEN)
-        assert len(eyeMasks) == 2, "Want 2 masks for eye!"
+        eye_masks = self.get_attr_masks(EYE_OPEN)
+        assert len(eye_masks) == 2, "Want 2 masks for eye!"
 
         # Eye line.
-        leftEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] <= self.bbox(eyeMasks[1])[1] else eyeMasks[1]
-        rightEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] > self.bbox(eyeMasks[1])[1] else eyeMasks[1]
+        left_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] <= self.bbox(eye_masks[1])[1] else eye_masks[1]
+        right_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] > self.bbox(eye_masks[1])[1] else eye_masks[1]
 
-        leftEyeCords = np.argwhere(leftEyeMask)
-        xMaxIndex = np.argmax(leftEyeCords, axis=0)[1]
-        leftMaxCord = leftEyeCords[xMaxIndex]
+        left_eye_cords = np.argwhere(left_eye_mask)
+        xmax_index = np.argmax(left_eye_cords, axis=0)[1]
+        left_max_cord = left_eye_cords[xmax_index]
 
-        rightEyeCords = np.argwhere(rightEyeMask)
-        xMinIndex = np.argmin(rightEyeCords, axis=0)[1]
-        rightMinCord = rightEyeCords[xMinIndex]
+        right_eye_cords = np.argwhere(right_eye_mask)
+        xmin_index = np.argmin(right_eye_cords, axis=0)[1]
+        right_min_cord = right_eye_cords[xmin_index]
 
-        leftY, leftX = leftMaxCord[0], leftMaxCord[1]
-        rightY, rightX = rightMinCord[0], rightMinCord[1]
-        theta = math.atan(float(leftY - rightY) / float(rightX - leftX))
-        rotMatrix = np.array([[math.cos(theta), math.sin(theta)], [-math.sin(theta), math.cos(theta)]])
+        left_y, left_x = left_max_cord[0], left_max_cord[1]
+        right_y, right_x = right_min_cord[0], right_min_cord[1]
+        theta = math.atan(float(left_y - right_y) / float(right_x - left_x))
+        rot_matrix = np.array([[math.cos(theta), math.sin(theta)], [-math.sin(theta), math.cos(theta)]])
 
-        return rotMatrix
+        return rot_matrix
 
     """
     Class encapsulating face mask results and other aspects of input image.

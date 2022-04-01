@@ -149,7 +149,7 @@ class SkinToneAnalyzer:
         self.face_mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
         self.mouth_mask_to_process = self.face.get_mouth_points()
         self.nose_middle_point = self.face.noseMiddlePoint
-        self.rotation_matrix = self.face.rotMatrix
+        self.rotation_matrix = self.face.rotation_matrix()
         self.is_teeth_visible = self.face.is_teeth_visible()
         self.face_mask_effective_color_map = {}
         self.skin_config = skin_config
