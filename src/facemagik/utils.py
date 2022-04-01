@@ -1647,6 +1647,18 @@ class ImageUtils:
         return hsvImage
 
     """
+    bbox returns bounding box (x1, y1, w, h) (top left point, width and height) of given mask.
+    """
+
+    @staticmethod
+    def bbox(mask):
+        rows = np.any(mask, axis=1)
+        cols = np.any(mask, axis=0)
+        rmin, rmax = np.where(rows)[0][[0, -1]]
+        cmin, cmax = np.where(cols)[0][[0, -1]]
+        return rmin, cmin, cmax - cmin + 1, rmax - rmin + 1
+
+    """
     show is an internal helper function to display given RGB image.
     """
 

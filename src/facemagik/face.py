@@ -711,7 +711,7 @@ class Face:
 
         noseMasks = self.get_attr_masks(NOSE)
         assert len(noseMasks) == 1, "Want 1 mask for nose!"
-        noseRowMin, _, _, noseHeight = self.bbox(noseMasks[0])
+        noseRowMin, _, _, noseHeight = ImageUtils.bbox(noseMasks[0])
         faceMask[noseRowMin + noseHeight:, :] = False
         return faceMask
 
@@ -770,9 +770,9 @@ class Face:
         assert len(nose_mask) == 1, "Want 1 mask for nose!"
 
         nose_mask = nose_mask[0]
-        left_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] <= self.bbox(eye_masks[1])[1] else eye_masks[1]
-        nose_row_min, nose_col_min, nose_width, nose_height = self.bbox(nose_mask)
-        left_eye_row_min, left_eye_col_min, left_eye_width, left_eye_height = self.bbox(left_eye_mask)
+        left_eye_mask = eye_masks[0] if ImageUtils.bbox(eye_masks[0])[1] <= ImageUtils.bbox(eye_masks[1])[1] else eye_masks[1]
+        nose_row_min, nose_col_min, nose_width, nose_height = ImageUtils.bbox(nose_mask)
+        left_eye_row_min, left_eye_col_min, left_eye_width, left_eye_height = ImageUtils.bbox(left_eye_mask)
 
         # row_min = left_eye_row_min+left_eye_height
         row_min = left_eye_row_min + 2 * left_eye_height
@@ -801,9 +801,9 @@ class Face:
         assert len(nose_mask) == 1, "Want 1 mask for nose!"
 
         nose_mask = nose_mask[0]
-        right_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] >= self.bbox(eye_masks[1])[1] else eye_masks[1]
-        nose_row_min, nose_col_min, nose_width, nose_height = self.bbox(nose_mask)
-        right_eye_row_min, right_eye_col_min, right_eye_width, right_eye_height = self.bbox(right_eye_mask)
+        right_eye_mask = eye_masks[0] if ImageUtils.bbox(eye_masks[0])[1] >= ImageUtils.bbox(eye_masks[1])[1] else eye_masks[1]
+        nose_row_min, nose_col_min, nose_width, nose_height = ImageUtils.bbox(nose_mask)
+        right_eye_row_min, right_eye_col_min, right_eye_width, right_eye_height = ImageUtils.bbox(right_eye_mask)
 
         # row_min = right_eye_row_min+right_eye_height
         row_min = right_eye_row_min + 2 * right_eye_height
@@ -829,13 +829,13 @@ class Face:
         assert len(nose_masks) == 1, "Want 1 mask for nose!"
         if len(nostril_masks) == 0:
             nose_mask = nose_masks[0]
-            row, _, _, h = self.bbox(nose_mask)
+            row, _, _, h = ImageUtils.bbox(nose_mask)
             nose_mask[row + h - 10:, :] = False
             return nose_mask
 
         row_max = 10 ** 10
         for mask in nostril_masks:
-            row, _, _, _ = self.bbox(mask)
+            row, _, _, _ = ImageUtils.bbox(mask)
             if row < row_max:
                 row_max = row
         nose_mask = nose_masks[0]
@@ -848,7 +848,7 @@ class Face:
 
     def get_left_nose_points(self):
         nsmask = self.get_nose_keypoints().copy()
-        _, cmin, w, _ = self.bbox(nsmask)
+        _, cmin, w, _ = ImageUtils.bbox(nsmask)
         xmid = int(cmin + float(w) / 2)
         nsmask[:, xmid:] = False
         return nsmask
@@ -859,7 +859,7 @@ class Face:
 
     def get_right_nose_points(self):
         nsmask = self.get_nose_keypoints().copy()
-        _, cmin, w, _ = self.bbox(nsmask)
+        _, cmin, w, _ = ImageUtils.bbox(nsmask)
         xmid = int(cmin + float(w) / 2)
         nsmask[:, :xmid] = False
         return nsmask
@@ -882,12 +882,12 @@ class Face:
         assert len(eyeMasks) == 2, "Want 2 masks for eyes!"
         assert len(eyebrowMasks) == 2, "Want 2 masks for eyebrows!"
 
-        leftEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] <= self.bbox(eyeMasks[1])[1] else eyeMasks[1]
-        leftEyebrowMask = eyebrowMasks[0] if self.bbox(eyebrowMasks[0])[1] <= self.bbox(eyebrowMasks[1])[1] else \
+        leftEyeMask = eyeMasks[0] if ImageUtils.bbox(eyeMasks[0])[1] <= ImageUtils.bbox(eyeMasks[1])[1] else eyeMasks[1]
+        leftEyebrowMask = eyebrowMasks[0] if ImageUtils.bbox(eyebrowMasks[0])[1] <= ImageUtils.bbox(eyebrowMasks[1])[1] else \
             eyebrowMasks[1]
 
-        eyeRowMin, eyeColMin, eyeWidth, eyeHeight = self.bbox(leftEyeMask)
-        eyebrowRowMin, eyebrowColMin, eyebrowWidth, eyebrowHeight = self.bbox(leftEyebrowMask)
+        eyeRowMin, eyeColMin, eyeWidth, eyeHeight = ImageUtils.bbox(leftEyeMask)
+        eyebrowRowMin, eyebrowColMin, eyebrowWidth, eyebrowHeight = ImageUtils.bbox(leftEyebrowMask)
 
         # Bounding box.
         rowMin = eyebrowRowMin + eyebrowHeight / 2
@@ -909,12 +909,12 @@ class Face:
         assert len(eyeMasks) == 2, "Want 2 masks for eyes!"
         assert len(eyebrowMasks) == 2, "Want 2 masks for eyebrows!"
 
-        rightEyeMask = eyeMasks[0] if self.bbox(eyeMasks[0])[1] >= self.bbox(eyeMasks[1])[1] else eyeMasks[1]
-        rightEyebrowMask = eyebrowMasks[0] if self.bbox(eyebrowMasks[0])[1] >= self.bbox(eyebrowMasks[1])[1] else \
+        rightEyeMask = eyeMasks[0] if ImageUtils.bbox(eyeMasks[0])[1] >= ImageUtils.bbox(eyeMasks[1])[1] else eyeMasks[1]
+        rightEyebrowMask = eyebrowMasks[0] if ImageUtils.bbox(eyebrowMasks[0])[1] >= ImageUtils.bbox(eyebrowMasks[1])[1] else \
             eyebrowMasks[1]
 
-        eyeRowMin, eyeColMin, eyeWidth, eyeHeight = self.bbox(rightEyeMask)
-        eyebrowRowMin, eyebrowColMin, eyebrowWidth, eyebrowHeight = self.bbox(rightEyebrowMask)
+        eyeRowMin, eyeColMin, eyeWidth, eyeHeight = ImageUtils.bbox(rightEyeMask)
+        eyebrowRowMin, eyebrowColMin, eyebrowWidth, eyebrowHeight = ImageUtils.bbox(rightEyebrowMask)
 
         # Bounding box.
         rowMin = eyebrowRowMin + eyebrowHeight / 2
@@ -940,9 +940,9 @@ class Face:
         # Use facemask to determine maximum height of neck mask.
         # Use eyes to restrict width of neck mask.
         faceMask = faceMasks[0]
-        rmin, _, _, h = self.bbox(faceMasks[0])
-        _, c1, w1, _ = self.bbox(eyeMasks[0])
-        _, c2, w2, _ = self.bbox(eyeMasks[1])
+        rmin, _, _, h = ImageUtils.bbox(faceMasks[0])
+        _, c1, w1, _ = ImageUtils.bbox(eyeMasks[0])
+        _, c2, w2, _ = ImageUtils.bbox(eyeMasks[1])
         w1, w2 = int(w1 / 2), int(w2 / 2)
 
         mask = np.zeros(faceMask.shape, dtype=bool)
@@ -963,14 +963,14 @@ class Face:
 
         mask = faceMask.copy()
         for ebMask in eyebrowMasks:
-            rmin, _, _, h = self.bbox(ebMask)
+            rmin, _, _, h = ImageUtils.bbox(ebMask)
             mask[rmin:, :] = False
 
             # rmax = rmin + h
             # mask[rmax:,:] = False
             # mask = np.bitwise_xor(mask, ebMask)
 
-        rmin, cmin, w, _ = self.bbox(faceMask)
+        rmin, cmin, w, _ = ImageUtils.bbox(faceMask)
         # delta_pixels = 30
         delta_pixels = 0
         mask[:, :cmin + delta_pixels] = False
@@ -988,8 +988,8 @@ class Face:
         assert len(eye_masks) == 2, "Want 2 masks for eye!"
 
         # Eye line.
-        left_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] <= self.bbox(eye_masks[1])[1] else eye_masks[1]
-        right_eye_mask = eye_masks[0] if self.bbox(eye_masks[0])[1] > self.bbox(eye_masks[1])[1] else eye_masks[1]
+        left_eye_mask = eye_masks[0] if ImageUtils.bbox(eye_masks[0])[1] <= ImageUtils.bbox(eye_masks[1])[1] else eye_masks[1]
+        right_eye_mask = eye_masks[0] if ImageUtils.bbox(eye_masks[0])[1] > ImageUtils.bbox(eye_masks[1])[1] else eye_masks[1]
 
         left_eye_cords = np.argwhere(left_eye_mask)
         xmax_index = np.argmax(left_eye_cords, axis=0)[1]
@@ -1134,7 +1134,7 @@ class Face:
 
     def get_left_forehead_points(self):
         fhmask = self.get_forehead_points().copy()
-        _, cmin, w, _ = self.bbox(fhmask)
+        _, cmin, w, _ = ImageUtils.bbox(fhmask)
         xmid = int(cmin + float(w) / 2)
         fhmask[:, xmid:] = False
         return fhmask
@@ -1145,7 +1145,7 @@ class Face:
 
     def get_right_forehead_points(self):
         fhmask = self.get_forehead_points().copy()
-        _, cmin, w, _ = self.bbox(fhmask)
+        _, cmin, w, _ = ImageUtils.bbox(fhmask)
         xmid = int(cmin + float(w) / 2)
         fhmask[:, :xmid] = False
         return fhmask
@@ -1185,8 +1185,8 @@ class Face:
         assert len(llip_masks) == 1, "Want 1 lower lip mask"
         ulip_mask = ulip_masks[0]
         llip_mask = llip_masks[0]
-        rmin_ulip, cmin_ulip, w_ulip, h_ulip = self.bbox(ulip_mask)
-        rmin_llip, cmin_llip, w_llip, h_llip = self.bbox(llip_mask)
+        rmin_ulip, cmin_ulip, w_ulip, h_ulip = ImageUtils.bbox(ulip_mask)
+        rmin_llip, cmin_llip, w_llip, h_llip = ImageUtils.bbox(llip_mask)
 
         # Find mask that encompasses lips and mouth. Determine (ymin, ymax) for each x.
         lips_and_mouth_mask = np.zeros(self.faceMask.shape, dtype=bool)
@@ -1329,8 +1329,8 @@ class Face:
 
         mask = faceMasks[0].copy()
 
-        rmin1, _, _, h1 = self.bbox(eyeMasks[0])
-        rmin2, _, _, h2 = self.bbox(eyeMasks[0])
+        rmin1, _, _, h1 = ImageUtils.bbox(eyeMasks[0])
+        rmin2, _, _, h2 = ImageUtils.bbox(eyeMasks[0])
         tol = 1.0
         rmin = min(rmin1, rmin2) - tol * max(h1, h2)
         rmax = max(rmin1 + h1, rmin2 + h2) + tol * max(h1, h2)
@@ -1338,10 +1338,10 @@ class Face:
 
         tol = 0.5
         tol_w = 0.1
-        rmin, cmin, w, h = self.bbox(ulipMasks[0])
+        rmin, cmin, w, h = ImageUtils.bbox(ulipMasks[0])
         mask[int(rmin - tol * h):int(rmin + h + tol * h), int(cmin - tol_w * w):int(cmin + w + tol_w * w)] = False
 
-        rmin, cmin, w, h = self.bbox(llipMasks[0])
+        rmin, cmin, w, h = ImageUtils.bbox(llipMasks[0])
         mask[int(rmin - tol * h):int(rmin + h + tol * h), int(cmin - tol_w * w):int(cmin + w + tol_w * w)] = False
 
         return mask
@@ -1809,17 +1809,6 @@ class Face:
         clone[mask] = fmask
         clone = cv2.cvtColor(clone, cv2.COLOR_HSV2RGB)
         return clone
-
-    """
-    bbox returns bounding box (x1, y1, w, h) (top left point, width and height) of given mask.
-    """
-
-    def bbox(self, mask):
-        rows = np.any(mask, axis=1)
-        cols = np.any(mask, axis=0)
-        rmin, rmax = np.where(rows)[0][[0, -1]]
-        cmin, cmax = np.where(cols)[0][[0, -1]]
-        return rmin, cmin, cmax - cmin + 1, rmax - rmin + 1
 
     """
     get_custom_mask will return a mask of points with given attributes.
