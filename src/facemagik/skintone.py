@@ -484,13 +484,14 @@ class SkinToneAnalyzer:
 
         if self.skin_config.ITERATE_TEETH_CLUSTERS:
             # Iterate to optimize final clusters.
-            effective_color_map = self.face.iterate_effective_color_map(effective_color_map, all_cluster_masks)
+            effective_color_map = Face.iterate_effective_color_map(self.face.image, effective_color_map,
+                                                                   all_cluster_masks)
 
         if self.skin_config.DEBUG_MODE:
-            self.face.print_effective_color_map(effective_color_map, total_points)
+            Face.print_effective_color_map(self.face.image, effective_color_map, total_points)
 
         # Check mean brightness minimum coverage of the teeth.
-        final_mask = np.zeros(self.face.faceMask.shape, dtype=bool)
+        final_mask = np.zeros(self.face.image.shape[:2], dtype=bool)
 
         # Find mean brightness of first two masks in decreasing order of brightness.
         count = 0
@@ -506,7 +507,7 @@ class SkinToneAnalyzer:
                                                                                                             total_points
                                                                                                             ), "\n")
         if self.skin_config.DEBUG_MODE:
-            self.face.show_orig_image()
+            ImageUtils.show(self.face.image)
 
         return mean_brightness
 
@@ -673,13 +674,14 @@ class SkinToneAnalyzer:
 
         if self.skin_config.ITERATE_FACE_CLUSTERS:
             # Iterate to optimize final clusters.
-            effective_color_map = self.face.iterate_effective_color_map(effective_color_map, all_cluster_masks)
+            effective_color_map = Face.iterate_effective_color_map(self.face.image, effective_color_map,
+                                                                   all_cluster_masks)
 
         if self.skin_config.DEBUG_MODE:
-            self.face.print_effective_color_map(effective_color_map, total_points)
+            Face.print_effective_color_map(self.face.image, effective_color_map, total_points)
 
         if self.skin_config.COMBINE_MASKS:
-            combined_masks = self.face.combine_masks_close_to_each_other(effective_color_map)
+            combined_masks = Face.combine_masks_close_to_each_other(self.face.image, effective_color_map)
 
             if self.skin_config.DEBUG_MODE:
                 print("\nCombined masks")
@@ -687,8 +689,11 @@ class SkinToneAnalyzer:
                     print("percent: ", ImageUtils.percentPoints(m, total_points))
                     self.face.show_mask(m)
 
+        img = ImageUtils.plot_points_new(self.face.image, [self.face.noseMiddlePoint])
+        ImageUtils.show(img)
+
         if self.skin_config.DEBUG_MODE:
-            self.face.show_orig_image()
+            ImageUtils.show(self.face.image)
 
         return SkinToneAnalyzer.__get_skin_tones(self.face.image, effective_color_map, total_points)
 
@@ -740,9 +745,9 @@ if __name__ == "__main__":
     maskrcnn_model = SkinToneAnalyzer.construct_model("../maskrcnn_model/mask_rcnn_face_0060.h5")
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config)
-    # print("Brightness value: ", analyzer.determine_brightness())
+    #print("Brightness value: ", analyzer.determine_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction()[:2])
     # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    # print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
-    # print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
-    print("Skin Tones production: ", analyzer.get_skin_tones())
+    #print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
+    print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
+    #print("Skin Tones production: ", analyzer.get_skin_tones())

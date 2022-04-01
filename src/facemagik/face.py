@@ -55,12 +55,11 @@ class Face:
             print("image has sRGB profile")
             self.image = ImageUtils.sRGBtodisplayP3Image(self.image)
 
-        self.brightImage = self.to_brightImage(self.image)
+        self.brightImage = ImageUtils.to_brightImage(self.image)
 
         if image is None:
             self.preds = self.detect_face(image_path, maskrcnn_model)
         else:
-            print("MAKE PREDICTIONS")
             self.preds = self.make_predictions(maskrcnn_model)
 
         self.faceMask = self.get_face_mask()
@@ -125,7 +124,7 @@ class Face:
         clone = self.image.copy()
         for i, mask in enumerate(masks):
             clone[mask] = np.array(colorList[i])
-        return self.show(clone)
+        return ImageUtils.show(clone)
 
     """
     show_masks_comb will combine given mask list and show it.
@@ -133,7 +132,7 @@ class Face:
 
     def show_masks_comb(self, masks):
         if len(masks) == 0:
-            return self.show_orig_image()
+            return ImageUtils.show(self.image)
         res = np.zeros(self.faceMask.shape, dtype=bool)
         for m in masks:
             res = np.bitwise_or(res, m)
@@ -146,16 +145,17 @@ class Face:
     def show_mask(self, mask, color=[0, 255, 0]):
         clone = self.image.copy()
         clone[mask] = np.array(color)
-        return self.show(clone)
+        return ImageUtils.show(clone)
 
     """
     show_mask_with_image will display given mask with given image.
     """
 
-    def show_mask_with_image(self, image, mask, color=[0, 255, 0]):
+    @staticmethod
+    def show_mask_with_image(image, mask, color=[0, 255, 0]):
         clone = image.copy()
         clone[mask] = np.array(color)
-        return self.show(clone)
+        return ImageUtils.show(clone)
 
     """
     show_skin_tone sets given skin tone (sRGB) to background mask.
@@ -166,32 +166,14 @@ class Face:
         self.show_masks([self.background_mask()], [skinTone])
 
     """
-    show_orig_image shows the original RGB image without modifications.
+    show_irrad_mask shows given irradiance mask.
     """
-
-    def show_orig_image(self):
-        return self.show(self.image)
-
-    """
-  show_irrad_mask shows given irradiance mask.
-  """
 
     def show_irrad_mask(self, vertices, E):
         clone = self.image.copy()
         clone[:, :] = [0, 0, 0]
         clone[vertices[:, 0], vertices[:, 1]] = np.clip(E * 100, None, 255).astype(np.uint8)
-        return self.show(clone)
-
-    """
-    show is an internal helper function to display given RGB image.
-    """
-
-    def show(self, image):
-        # cv2.namedWindow(self.windowName, cv2.WINDOW_NORMAL)
-        # cv2.resizeWindow(self.windowName, (100, 100))
-        # cv2.imshow(self.windowName, cv2.cvtColor(ImageUtils.ResizeWithAspectRatio(image, width=600), cv2.COLOR_RGB2BGR))
-        cv2.imshow(self.windowName, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-        return cv2.waitKey(0) & 0xFF
+        return ImageUtils.show(clone)
 
     """
     detect_face will detect face in the given image and segment out eyes,
@@ -497,7 +479,7 @@ class Face:
         for i in range(intensity.shape[0]):
             cv2.circle(clone, (tVertices[i, 1], tVertices[i, 0]), 1,
                        [int(intensity[i][0]), int(intensity[i][1]), int(intensity[i][2])], 1)
-        self.show(clone)
+        ImageUtils.show(clone)
 
     """
     compute_diffuse_new will compute the irradiance(E) and diffuse color using the
@@ -534,7 +516,7 @@ class Face:
         for i in range(intensity.shape[0]):
             cv2.circle(clone, (tVertices[i, 1], tVertices[i, 0]), 1,
                        [int(intensity[i][0]), int(intensity[i][1]), int(intensity[i][2])], 1)
-        self.show(clone)
+        ImageUtils.show(clone)
 
     """
     adjust_SH_coeffs adjusts the signs of SH coefficients provided by ARKit depending
@@ -578,19 +560,19 @@ class Face:
         clone = self.image.copy()
         vmask = verts[normals[:, 0] >= 0]
         clone[vmask[:, 0], vmask[:, 1]] = [255, 0, 0]
-        self.show(clone)
+        ImageUtils.show(clone)
 
         # Y direction.
         clone = self.image.copy()
         vmask = verts[normals[:, 1] >= 0]
         clone[vmask[:, 0], vmask[:, 1]] = [0, 255, 0]
-        self.show(clone)
+        ImageUtils.show(clone)
 
         # Z direction.
         clone = self.image.copy()
         vmask = verts[normals[:, 2] >= 0]
         clone[vmask[:, 0], vmask[:, 1]] = [0, 0, 255]
-        self.show(clone)
+        ImageUtils.show(clone)
 
     """
     adjust_SH_coeffs helper will adjust coefficients
@@ -899,15 +881,6 @@ class Face:
 
     def does_facial_hair_exist(self):
         return len(self.get_attr_masks(FACIAL_HAIR)) > 0
-
-    """
-    get_area_around_eyes returns mask of area around eyes.
-    """
-
-    def get_area_around_eyes(self):
-        eyeMasks = self.get_attr_masks(EYE_OPEN)
-        eyebrowMasks = self.get_attr_masks(LE)
-        assert len(eyeMasks) == 2, "Want 2 masks for eyes!"
 
     """
     get_area_around_left_eye returns mask of area around left eye.
@@ -1254,12 +1227,12 @@ class Face:
     Prints the given effective color map for debugging.
     """
 
-    def print_effective_color_map(self, effective_color_map, total_points):
+    def print_effective_color_map(srgb_image, effective_color_map, total_points):
         print("\nEffective Color Map: ")
-        ycrcb_image = ImageUtils.to_YCrCb(self.image)
+        ycrcb_image = ImageUtils.to_YCrCb(srgb_image)
         prev_mask = np.zeros(ycrcb_image.shape[:2], dtype=bool)
         sorted_effective_color_map = sorted(effective_color_map, key=lambda h: 255.0 - np.mean(
-            self.to_brightImage(self.image)[effective_color_map[h]], axis=0)[2])
+            ImageUtils.to_brightImage(srgb_image)[effective_color_map[h]], axis=0)[2])
         for mHue in sorted_effective_color_map:
             comb_mask = effective_color_map[mHue]
             prev_delta_cie = 0 if np.count_nonzero(prev_mask) == 0 else ImageUtils.delta_cie2000(
@@ -1267,16 +1240,16 @@ class Face:
 
             print("\npercent: ", ImageUtils.percentPoints(comb_mask, total_points), "Munsell hue: ", mHue,
                   " Musell sat: ",
-                  round(np.mean(self.to_satImage(ycrcb_image)[comb_mask], axis=0)[1] * (100.0 / 255.0), 2),
-                  " brightness: ", round(np.mean(np.max(self.image, axis=2)[comb_mask]), 2), " mean + std: ",
-                  round(np.mean(np.max(self.image, axis=2)[comb_mask]) + np.std(np.max(self.image, axis=2)[comb_mask]),
-                        2), " hue: ", round(ImageUtils.sRGBtoHSV(np.mean(self.image[comb_mask], axis=0))[0, 0] * 2, 2),
-                  " sat: ", round(np.mean(self.to_satImage(self.image)[comb_mask], axis=0)[1] * (100.0 / 255.0), 2),
-                  " red: ", round(np.mean(self.image[comb_mask][:, 0]), 2), " green: ",
-                  round(np.mean(self.image[comb_mask][:, 1]), 2), " blue: ",
-                  round(np.mean(self.image[comb_mask][:, 2]), 2), " prev delta: ", round(prev_delta_cie, 2))
+                  round(np.mean(ImageUtils.to_satImage(ycrcb_image)[comb_mask], axis=0)[1] * (100.0 / 255.0), 2),
+                  " brightness: ", round(np.mean(np.max(srgb_image, axis=2)[comb_mask]), 2), " mean + std: ",
+                  round(np.mean(np.max(srgb_image, axis=2)[comb_mask]) + np.std(np.max(srgb_image, axis=2)[comb_mask]),
+                        2), " hue: ", round(ImageUtils.sRGBtoHSV(np.mean(srgb_image[comb_mask], axis=0))[0, 0] * 2, 2),
+                  " sat: ", round(np.mean(ImageUtils.to_satImage(srgb_image)[comb_mask], axis=0)[1] * (100.0 / 255.0), 2),
+                  " red: ", round(np.mean(srgb_image[comb_mask][:, 0]), 2), " green: ",
+                  round(np.mean(srgb_image[comb_mask][:, 1]), 2), " blue: ",
+                  round(np.mean(srgb_image[comb_mask][:, 2]), 2), " prev delta: ", round(prev_delta_cie, 2))
 
-            self.show_mask_with_image(ycrcb_image, comb_mask)
+            Face.show_mask_with_image(ycrcb_image, comb_mask)
             prev_mask = comb_mask
 
     """
@@ -1284,9 +1257,10 @@ class Face:
     compared with the cluster's color to determine it's new cluster (based on smallest delta_cie).
     """
 
-    def iterate_effective_color_map(self, effective_color_map: dict, all_cluster_masks: list):
+    @staticmethod
+    def iterate_effective_color_map(srgb_image: np.ndarray, effective_color_map: dict, all_cluster_masks: list):
         start_time = time.time()
-        ycrcb_image = ImageUtils.to_YCrCb(self.image)
+        ycrcb_image = ImageUtils.to_YCrCb(srgb_image)
         result_color_map = effective_color_map.copy()
         for i in range(5):
             temp_color_map = {}
@@ -1315,12 +1289,13 @@ class Face:
     single cluster. Returns the new list of masks.
     """
 
-    def combine_masks_close_to_each_other(self, effective_color_map):
+    @staticmethod
+    def combine_masks_close_to_each_other(srgb_image, effective_color_map):
         start_time = time.time()
         still_rem = True
         temp_close_masks = sorted([effective_color_map[e] for e in effective_color_map],
-                                  key=lambda m: 255.0 - np.mean(self.to_brightImage(self.image)[m], axis=0)[2])
-        ycrcb_image = ImageUtils.to_YCrCb(self.image)
+                                  key=lambda m: 255.0 - np.mean(ImageUtils.to_brightImage(srgb_image)[m], axis=0)[2])
+        ycrcb_image = ImageUtils.to_YCrCb(srgb_image)
         while still_rem:
             still_rem = False
             for i in range(1, len(temp_close_masks)):
@@ -1383,7 +1358,7 @@ class Face:
 
     """
     to_ratioImage converts sRGB image to HSV like saturation image with H = 0, S = Brightness/saturation (float), V = 0.
-  """
+    """
 
     def to_ratioImage(self, image):
         ratioImage = cv2.cvtColor(image, cv2.COLOR_RGB2HSV).astype(np.float)
@@ -1394,26 +1369,6 @@ class Face:
         ratioImage[:, :, 1] = ratioImage[:, :, 2] / (ratioImage[:, :, 1])
         ratioImage[:, :, 2] = 0
         return ratioImage
-
-    """
-    to_brightImage converts sRGB image to HSV image with H = 0, S = 0 and only brightness values.
-    """
-
-    def to_brightImage(self, image):
-        hsvImage = cv2.cvtColor(image, cv2.COLOR_RGB2HSV).astype(np.float)
-        hsvImage[:, :, 0] = 0
-        hsvImage[:, :, 1] = 0
-        return hsvImage
-
-    """
-    to_brightImage converts sRGB image to HSV image with H = 0, V = 0 and only saturation values.
-    """
-
-    def to_satImage(self, image):
-        hsvImage = cv2.cvtColor(image, cv2.COLOR_RGB2HSV).astype(np.float)
-        hsvImage[:, :, 0] = 0
-        hsvImage[:, :, 2] = 0
-        return hsvImage
 
     def to_LSatImage(self, image):
         hslImage = cv2.cvtColor(image, cv2.COLOR_RGB2HLS).astype(np.float)
@@ -1456,13 +1411,13 @@ class Face:
         print("Median Red: ", np.median(self.image[self.faceMask][:, 0]))
         if np.median(self.image[self.faceMask][:, 0]) <= 140:
             print("Image too dark: ", np.median(self.image[self.faceMask][:, 0]))
-            self.show(self.image)
+            ImageUtils.show(self.image)
             return False
 
         if hist[-1] / max(hist) >= 0.2:
             # Red pixel == 255, too bright.
             print("Image too bright: ", hist[-1] / max(hist))
-            self.show(self.image)
+            ImageUtils.show(self.image)
             return False
 
         return True
@@ -1490,7 +1445,7 @@ class Face:
 
     def divide_all_sat(self, mask, image=np.zeros((0, 3)), tol=0.05):
         if np.array_equal(image, np.zeros((0, 3))):
-            image = self.to_satImage(self.image)
+            image = ImageUtils.to_satImage(self.image)
 
         a, b = self.divide_by_saturation(mask, False, image)
         if np.array_equal(b, np.zeros(self.faceMask.shape, dtype=bool)) or \
@@ -1693,7 +1648,7 @@ class Face:
 
     def divide_by_saturation(self, mask, show_masks_info=True, image=np.zeros((0, 3))):
         if np.array_equal(image, np.zeros((0, 3))):
-            image = self.to_satImage(self.image)
+            image = ImageUtils.to_satImage(self.image)
         print("divide by saturation")
         try:
             higherSatMask, lowerSatMask = self.biclustering_Kmeans_mod(image, mask,
@@ -1749,18 +1704,18 @@ class Face:
               np.count_nonzero(rightMask) / np.count_nonzero(mask))
         print("\tCounts: ", (np.count_nonzero(leftMask) / np.count_nonzero(self.faceMask)) * 100.0,
               (np.count_nonzero(rightMask) / np.count_nonzero(self.faceMask)) * 100.0)
-        print("\tSat values: ", np.mean(self.to_satImage(self.image)[leftMask], axis=0)[1] * 100.0 / 255.0,
-              np.mean(self.to_satImage(self.image)[rightMask], axis=0)[1] * 100.0 / 255.0, abs(
-                np.mean(self.to_satImage(self.image)[leftMask], axis=0)[1] * 100.0 / 255.0 -
-                np.mean(self.to_satImage(self.image)[rightMask], axis=0)[1] * 100.0 / 255.0))
+        print("\tSat values: ", np.mean(ImageUtils.to_satImage(self.image)[leftMask], axis=0)[1] * 100.0 / 255.0,
+              np.mean(ImageUtils.to_satImage(self.image)[rightMask], axis=0)[1] * 100.0 / 255.0, abs(
+                np.mean(ImageUtils.to_satImage(self.image)[leftMask], axis=0)[1] * 100.0 / 255.0 -
+                np.mean(ImageUtils.to_satImage(self.image)[rightMask], axis=0)[1] * 100.0 / 255.0))
         print("\tBrightness values: ", np.mean(self.brightImage[leftMask], axis=0)[2] * 100.0 / 255.0,
               np.mean(self.brightImage[rightMask], axis=0)[2] * 100.0 / 255.0, abs(
                 np.mean(self.brightImage[leftMask], axis=0)[2] * 100.0 / 255.0 -
                 np.mean(self.brightImage[rightMask], axis=0)[2] * 100.0 / 255.0))
         print("\tHue values: ", np.mean(self.to_hueImage(self.image)[leftMask], axis=0)[0],
               np.mean(self.to_hueImage(self.image)[rightMask], axis=0)[0])
-        print("\tSat std: ", np.std(self.to_satImage(self.image)[leftMask], axis=0)[1] * 100.0 / 255.0,
-              np.std(self.to_satImage(self.image)[rightMask], axis=0)[1] * 100.0 / 255.0)
+        print("\tSat std: ", np.std(ImageUtils.to_satImage(self.image)[leftMask], axis=0)[1] * 100.0 / 255.0,
+              np.std(ImageUtils.to_satImage(self.image)[rightMask], axis=0)[1] * 100.0 / 255.0)
         print("\tBrightness std: ", np.std(self.brightImage[leftMask], axis=0)[2] * 100.0 / 255.0,
               np.std(self.brightImage[rightMask], axis=0)[2] * 100.0 / 255.0)
         print("\tRatio values: ", np.mean(self.to_ratioImage(self.image)[leftMask], axis=0)[1],

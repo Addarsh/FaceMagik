@@ -1625,6 +1625,40 @@ class ImageUtils:
         return md
 
     """
+    to_brightImage converts sRGB image to HSV image with H = 0, S = 0 and only brightness values.
+    """
+
+    @staticmethod
+    def to_brightImage(image):
+        hsvImage = cv2.cvtColor(image, cv2.COLOR_RGB2HSV).astype(np.float)
+        hsvImage[:, :, 0] = 0
+        hsvImage[:, :, 1] = 0
+        return hsvImage
+
+    """
+    to_satImage converts sRGB image to HSV image with H = 0, V = 0 and only saturation values.
+    """
+
+    @staticmethod
+    def to_satImage(image):
+        hsvImage = cv2.cvtColor(image, cv2.COLOR_RGB2HSV).astype(np.float)
+        hsvImage[:, :, 0] = 0
+        hsvImage[:, :, 2] = 0
+        return hsvImage
+
+    """
+    show is an internal helper function to display given RGB image.
+    """
+
+    def show(image, windowName="image"):
+        # cv2.namedWindow(self.windowName, cv2.WINDOW_NORMAL)
+        # cv2.resizeWindow(self.windowName, (100, 100))
+        # cv2.imshow(self.windowName, cv2.cvtColor(ImageUtils.ResizeWithAspectRatio(image, width=600), cv2.COLOR_RGB2BGR))
+        cv2.imshow(windowName, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        return cv2.waitKey(0) & 0xFF
+
+
+    """
     Returns the mean coordinates of the given image mask.
     """
 
@@ -1725,18 +1759,6 @@ class ImageUtils:
         cv2.resizeWindow(ImageUtils.windowName, imgSize, imgSize)
         cv2.imshow(ImageUtils.windowName, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         return cv2.waitKey(0) & 0xFF
-
-    """
-    show plots the image and blocks until user presses a key. If user presses 'q', returns False to indicate user 
-    wants to quit else returns True.
-    """
-
-    def show(img):
-        cv2.imshow(ImageUtils.windowName, img)
-        key = cv2.waitKey(0)
-        if key & 0xff == ord("q"):
-            return False
-        return True
 
     """
     show_image opens up the given image in BGR space.
