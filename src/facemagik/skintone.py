@@ -110,6 +110,31 @@ class SkinTone:
         return max(self.rgb)
 
 
+@dataclass
+class NoseMiddlePoint:
+    x: int
+    y: int
+
+
+@dataclass
+class FaceMaskInfo:
+    face_mask_to_process: np.ndarray
+    mouth_mask_to_process: np.ndarray
+    nose_middle_point: NoseMiddlePoint
+    left_eye_mask: np.ndarray
+    right_eye_mask: np.ndarray
+
+    def get_eye_masks(self):
+        return [self.left_eye_mask, self.right_eye_mask]
+
+    def get_nose_middle_point(self):
+        return [self.nose_middle_point.y, self.nose_middle_point.x]
+
+    @staticmethod
+    def is_teeth_visible():
+        return True
+
+
 """
 Class to analyze skin tone from a image of a face.
 """
@@ -131,26 +156,33 @@ class SkinToneAnalyzer:
     blue = "Blue"
     none = "None"
 
-    def __init__(self, maskrcnn_model, skin_config: object):
+    def __init__(self, maskrcnn_model, skin_config: object, face_mask_info: FaceMaskInfo = None):
+        if face_mask_info is None:
+            # Detect face.
+            if skin_config.IMAGE_PATH != "":
+                face = Face(image_path=skin_config.IMAGE_PATH, maskrcnn_model=maskrcnn_model)
+            else:
+                face = Face(image=skin_config.IMAGE, maskrcnn_model=maskrcnn_model)
 
-        # Detect face.
-        if skin_config.IMAGE_PATH != "":
-            face = Face(image_path=skin_config.IMAGE_PATH, maskrcnn_model=maskrcnn_model)
+            if skin_config.BRIGHTNESS_UPDATE_FACTOR != 1.0 or skin_config.SATURATION_UPDATE_FACTOR != 1.0:
+                new_img = ImageUtils.set_brightness(face.image, skin_config.BRIGHTNESS_UPDATE_FACTOR)
+                new_img = ImageUtils.set_saturation(new_img, skin_config.SATURATION_UPDATE_FACTOR)
+                face.image = new_img
+
+            self.image = face.image
+            self.face_mask_to_process = face.get_face_until_nose_end_without_area_around_eyes()
+            self.mouth_mask_to_process = face.get_mouth_points()
+            self.nose_middle_point = face.noseMiddlePoint
+            self.rotation_matrix = ImageUtils.rotation_matrix(face.get_eye_masks())
+            self.is_teeth_visible = face.is_teeth_visible()
         else:
-            face = Face(image=skin_config.IMAGE, maskrcnn_model=maskrcnn_model)
+            self.image = skin_config.IMAGE
+            self.face_mask_to_process = face_mask_info.face_mask_to_process
+            self.mouth_mask_to_process = face_mask_info.mouth_mask_to_process
+            self.nose_middle_point = face_mask_info.get_nose_middle_point()
+            self.rotation_matrix = ImageUtils.rotation_matrix(face_mask_info.get_eye_masks())
+            self.is_teeth_visible = FaceMaskInfo.is_teeth_visible()
 
-        if skin_config.BRIGHTNESS_UPDATE_FACTOR != 1.0 or skin_config.SATURATION_UPDATE_FACTOR != 1.0:
-            new_img = ImageUtils.set_brightness(face.image, skin_config.BRIGHTNESS_UPDATE_FACTOR)
-            new_img = ImageUtils.set_saturation(new_img, skin_config.SATURATION_UPDATE_FACTOR)
-            face.image = new_img
-
-        self.face = face
-        self.image = self.face.image
-        self.face_mask_to_process = self.face.get_face_until_nose_end_without_area_around_eyes()
-        self.mouth_mask_to_process = self.face.get_mouth_points()
-        self.nose_middle_point = self.face.noseMiddlePoint
-        self.rotation_matrix = ImageUtils.rotation_matrix(self.face.get_eye_masks())
-        self.is_teeth_visible = self.face.is_teeth_visible()
         self.face_mask_effective_color_map = {}
         self.skin_config = skin_config
 
@@ -720,6 +752,29 @@ class SkinToneAnalyzer:
         return skin_tones
 
 
+"""
+Helper to read test face mask info from test images. Can be removed after tested on server.
+"""
+
+
+def get_test_face_mask_info():
+    dir = "/Users/addarsh/virtualenvs/facemagik_server/facetone/"
+
+    def get_mask(fname):
+        return ImageUtils.get_boolean_mask(ImageUtils.read_grayscale_image(
+            dir + fname))
+
+    with open(dir + "nose_middle_point.txt", "r") as f:
+        nose_middle_point = [int(v) for v in f.read().splitlines()]
+    print("nose middle point: ", nose_middle_point)
+    face_mask_info = FaceMaskInfo(face_mask_to_process=get_mask("test_face_mask.png"),
+                                  mouth_mask_to_process=get_mask("test_mouth_mask.png"),
+                                  nose_middle_point=NoseMiddlePoint(x=nose_middle_point[0], y=nose_middle_point[1]),
+                                  left_eye_mask=get_mask("left_eye_mask.png"),
+                                  right_eye_mask=get_mask("right_eye_mask.png"))
+    return face_mask_info
+
+
 if __name__ == "__main__":
     # Run this script from parent directory level (face_magik) of this module.
     # Example: python -m facemagik.skintone --image <image_path>
@@ -727,7 +782,7 @@ if __name__ == "__main__":
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Image for processing')
-    parser.add_argument('--image', required=True, metavar="path to video file")
+    parser.add_argument('--image', required=True, metavar="path to image file")
     parser.add_argument('--bri', required=False, metavar="bri")
     parser.add_argument('--sat', required=False, metavar="sat")
     args = parser.parse_args()
@@ -748,10 +803,15 @@ if __name__ == "__main__":
     # Load Mask RCNN model. maskrcnn_model directory is located one level above where this script is run.
     maskrcnn_model = SkinToneAnalyzer.construct_model("../maskrcnn_model/mask_rcnn_face_0060.h5")
 
-    analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config)
-    #print("Brightness value: ", analyzer.determine_brightness())
-    #print ("Primary light direction: ", analyzer.get_light_direction()[:2])
-    #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    #print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
+    face_mask_config = None
+    # Uncomment if you want to test face mask info.
+    #skin_detection_config.IMAGE = ImageUtils.read_rgb_image(args.image)
+    #face_mask_config = get_test_face_mask_info()
+
+    analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config, face_mask_config)
+    # print("Brightness value: ", analyzer.determine_brightness())
+    # print ("Primary light direction: ", analyzer.get_light_direction()[:2])
+    # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
+    # print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
     print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
-    #print("Skin Tones production: ", analyzer.get_skin_tones())
+    # print("Skin Tones production: ", analyzer.get_skin_tones())

@@ -45,6 +45,20 @@ class ImageUtils:
         return cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
 
     """
+    Reads a gray scale image from given path.
+    """
+    @staticmethod
+    def read_grayscale_image(image_path):
+        return cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2GRAY)
+
+    """
+    Converts given gray scale image to boolean mask [value >=150 -> 1 else 0].
+    """
+    @staticmethod
+    def get_boolean_mask(grayscale_image):
+        return (grayscale_image >= 150).astype(np.bool)
+
+    """
     Reads and returns a LAB scale and gray scale image from given image path.
     """
 
@@ -1861,11 +1875,16 @@ if __name__ == "__main__":
     # ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
     # print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#d1af9b"), ImageUtils.HEX2RGB("#daa894")))
     # img = mpimg.imread("/Users/addarsh/Desktop/anastasia-me/IMG_6613.png")
-    # ImageUtils.print_lab_to_rgb([60.0, 0.0, 0.0])
+    ImageUtils.print_lab_to_rgb([60.0, 0.0, 0.0])
     # ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/10_29_color_checker_foundation/IMG_7883.png")
-    print("val: ", ImageUtils.displayP3tosRGB([204.0, 158.0, 141.0]))
+    #print("val: ", ImageUtils.displayP3tosRGB([204.0, 158.0, 141.0]))
     # ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/10_24_21_addarsh_foundation/IMG_7819.png")
     # ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/sephora_foundation_chart.png")
+    #mask = ImageUtils.get_boolean_mask(ImageUtils.read_grayscale_image(
+    #    "/Users/addarsh/virtualenvs/facemagik_server/facetone/test_mouth_mask.png"))
+    #img = ImageUtils.plot_points_new(ImageUtils.read_rgb_image(
+    #    "/Users/addarsh/virtualenvs/facemagik_server/facetone/test_ios.png"), [[692,384]])
+    #ImageUtils.show_mask(img, mask)
     # print ("munsell: ", ImageUtils.sRGBtoMunsell(ImageUtils.HEX2RGB("#9F796A")))
     # print ("ycrcb: ", ImageUtils.RGB2HEX(ImageUtils.YCrCbtosRGB(ImageUtils.HEX2RGB("#B69C68"))[0]))
     # ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))
