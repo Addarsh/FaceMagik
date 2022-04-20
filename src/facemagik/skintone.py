@@ -627,7 +627,7 @@ class SkinToneAnalyzer:
 
     """
     Computes Scene Brightness and Primary Light Direction. Scene brightness is executed in a separate process to 
-    parallelize compute.
+    parallelize compute. Currently used in production.
     """
 
     def get_primary_light_direction_and_scene_brightness(self) -> SceneBrightnessAndDirection:
@@ -675,7 +675,7 @@ class SkinToneAnalyzer:
         return SkinToneAnalyzer.__get_skin_tones(self.image, effective_color_map, total_points)
 
     """
-    Detects skin tone and primary light direction for given face image. Only used for debugging purposes. Do nto use 
+    Detects skin tone and primary light direction for given face image. Only used for debugging purposes. Do not use 
     in production code.
     """
 

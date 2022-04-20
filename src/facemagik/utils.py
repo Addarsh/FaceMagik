@@ -1639,6 +1639,48 @@ class ImageUtils:
         return md
 
     """
+    Returns face mask till nose end excluding eyes and eyebrows mask from given contour points. The input face mask 
+    till nose end has the eyes and eyebrows included. Each contour is a numpy array of points (X,Y). The mask is 
+    constructed for the given image shape [W,H,3]. 
+    """
+
+    @staticmethod
+    def get_face_mask_till_nose_end(image_shape: tuple, face_till_nose_end_contour_points: np.ndarray,
+                                    left_eye_contour_points: np.ndarray, right_eye_contour_points: np.ndarray,
+                                    left_eyebrow_contour_points: np.ndarray, right_eyebrow_contour_points: np.ndarray):
+        mask_shape = image_shape[:2]
+
+        # Create face mask.
+        gray_face = np.zeros(mask_shape)
+        cv2.drawContours(gray_face, [face_till_nose_end_contour_points], -1, color=255, thickness=cv2.FILLED)
+        face_mask = gray_face == 255
+
+        # Create eyes and eyebrows mask.
+        gray_eyes_eyebrows = np.zeros(mask_shape)
+        cv2.drawContours(gray_eyes_eyebrows, [left_eye_contour_points, right_eye_contour_points,
+                                              left_eyebrow_contour_points, right_eyebrow_contour_points], -1, color=255,
+                         thickness=cv2.FILLED)
+        eyes_and_eyebrows_mask = gray_eyes_eyebrows == 255
+
+        return np.bitwise_xor(face_mask, eyes_and_eyebrows_mask)
+
+    """
+    Returns mouth mask from given contour points The contour is a numpy array of points (X,
+    Y) representing the boundary points associated with the face boundary. The mask is constructed for the  given 
+    image shape [W,H,3]. 
+    """
+
+    @staticmethod
+    def get_mask_from_contour_points(image_shape: tuple, contour_points: np.ndarray):
+        mask_shape = image_shape[:2]
+
+        # Create face mask.
+        gray = np.zeros(mask_shape)
+        cv2.drawContours(gray, [contour_points], -1, color=255, thickness=cv2.FILLED)
+
+        return gray == 255
+
+    """
     to_brightImage converts sRGB image to HSV image with H = 0, S = 0 and only brightness values.
     """
 
@@ -1875,7 +1917,7 @@ if __name__ == "__main__":
     # ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/IMG_9872.png", ImageUtils.Temp_to_sRGB(5284))
     # print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#d1af9b"), ImageUtils.HEX2RGB("#daa894")))
     # img = mpimg.imread("/Users/addarsh/Desktop/anastasia-me/IMG_6613.png")
-    ImageUtils.print_lab_to_rgb([60.0, 0.0, 0.0])
+    #ImageUtils.print_lab_to_rgb([60.0, 0.0, 0.0])
     # ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/10_29_color_checker_foundation/IMG_7883.png")
     #print("val: ", ImageUtils.displayP3tosRGB([204.0, 158.0, 141.0]))
     # ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/10_24_21_addarsh_foundation/IMG_7819.png")
@@ -1884,7 +1926,25 @@ if __name__ == "__main__":
     #    "/Users/addarsh/virtualenvs/facemagik_server/facetone/test_mouth_mask.png"))
     #img = ImageUtils.plot_points_new(ImageUtils.read_rgb_image(
     #    "/Users/addarsh/virtualenvs/facemagik_server/facetone/test_ios.png"), [[692,384]])
-    #ImageUtils.show_mask(img, mask)
+    img = ImageUtils.read_rgb_image("/Users/addarsh/virtualenvs/facemagik_server/facetone/test_ios.png")
+    with open("/Users/addarsh/virtualenvs/facemagik_server/facetone/face_till_nose_end_contour_points.txt", "r") as f:
+        face_till_nose_end_cpts = np.array(json.loads(f.read()))
+    with open("/Users/addarsh/virtualenvs/facemagik_server/facetone/right_eye_contour_points.txt", "r") as f:
+        right_eye_cpts = np.array(json.loads(f.read()))
+    with open("/Users/addarsh/virtualenvs/facemagik_server/facetone/left_eye_contour_points.txt", "r") as f:
+        left_eye_cpts = np.array(json.loads(f.read()))
+    with open("/Users/addarsh/virtualenvs/facemagik_server/facetone/left_eyebrow_contour_points.txt", "r") as f:
+        left_eyebrow_cpts = np.array(json.loads(f.read()))
+    with open("/Users/addarsh/virtualenvs/facemagik_server/facetone/right_eyebrow_contour_points.txt", "r") as f:
+        right_eyebrow_cpts = np.array(json.loads(f.read()))
+    with open("/Users/addarsh/virtualenvs/facemagik_server/facetone/mouth_without_lips_contour_points.txt", "r") as f:
+        mouth_cpts = np.array(json.loads(f.read()))
+    mask = ImageUtils.get_face_mask_till_nose_end(img.shape, face_till_nose_end_cpts,
+                                                  left_eye_cpts, right_eye_cpts,
+                                                  left_eyebrow_cpts, right_eyebrow_cpts)
+    #mask = ImageUtils.get_mask_from_contour_points(img.shape, mouth_cpts)
+    img[mask] = [255, 0, 0]
+    ImageUtils.show(img)
     # print ("munsell: ", ImageUtils.sRGBtoMunsell(ImageUtils.HEX2RGB("#9F796A")))
     # print ("ycrcb: ", ImageUtils.RGB2HEX(ImageUtils.YCrCbtosRGB(ImageUtils.HEX2RGB("#B69C68"))[0]))
     # ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))
