@@ -1128,6 +1128,7 @@ class ImageUtils:
 
     def displayP3toMunsell(displayP3):
         try:
+            print ("DISPLAY P3 color: ", displayP3)
             return colour.xyY_to_munsell_colour(colour.XYZ_to_xyY(ImageUtils.displayP3toXYZ(displayP3)))
         except Exception as e:
             print("display P3 to Munsell exception: ", e)
