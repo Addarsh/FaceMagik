@@ -432,7 +432,10 @@ class SkinToneAnalyzer:
             mask_clusters.append(curr_mask)
 
         # Compute effective color of each cluster mask and group them.
-        with Pool(processes=mp.cpu_count()) as pool:
+        num_processes = min(4, mp.cpu_count())
+        print ("CPU count: ", num_processes)
+        print ("MP Get start method: ", mp.get_start_method(allow_none=True))
+        with Pool(processes=num_processes) as pool:
             results = [pool.apply_async(ImageUtils.sRGBtoMunsell, (np.mean(ycrcb_image[m], axis=0),)) for m in
                        mask_clusters]
             munsell_color_list = [result.get() for result in results]
@@ -810,8 +813,8 @@ if __name__ == "__main__":
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config, face_mask_config)
     # print("Brightness value: ", analyzer.determine_brightness())
-    # print ("Primary light direction: ", analyzer.get_light_direction()[:2])
-    # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    # print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
-    print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
+    #print ("Primary light direction: ", analyzer.get_light_direction()[:2])
+    #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
+    print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
+    #print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
     # print("Skin Tones production: ", analyzer.get_skin_tones())
