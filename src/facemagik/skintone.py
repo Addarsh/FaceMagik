@@ -583,18 +583,31 @@ class SkinToneAnalyzer:
         return primary_light_direction, percent_per_direction, effective_color_map
 
     """
-    Instance method that returns primary light direction. Used for sequential execution.
+    Returns light direction results in the form of primary light direction, percent per direction and effective color 
+    map. Used for sequential execution.
     """
 
-    def get_light_direction(self) -> LightDirection:
+    def get_light_direction_result(self):
+        start_time = time.time()
+        self.skin_config.DEBUG_MODE = False
+
         ycrcb_image = ImageUtils.to_YCrCb(self.image)
         mask_to_process = self.face_mask_to_process
         node_middle_point = self.nose_middle_point
         rotation_matrix = self.rotation_matrix
 
-        return SkinToneAnalyzer.get_primary_light_direction(ycrcb_image, mask_to_process, node_middle_point,
-                                                            rotation_matrix, self.skin_config,
-                                                            None)
+        primary_light_direction = SkinToneAnalyzer.get_primary_light_direction(ycrcb_image, mask_to_process,
+                                                                               node_middle_point, rotation_matrix,
+                                                                               self.skin_config, None)
+        print("Primary light direction computation time: ", time.time() - start_time)
+        return primary_light_direction
+
+    """
+    Returns only primary light direction from light direction result.
+    """
+
+    def get_primary_light_direction(self) -> LightDirection:
+        return self.get_light_direction_result()[0]
 
     """
     Computes Scene Brightness and Primary Light Direction. Primary light direction is executed in a separate process 
@@ -647,7 +660,7 @@ class SkinToneAnalyzer:
                                                                      self.skin_config, brightness_queue))
         p.start()
 
-        primary_light_direction, percent_per_direction, effective_color_map = self.get_light_direction()
+        primary_light_direction, percent_per_direction, effective_color_map = self.get_light_direction_result()
 
         p.join()
 
@@ -661,7 +674,7 @@ class SkinToneAnalyzer:
         return SceneBrightnessAndDirection(scene_brightness_value, primary_light_direction, percent_per_direction)
 
     """
-    Computes skin tones associated with the face.
+    Computes skin tones associated with the face. Used in production.
     """
 
     def get_skin_tones(self):
@@ -674,6 +687,13 @@ class SkinToneAnalyzer:
             effective_color_map = self.face_mask_effective_color_map
 
         return SkinToneAnalyzer.__get_skin_tones(self.image, effective_color_map, total_points)
+
+    """
+    Computes average brightness of the RGB image for given face mask.
+    """
+
+    def get_average_face_brightness(self) -> int:
+        return round(np.mean(np.max(self.image, axis=2)[self.face_mask_to_process]))
 
     """
     Detects skin tone and primary light direction for given face image. Only used for debugging purposes. Do not use 
@@ -806,13 +826,13 @@ if __name__ == "__main__":
 
     face_mask_config = None
     # Uncomment if you want to test face mask info.
-    #skin_detection_config.IMAGE = ImageUtils.read_rgb_image(args.image)
-    #face_mask_config = get_test_face_mask_info()
+    # skin_detection_config.IMAGE = ImageUtils.read_rgb_image(args.image)
+    # face_mask_config = get_test_face_mask_info()
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config, face_mask_config)
     # print("Brightness value: ", analyzer.determine_brightness())
-    #print ("Primary light direction: ", analyzer.get_light_direction()[:2])
-    #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
+    # print ("Primary light direction: ", analyzer.get_light_direction_result()[:2])
+    # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
     print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
-    #print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
+    # print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
     # print("Skin Tones production: ", analyzer.get_skin_tones())
