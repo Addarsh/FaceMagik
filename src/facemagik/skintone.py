@@ -606,7 +606,7 @@ class SkinToneAnalyzer:
     Returns only primary light direction from light direction result.
     """
 
-    def get_primary_light_direction(self) -> LightDirection:
+    def get_light_direction(self) -> LightDirection:
         return self.get_light_direction_result()[0]
 
     """
@@ -833,6 +833,7 @@ if __name__ == "__main__":
     # print("Brightness value: ", analyzer.determine_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction_result()[:2])
     # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
+    #print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
+    print("light direction only: ", analyzer.get_light_direction())
     # print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
     # print("Skin Tones production: ", analyzer.get_skin_tones())
