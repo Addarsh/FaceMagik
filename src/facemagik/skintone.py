@@ -433,12 +433,16 @@ class SkinToneAnalyzer:
 
         # Compute effective color of each cluster mask and group them.
         num_processes = min(4, mp.cpu_count())
-        with Pool(processes=num_processes) as pool:
-            results = [pool.apply_async(ImageUtils.sRGBtoMunsell, (np.mean(ycrcb_image[m], axis=0),)) for m in
-                       mask_clusters]
-            munsell_color_list = [result.get() for result in results]
-            effective_color_list = [SkinToneAnalyzer.effective_color(munsell_color) for munsell_color in
-                                    munsell_color_list]
+        try:
+            with Pool(processes=num_processes) as pool:
+                results = [pool.apply_async(ImageUtils.sRGBtoMunsell, (np.mean(ycrcb_image[m], axis=0),)) for m in
+                           mask_clusters]
+                munsell_color_list = [result.get() for result in results]
+        except Exception as e:
+            print("Got Multi processing timeout!")
+            raise e
+
+        effective_color_list = [SkinToneAnalyzer.effective_color(munsell_color) for munsell_color in munsell_color_list]
 
         effective_color_map = {}
         for effective_color, mask in zip(effective_color_list, mask_clusters):
