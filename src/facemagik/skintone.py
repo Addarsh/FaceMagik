@@ -494,11 +494,18 @@ class SkinToneAnalyzer:
         return mean_brightness
 
     """
+    Returns true if teeth are visible in image, false otherwise.
+    """
+
+    def are_teeth_visible_in_image(self):
+        return self.is_teeth_visible
+
+    """
     Computes average brightness of the scene. The person in the image is expected to be smiling with teeth 
     visible else an exception is thrown.
     """
 
-    def determine_brightness(self) -> int:
+    def determine_scene_brightness(self) -> int:
         if not self.is_teeth_visible:
             raise TeethNotVisibleException("Teeth not visible for config: " +
                                            str(self.skin_config))
@@ -629,7 +636,7 @@ class SkinToneAnalyzer:
                                                                                   light_direction_queue))
         p.start()
 
-        scene_brightness_value = self.determine_brightness()
+        scene_brightness_value = self.determine_scene_brightness()
 
         p.join()
 
@@ -830,7 +837,7 @@ if __name__ == "__main__":
     # face_mask_config = get_test_face_mask_info()
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config, face_mask_config)
-    # print("Brightness value: ", analyzer.determine_brightness())
+    # print("Brightness value: ", analyzer.determine_scene_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction_result()[:2])
     # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
     #print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
