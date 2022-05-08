@@ -539,15 +539,24 @@ class SkinToneAnalyzer:
 
         # Find mean brightness of first two masks in decreasing order of brightness.
         count = 0
+        mask_one = None
+        mask_two = None
         for effective_color in effective_color_map:
             final_mask = np.bitwise_or(final_mask, effective_color_map[effective_color])
             count += 1
+            if count == 1:
+                mask_one = effective_color_map[effective_color]
             if count == 2:
+                mask_two = effective_color_map[effective_color]
                 break
 
         mean_brightness = round(np.mean(np.max(self.image, axis=2)[final_mask]))
-        if self.skin_config.DEBUG_MODE:
-            print("\nMean brightness value: ", mean_brightness, " with percent: ", ImageUtils.percentPoints(final_mask,
+
+        print("\nMask One: ", round(np.mean(np.max(self.image, axis=2)[mask_one])), " with percent: ",
+              ImageUtils.percentPoints(mask_one, total_points), "\n")
+        print("\nMask Two: ", round(np.mean(np.max(self.image, axis=2)[mask_two])), " with percent: ",
+              ImageUtils.percentPoints(mask_two, total_points), "\n")
+        print("\nMean brightness value: ", mean_brightness, " with percent: ", ImageUtils.percentPoints(final_mask,
                                                                                                             total_points
                                                                                                             ), "\n")
         if self.skin_config.DEBUG_MODE:
@@ -837,10 +846,10 @@ if __name__ == "__main__":
     # face_mask_config = get_test_face_mask_info()
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config, face_mask_config)
-    # print("Brightness value: ", analyzer.determine_scene_brightness())
+    print("Brightness value: ", analyzer.determine_scene_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction_result()[:2])
     # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
     #print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
-    print("light direction only: ", analyzer.get_light_direction())
-    # print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
+    #print("light direction only: ", analyzer.get_light_direction())
+    #print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
     # print("Skin Tones production: ", analyzer.get_skin_tones())
