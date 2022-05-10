@@ -50,10 +50,15 @@ class Face:
         else:
             self.image = image
 
+        # Can give bad signals when images are stored from raw np arrays
+        # I don't think we should use this logic except when the image file
+        # has been created with all required metadata.
         # Convert from sRGB to display P3 if sRGB profile.
+        """
         if image_path != "" and self.is_sRGB_profile(image_path):
             print("image has sRGB profile")
             self.image = ImageUtils.sRGBtodisplayP3Image(self.image)
+        """
 
         self.brightImage = ImageUtils.to_brightImage(self.image)
 

@@ -539,30 +539,34 @@ class SkinToneAnalyzer:
 
         # Find mean brightness of first two masks in decreasing order of brightness.
         count = 0
-        mask_one = None
-        mask_two = None
         for effective_color in effective_color_map:
             final_mask = np.bitwise_or(final_mask, effective_color_map[effective_color])
             count += 1
-            if count == 1:
-                mask_one = effective_color_map[effective_color]
             if count == 2:
-                mask_two = effective_color_map[effective_color]
                 break
 
-        mean_brightness = round(np.mean(np.max(self.image, axis=2)[final_mask]))
+        # Find brightness value with one of the highest frequencies.
+        bins = 50
+        frequencies, brightness_values, _ = plt.hist(self.image[final_mask][:, 0], bins=bins, density=True,
+                                                     histtype="step")
+        # Find top k frequencies.
+        top_k = 2
+        indices = np.argpartition(frequencies, -top_k)[-top_k:]
+        top_brightness_values = brightness_values[indices]
+        print("Top brightness values: ", top_brightness_values)
 
-        print("\nMask One: ", round(np.mean(np.max(self.image, axis=2)[mask_one])), " with percent: ",
-              ImageUtils.percentPoints(mask_one, total_points), "\n")
-        print("\nMask Two: ", round(np.mean(np.max(self.image, axis=2)[mask_two])), " with percent: ",
-              ImageUtils.percentPoints(mask_two, total_points), "\n")
-        print("\nMean brightness value: ", mean_brightness, " with percent: ", ImageUtils.percentPoints(final_mask,
-                                                                                                            total_points
-                                                                                                            ), "\n")
+        average_teeth_brightness_value = round(np.max(top_brightness_values))
+        print("Scene brightness value: ", average_teeth_brightness_value)
+
+        if self.skin_config.DEBUG_MODE:
+            # Plot histogram.
+            ImageUtils.plot_histogram(self.image, final_mask, channel=0, block=True, bins=bins, fig_num=1, xlim=[0,
+                                                                                                                 256])
+
         if self.skin_config.DEBUG_MODE:
             ImageUtils.show(self.image)
 
-        return mean_brightness
+        return average_teeth_brightness_value
 
     """
     Static method that returns Primary light direction. Used for parallel execution.
@@ -847,9 +851,13 @@ if __name__ == "__main__":
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config, face_mask_config)
     print("Brightness value: ", analyzer.determine_scene_brightness())
+    #print("Average face brightness value: ", analyzer.get_average_face_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction_result()[:2])
     # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    #print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
-    #print("light direction only: ", analyzer.get_light_direction())
+    # print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
+    # print("light direction only: ", analyzer.get_light_direction())
     #print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
-    # print("Skin Tones production: ", analyzer.get_skin_tones())
+
+    final_skin_tones = analyzer.get_skin_tones()
+    print("Skin Tones production: ", final_skin_tones)
+    ImageUtils.show_skin_tone_color_grid(final_skin_tones)

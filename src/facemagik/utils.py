@@ -177,6 +177,27 @@ class ImageUtils:
         plt.show(block=block)
 
     """
+    Shows grid of skin tone colors stacked vertically on top of each.
+    """
+
+    @staticmethod
+    def show_skin_tone_color_grid(skin_tones):
+
+        grid_height = 800
+        img_list = []
+        for sk in skin_tones:
+            img_height = round(sk.percent_of_face_mask*0.01*grid_height)
+            img = np.full((img_height, 200, 3), 0, np.uint8)
+            img_list.append(img)
+
+        for i, img in enumerate(img_list):
+            color = skin_tones[i].rgb
+            img[:, :, :] = np.flip(color)
+
+        cv2.imshow('color_grid', np.vstack(img_list))
+        cv2.waitKey(0)
+
+    """
     color return the RGB tuple of given hex color. Hex color format is #FF0033.
     """
 
