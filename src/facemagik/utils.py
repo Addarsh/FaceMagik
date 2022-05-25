@@ -18,6 +18,7 @@ from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
 from colormath import color_diff_matrix
 from .common import MaskDirection
+from PIL import Image
 
 
 class ImageUtils:
@@ -196,6 +197,43 @@ class ImageUtils:
 
         cv2.imshow('color_grid', np.vstack(img_list))
         cv2.waitKey(0)
+
+    """
+    Saves grid of skin tone colors stacked vertically on top of each as a png image.
+    """
+
+    @staticmethod
+    def save_skin_tones_to_file(image_name, skin_tones):
+
+        grid_height = 800
+        img_list = []
+        for sk in skin_tones:
+            img_height = round(sk.percent_of_face_mask * 0.01 * grid_height)
+            img = np.full((img_height, 200, 3), 0, np.uint8)
+            img_list.append(img)
+
+        for i, img in enumerate(img_list):
+            color = skin_tones[i].rgb
+            percent_of_face_mask = round(skin_tones[i].percent_of_face_mask, 1)
+            img[:, :, :] = color
+
+            # Add text to image.
+            hsv = ImageUtils.sRGBtoHSV(color)[0]
+            h = hsv[0]*2
+            s = round(hsv[1] * (100.0/255.0))
+            v = round(hsv[2] * (100.0/255.0))
+            hsvStr = "H: " + str(h) + ", S: " + str(s) + ", V: " + str(v) + ", P: " + str(percent_of_face_mask)
+            img[:, :, :] = cv2.putText(img, hsvStr, (10, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (210, 0, 0), 1,
+                                       cv2.LINE_AA)
+
+        save_img = np.vstack(img_list)
+        im = Image.fromarray(save_img)
+        im.save(image_name)
+
+    @staticmethod
+    def save_image_to_file(rgb_array, image_name):
+        im = Image.fromarray(rgb_array)
+        im.save(image_name)
 
     """
     color return the RGB tuple of given hex color. Hex color format is #FF0033.
@@ -1724,6 +1762,16 @@ class ImageUtils:
         return hsvImage
 
     """
+    Returns array of hue values associated with a mask for given RGB image.
+    """
+
+    @staticmethod
+    def hue_values(rgb_image, mask):
+        hsv_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV).astype(np.float)
+        hsv_image[:, :, 0] = hsv_image[:, :, 0]*2
+        return hsv_image[:, :, 0][mask]
+
+    """
     bbox returns bounding box (x1, y1, w, h) (top left point, width and height) of given mask.
     """
 
@@ -1771,6 +1819,14 @@ class ImageUtils:
         # cv2.resizeWindow(self.windowName, (100, 100))
         # cv2.imshow(self.windowName, cv2.cvtColor(ImageUtils.ResizeWithAspectRatio(image, width=600), cv2.COLOR_RGB2BGR))
         cv2.imshow(windowName, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        return cv2.waitKey(0) & 0xFF
+
+    @staticmethod
+    def show_gray_img(image, windowName="image"):
+        # cv2.namedWindow(self.windowName, cv2.WINDOW_NORMAL)
+        # cv2.resizeWindow(self.windowName, (100, 100))
+        # cv2.imshow(self.windowName, cv2.cvtColor(ImageUtils.ResizeWithAspectRatio(image, width=600), cv2.COLOR_RGB2BGR))
+        cv2.imshow(windowName, cv2.cvtColor(image, cv2.COLOR_RGB2GRAY))
         return cv2.waitKey(0) & 0xFF
 
     """
@@ -1824,8 +1880,8 @@ class ImageUtils:
     """
 
     def sRGBtodisplayP3(sRGB):
-        conversionMatrix = np.array([[0.8225, 0.1774, 0], [0.0332, 0.9669, 0], [0.0171, 0.0724, 0.9108]]).T
-        return ImageUtils.add_gamma_correction(ImageUtils.remove_gamma_correction(np.array(sRGB) @ conversionMatrix))
+        conversionMatrix = np.array([[0.8225, 0.1774, 0], [0.0332, 0.9669, 0], [0.0171, 0.0724, 0.9108]])
+        return ImageUtils.add_gamma_correction(conversionMatrix @ ImageUtils.remove_gamma_correction(np.array(sRGB)))
 
     """
     Converts a sRGB profile image to display P3 profile image. The input is assumed to be (w, h, 3) in shape and (
@@ -1833,9 +1889,9 @@ class ImageUtils:
     """
 
     def sRGBtodisplayP3Image(sRGBArray):
-        conversionMatrix = np.array([[0.8225, 0.1774, 0], [0.0332, 0.9669, 0], [0.0171, 0.0724, 0.9108]]).T
-        return np.clip(ImageUtils.add_gamma_correction_matrix(
-            ImageUtils.remove_gamma_correction_matrix(sRGBArray) @ conversionMatrix), 0, 255).astype(np.uint8)
+        conversionMatrix = np.array([[0.8225, 0.1774, 0], [0.0332, 0.9669, 0], [0.0171, 0.0724, 0.9108]])
+        return np.clip(ImageUtils.add_gamma_correction_matrix(conversionMatrix @
+            ImageUtils.remove_gamma_correction_matrix(sRGBArray)), 0, 255).astype(np.uint8)
 
     """
     Computes percent of points in mask relative to given totalPoints.
@@ -1947,6 +2003,9 @@ if __name__ == "__main__":
     #    "/Users/addarsh/virtualenvs/facemagik_server/facetone/test_mouth_mask.png"))
     #img = ImageUtils.plot_points_new(ImageUtils.read_rgb_image(
     #    "/Users/addarsh/virtualenvs/facemagik_server/facetone/test_ios.png"), [[692,384]])
+
+    """
+    # Testing face contours from client.
     img = ImageUtils.read_rgb_image("/Users/addarsh/virtualenvs/facemagik_server/facetone/test_ios.png")
     with open("/Users/addarsh/virtualenvs/facemagik_server/facetone/face_till_nose_end_contour_points.txt", "r") as f:
         face_till_nose_end_cpts = np.array(json.loads(f.read()))
@@ -1966,6 +2025,15 @@ if __name__ == "__main__":
     #mask = ImageUtils.get_mask_from_contour_points(img.shape, mouth_cpts)
     img[mask] = [255, 0, 0]
     ImageUtils.show(img)
+    """
+
+    #carr = [62, 0, 0]
+    #carr = [73, 0, 0]
+    carr = [50, 0, 0]
+    srgb = ImageUtils.LabTosRGBConventional(np.array(carr))[0].astype(np.float)
+    print("srgb : ", srgb)
+    print("display p3: ", ImageUtils.sRGBtodisplayP3(srgb))
+
     # print ("munsell: ", ImageUtils.sRGBtoMunsell(ImageUtils.HEX2RGB("#9F796A")))
     # print ("ycrcb: ", ImageUtils.RGB2HEX(ImageUtils.YCrCbtosRGB(ImageUtils.HEX2RGB("#B69C68"))[0]))
     # ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))

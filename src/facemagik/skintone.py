@@ -535,35 +535,25 @@ class SkinToneAnalyzer:
             Face.print_effective_color_map(self.image, effective_color_map, total_points)
 
         # Check mean brightness minimum coverage of the teeth.
-        final_mask = np.zeros(self.image.shape[:2], dtype=bool)
 
-        # Find mean brightness of first two masks in decreasing order of brightness.
-        count = 0
-        for effective_color in effective_color_map:
-            final_mask = np.bitwise_or(final_mask, effective_color_map[effective_color])
-            count += 1
-            if count == 2:
+        # Top 30% of brightest teeth pixels.
+        top_brightness_mask = np.zeros(self.image.shape[:2], dtype=bool)
+        for acm in all_cluster_masks:
+            top_brightness_mask = np.bitwise_or(top_brightness_mask, acm)
+            if ImageUtils.percentPoints(top_brightness_mask, total_points) >= 20:
                 break
 
-        # Find brightness value with one of the highest frequencies.
-        bins = 50
-        frequencies, brightness_values, _ = plt.hist(self.image[final_mask][:, 0], bins=bins, density=True,
-                                                     histtype="step")
-        # Find top k frequencies.
-        top_k = 2
-        indices = np.argpartition(frequencies, -top_k)[-top_k:]
-        top_brightness_values = brightness_values[indices]
-        print("Top brightness values: ", top_brightness_values)
-
-        average_teeth_brightness_value = round(np.max(top_brightness_values))
+        average_teeth_brightness_value = round(np.mean(np.max(self.image, axis=2)[top_brightness_mask]))
         print("Scene brightness value: ", average_teeth_brightness_value)
 
         if self.skin_config.DEBUG_MODE:
             # Plot histogram.
-            ImageUtils.plot_histogram(self.image, final_mask, channel=0, block=True, bins=bins, fig_num=1, xlim=[0,
+            ImageUtils.plot_histogram(self.image, top_brightness_mask, channel=0, block=True, bins=50, fig_num=1,
+                                      xlim=[0,
                                                                                                                  256])
 
         if self.skin_config.DEBUG_MODE:
+            ImageUtils.show_mask(self.image, top_brightness_mask)
             ImageUtils.show(self.image)
 
         return average_teeth_brightness_value
@@ -716,6 +706,46 @@ class SkinToneAnalyzer:
         return round(np.mean(np.max(self.image, axis=2)[self.face_mask_to_process]))
 
     """
+    Returns dominant hues found in face.
+    """
+
+    def hues_in_face(self):
+        hue_values = ImageUtils.hue_values(self.image, self.face_mask_to_process)
+
+        if self.skin_config.DEBUG_MODE:
+            plt.figure(1)
+            plt.hist(hue_values, bins=60, density=True, histtype="step")
+            plt.xlim([0, 40])
+            plt.show(block=True)
+
+    """
+    Breaks image of given mask to smaller clusters based on brightness and returns mean skin tone for each cluster.
+    """
+
+    def smaller_cluster_skin_tones(self):
+        image = self.image
+        mask = self.face_mask_to_process
+        bright_image = np.max(image, axis=2).astype(float)
+        total_points = np.count_nonzero(mask)
+
+        # Break mask into smaller clusters.
+        max_brightness = int(np.max(bright_image[mask]))
+        min_brightness = int(np.min(bright_image[mask]))
+        mask_clusters = []
+        curr_mask = np.zeros(bright_image.shape, dtype=bool)
+        curr_max_brightness = max_brightness
+        for brightness in range(max_brightness, min_brightness - 1, -1):
+            curr_mask = np.bitwise_or(curr_mask, np.bitwise_and(bright_image == brightness, mask))
+            if curr_max_brightness - brightness >= 5:
+                mask_clusters.append(curr_mask)
+                curr_mask = np.zeros(bright_image.shape, dtype=bool)
+                curr_max_brightness = brightness - 1
+
+        return [SkinTone(np.mean(image[m], axis=0).tolist(), round(ImageUtils.percentPoints(m, total_points)),
+                               SkinTone.DISPLAY_P3) for m in mask_clusters]
+
+
+    """
     Detects skin tone and primary light direction for given face image. Only used for debugging purposes. Do not use 
     in production code.
     """
@@ -765,9 +795,6 @@ class SkinToneAnalyzer:
                 for m in combined_masks:
                     print("percent: ", ImageUtils.percentPoints(m, total_points))
                     ImageUtils.face.show_mask(self.image, m)
-
-        img = ImageUtils.plot_points_new(self.image, [self.nose_middle_point])
-        ImageUtils.show(img)
 
         if self.skin_config.DEBUG_MODE:
             ImageUtils.show(self.image)
@@ -857,7 +884,15 @@ if __name__ == "__main__":
     # print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
     # print("light direction only: ", analyzer.get_light_direction())
     #print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
+    #analyzer.hues_in_face()
 
-    final_skin_tones = analyzer.get_skin_tones()
-    print("Skin Tones production: ", final_skin_tones)
-    ImageUtils.show_skin_tone_color_grid(final_skin_tones)
+    # Show skin tones.
+    #final_skin_tones = analyzer.get_skin_tones()
+    final_skin_tones = analyzer.smaller_cluster_skin_tones()
+    #print("Skin Tones production: ", final_skin_tones)
+    shade_file_name = os.path.splitext(args.image)[0] + "_shade_clusters.png"
+    ImageUtils.save_skin_tones_to_file(shade_file_name, final_skin_tones)
+    if args.bri is not None and float(args.bri) != 1.0:
+        mod_file_name = os.path.splitext(args.image)[0] + "_mod.png"
+        ImageUtils.save_image_to_file(analyzer.image, mod_file_name)
+
