@@ -203,7 +203,7 @@ class ImageUtils:
     """
 
     @staticmethod
-    def save_skin_tones_to_file(image_name, skin_tones):
+    def save_skin_tones_to_file(image_name, skin_tones, icc_profile_path=""):
 
         grid_height = 800
         img_list = []
@@ -214,26 +214,33 @@ class ImageUtils:
 
         for i, img in enumerate(img_list):
             color = skin_tones[i].rgb
-            percent_of_face_mask = round(skin_tones[i].percent_of_face_mask, 1)
+            percent_of_face_mask = round(skin_tones[i].percent_of_face_mask)
             img[:, :, :] = color
 
+            hsv = skin_tones[i].hsv
+            h = round(hsv[0])
+            s = round(hsv[1])
+            v = round(hsv[2])
+            sl = round(skin_tones[i].hls[2])
+
             # Add text to image.
-            hsv = ImageUtils.sRGBtoHSV(color)[0]
-            h = hsv[0]*2
-            s = round(hsv[1] * (100.0/255.0))
-            v = round(hsv[2] * (100.0/255.0))
-            hsvStr = "H: " + str(h) + ", S: " + str(s) + ", V: " + str(v) + ", P: " + str(percent_of_face_mask)
+            hsvStr = "H: " + str(h) + ",S: " + str(sl) + ",S:" + str(s) + ",V: " + str(v) + ",P:" + str(
+                percent_of_face_mask)
             img[:, :, :] = cv2.putText(img, hsvStr, (10, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (210, 0, 0), 1,
                                        cv2.LINE_AA)
 
         save_img = np.vstack(img_list)
-        im = Image.fromarray(save_img)
-        im.save(image_name)
+        ImageUtils.save_image_to_file(save_img, image_name, icc_profile_path)
 
     @staticmethod
-    def save_image_to_file(rgb_array, image_name):
+    def save_image_to_file(rgb_array, image_name, icc_profile_path=""):
         im = Image.fromarray(rgb_array)
-        im.save(image_name)
+        if icc_profile_path != "":
+            with open(icc_profile_path, "rb") as f:
+                icc = f.read()
+            im.save(image_name, icc_profile=icc)
+        else:
+            im.save(image_name)
 
     """
     color return the RGB tuple of given hex color. Hex color format is #FF0033.
@@ -1110,6 +1117,25 @@ class ImageUtils:
         return np.reshape(cv2.cvtColor(np.reshape(colorArr,
                                                   (-1, 3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_RGB2HSV),
                           (-1, 3))
+
+    """
+    sRGBtoHLS converts given sRGB array (n by 3) into (n, 3) HLS array.
+    """
+
+    def sRGBtoHLS(colorArr):
+        return np.reshape(cv2.cvtColor(np.reshape(colorArr,
+                                                  (-1, 3))[np.newaxis, :, :].astype(np.uint8), cv2.COLOR_RGB2HLS),
+                          (-1, 3))
+
+    """
+    Converts given HSV/HLS OpenCV values (H=0-179, S=0-255, V=0-255) to preferred values (H=0-360, S=0-100, 
+    V=0-100).Will works for HLS input also because L and S have the same ranges and H is the same for both HSV and HLS.
+    """
+    def toHSVPreferredRange(hsv):
+        h = hsv[0]*2
+        s = round(hsv[1] * (100.0 / 255.0), 2)
+        v = round(hsv[2] * (100.0 / 255.0), 2)
+        return np.array([h, s, v])
 
     """
     HSVtosRGB converts given HSV array (n by 3) into (n by 3) sRGB array.

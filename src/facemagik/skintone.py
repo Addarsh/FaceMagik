@@ -103,7 +103,9 @@ class SkinTone:
     DISPLAY_P3 = "displayP3"
 
     rgb: []
-    percent_of_face_mask: int
+    hsv: []
+    hls: []
+    percent_of_face_mask: float
     profile: str
 
     def brightness(self):
@@ -741,8 +743,17 @@ class SkinToneAnalyzer:
                 curr_mask = np.zeros(bright_image.shape, dtype=bool)
                 curr_max_brightness = brightness - 1
 
-        return [SkinTone(np.mean(image[m], axis=0).tolist(), round(ImageUtils.percentPoints(m, total_points)),
-                               SkinTone.DISPLAY_P3) for m in mask_clusters]
+        all_skin_tones = []
+        for m in mask_clusters:
+            mean_color_rgb = np.round(np.mean(image[m], axis=0), 2)
+            hsv = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHSV(mean_color_rgb)[0])
+            hls = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHLS(mean_color_rgb)[0])
+            tone = SkinTone(rgb=mean_color_rgb.tolist(), hsv=hsv.tolist(), hls=hls.tolist(),
+                            percent_of_face_mask=round(ImageUtils.percentPoints(m, total_points), 2),
+                            profile=SkinTone.DISPLAY_P3)
+            all_skin_tones.append(tone)
+
+        return all_skin_tones
 
 
     """
@@ -813,8 +824,13 @@ class SkinToneAnalyzer:
         for mask in effective_color_map.values():
             percent_of_face_mask = ImageUtils.percentPoints(mask, total_points)
             if percent_of_face_mask >= skin_tone_percent_cutoff:
-                mean_color = np.round(np.mean(rgb_image[mask], axis=0)).astype(int)
-                skin_tone = SkinTone(mean_color.tolist(), round(percent_of_face_mask), SkinTone.DISPLAY_P3)
+                mean_color_rgb = np.round(np.mean(rgb_image[mask], axis=0), 2)
+                hsv = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHSV(mean_color_rgb)[0])
+                hls = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHLS(mean_color_rgb)[0])
+
+                skin_tone = SkinTone(rgb=mean_color_rgb.tolist(), hsv=hsv.tolist(), hls=hls.tolist(),
+                                     percent_of_face_mask=round(percent_of_face_mask, 2),
+                                     profile=SkinTone.DISPLAY_P3)
                 skin_tones.append(skin_tone)
 
         return skin_tones
@@ -877,7 +893,7 @@ if __name__ == "__main__":
     # face_mask_config = get_test_face_mask_info()
 
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config, face_mask_config)
-    print("Brightness value: ", analyzer.determine_scene_brightness())
+    #print("Brightness value: ", analyzer.determine_scene_brightness())
     #print("Average face brightness value: ", analyzer.get_average_face_brightness())
     # print ("Primary light direction: ", analyzer.get_light_direction_result()[:2])
     # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
@@ -889,10 +905,13 @@ if __name__ == "__main__":
     # Show skin tones.
     #final_skin_tones = analyzer.get_skin_tones()
     final_skin_tones = analyzer.smaller_cluster_skin_tones()
+    print ("final skin tones: ", final_skin_tones)
     #print("Skin Tones production: ", final_skin_tones)
     shade_file_name = os.path.splitext(args.image)[0] + "_shade_clusters.png"
-    ImageUtils.save_skin_tones_to_file(shade_file_name, final_skin_tones)
-    if args.bri is not None and float(args.bri) != 1.0:
+    icc_profile_path = "/Users/addarsh/Desktop/anastasia-me/displayP3_icc_profile.txt"
+    ImageUtils.save_skin_tones_to_file(shade_file_name, final_skin_tones, icc_profile_path=icc_profile_path)
+    if (args.bri is not None and float(args.bri) != 1.0) or (args.sat is not None and float(args.sat) != 1.0):
         mod_file_name = os.path.splitext(args.image)[0] + "_mod.png"
-        ImageUtils.save_image_to_file(analyzer.image, mod_file_name)
+        ImageUtils.save_image_to_file(analyzer.image, mod_file_name,
+                                      icc_profile_path=icc_profile_path)
 
