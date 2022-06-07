@@ -721,7 +721,8 @@ class SkinToneAnalyzer:
             plt.show(block=True)
 
     """
-    Breaks image of given mask to smaller clusters based on brightness and returns mean skin tone for each cluster.
+    Breaks image of given mask to smaller clusters based on brightness and returns mean skin tone for each cluster. 
+    The returned skin tones are in decreasing order of brightness.
     """
 
     def smaller_cluster_skin_tones(self):
@@ -755,6 +756,42 @@ class SkinToneAnalyzer:
 
         return all_skin_tones
 
+    """
+    Returns skin tones filtered by mask percent.
+    """
+
+    def filter_skin_tones_by_mask_percent(self, skin_tones):
+        mask_percent_cutoff = 5
+        sig_skin_tones = []
+        cumulative_percent = 0
+        for sk in skin_tones:
+            if round(sk.percent_of_face_mask) >= mask_percent_cutoff:
+                sig_skin_tones.append(sk)
+                cumulative_percent += sk.percent_of_face_mask
+
+        return sig_skin_tones
+
+    """
+    Algorithm that determines brightness from skin.
+    """
+
+    def brightness_from_skin(self):
+        skin_tones = self.smaller_cluster_skin_tones()
+
+        # We want masks that are 5% or greater with cumulative percentage exceeding a certain threshold.
+        sig_skin_tones = self.filter_skin_tones_by_mask_percent(skin_tones)
+        cumulative_percent = 0
+        for sk in sig_skin_tones:
+            cumulative_percent += sk.percent_of_face_mask
+
+        print("Cumulative percent: ", round(cumulative_percent))
+        if cumulative_percent < 60:
+            print("Cumulative percent too less, might be too bright at some region of the face")
+
+
+        # TODO: Find brightness based on Saturation from HLS and Saturation from HSV.
+
+        return sig_skin_tones
 
     """
     Detects skin tone and primary light direction for given face image. Only used for debugging purposes. Do not use 
@@ -905,11 +942,13 @@ if __name__ == "__main__":
     # Show skin tones.
     #final_skin_tones = analyzer.get_skin_tones()
     final_skin_tones = analyzer.smaller_cluster_skin_tones()
-    print ("final skin tones: ", final_skin_tones)
+    filtered_skin_tones = analyzer.brightness_from_skin()
     #print("Skin Tones production: ", final_skin_tones)
     shade_file_name = os.path.splitext(args.image)[0] + "_shade_clusters.png"
+    filtered_file_name = os.path.splitext(args.image)[0] + "_filtered.png"
     icc_profile_path = "/Users/addarsh/Desktop/anastasia-me/displayP3_icc_profile.txt"
     ImageUtils.save_skin_tones_to_file(shade_file_name, final_skin_tones, icc_profile_path=icc_profile_path)
+    ImageUtils.save_skin_tones_to_file(filtered_file_name, filtered_skin_tones, icc_profile_path=icc_profile_path)
     if (args.bri is not None and float(args.bri) != 1.0) or (args.sat is not None and float(args.sat) != 1.0):
         mod_file_name = os.path.splitext(args.image)[0] + "_mod.png"
         ImageUtils.save_image_to_file(analyzer.image, mod_file_name,
