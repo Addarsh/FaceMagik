@@ -173,7 +173,10 @@ class SkinToneAnalyzer:
 
             self.image = face.image
             self.face_mask_to_process = face.get_face_until_nose_end_without_area_around_eyes()
-            self.mouth_mask_to_process = face.get_mouth_points()
+            try:
+                self.mouth_mask_to_process = face.get_mouth_points()
+            except Exception:
+                self.mouth_mask_to_process = None
             self.nose_middle_point = face.noseMiddlePoint
             self.rotation_matrix = ImageUtils.rotation_matrix(face.get_eye_masks())
             self.is_teeth_visible = face.is_teeth_visible()
