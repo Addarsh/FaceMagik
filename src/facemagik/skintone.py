@@ -10,8 +10,9 @@ from mrcnn import model as model_lib
 from dataclasses import dataclass
 from multiprocessing import Queue, Pool
 from .utils import ImageUtils
+from .mesh import face_mask_with_direct_light
 from .face import Face
-from .common import InferenceConfig, SceneBrightness, LightDirection
+from .common import InferenceConfig, SceneBrightness, LightDirection, SkinTone
 
 """
 Configuration details associated with skin detection algorithm.
@@ -92,26 +93,6 @@ class SceneBrightnessAndDirection:
 
         return SceneBrightness.NEUTRAL_LIGHTING
 
-
-"""
-Container class for skin tone.
-"""
-
-
-@dataclass
-class SkinTone:
-    DISPLAY_P3 = "displayP3"
-
-    rgb: []
-    hsv: []
-    hls: []
-    percent_of_face_mask: float
-    profile: str
-
-    def brightness(self):
-        return max(self.rgb)
-
-
 @dataclass
 class NoseMiddlePoint:
     x: int
@@ -173,6 +154,7 @@ class SkinToneAnalyzer:
 
             self.image = face.image
             self.face_mask_to_process = face.get_face_until_nose_end_without_area_around_eyes()
+            #self.face_mask_to_process = face.get_face_mask_without_area_around_eyes()
             try:
                 self.mouth_mask_to_process = face.get_mouth_points()
             except Exception:
@@ -180,6 +162,7 @@ class SkinToneAnalyzer:
             self.nose_middle_point = face.noseMiddlePoint
             self.rotation_matrix = ImageUtils.rotation_matrix(face.get_eye_masks())
             self.is_teeth_visible = face.is_teeth_visible()
+            self.face = face
         else:
             self.image = skin_config.IMAGE
             self.face_mask_to_process = face_mask_info.face_mask_to_process
@@ -716,6 +699,7 @@ class SkinToneAnalyzer:
 
     def hues_in_face(self):
         hue_values = ImageUtils.hue_values(self.image, self.face_mask_to_process)
+        print("hue vals: ", hue_values)
 
         if self.skin_config.DEBUG_MODE:
             plt.figure(1)
@@ -724,77 +708,123 @@ class SkinToneAnalyzer:
             plt.show(block=True)
 
     """
-    Breaks image of given mask to smaller clusters based on brightness and returns mean skin tone for each cluster. 
-    The returned skin tones are in decreasing order of brightness.
+    Returns skin tones filtered by mask percent.
     """
 
-    def smaller_cluster_skin_tones(self):
+    def filter_skin_tones_by_mask_percent(self, skin_tones):
+        max_cumulative_percent = 50
+        sig_skin_tones = []
+        cumulative_percent = 0
+        average_brightness = 0.0
+        average_chroma = 0.0
+        average_sat = 0.0
+        total_percent = 0.0
+        final_mask = np.zeros(self.image.shape[:2], dtype=bool)
+        for sk in skin_tones:
+            # if round(sk.percent_of_face_mask) >= mask_percent_cutoff:
+            if cumulative_percent < max_cumulative_percent:
+                sig_skin_tones.append(sk)
+                cumulative_percent += sk.percent_of_face_mask
+                average_brightness += sk.percent_of_face_mask * sk.hsv[2]
+                average_chroma += sk.percent_of_face_mask * sk.hls[2]
+                average_sat += sk.percent_of_face_mask * sk.hsv[1]
+                final_mask = np.bitwise_or(final_mask, sk.face_mask)
+                total_percent += sk.percent_of_face_mask
+
+        print("\n 50 filter")
+        print("average brightness: ", round(average_brightness/total_percent))
+        print("average chroma: ", round(average_chroma / total_percent))
+        print("average sat: ", round(average_sat / total_percent))
+        return sig_skin_tones, final_mask
+
+
+    def desirable_regions_face_mask(self, mask, desirable_percent):
         image = self.image
-        mask = self.face_mask_to_process
+
         bright_image = np.max(image, axis=2).astype(float)
         total_points = np.count_nonzero(mask)
 
         # Break mask into smaller clusters.
         max_brightness = int(np.max(bright_image[mask]))
         min_brightness = int(np.min(bright_image[mask]))
-        mask_clusters = []
         curr_mask = np.zeros(bright_image.shape, dtype=bool)
-        curr_max_brightness = max_brightness
         for brightness in range(max_brightness, min_brightness - 1, -1):
             curr_mask = np.bitwise_or(curr_mask, np.bitwise_and(bright_image == brightness, mask))
-            if curr_max_brightness - brightness >= 5:
-                mask_clusters.append(curr_mask)
-                curr_mask = np.zeros(bright_image.shape, dtype=bool)
-                curr_max_brightness = brightness - 1
+            if ImageUtils.percentPoints(curr_mask, total_points) >= desirable_percent:
+                break
 
-        all_skin_tones = []
-        for m in mask_clusters:
-            mean_color_rgb = np.round(np.mean(image[m], axis=0), 2)
-            hsv = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHSV(mean_color_rgb)[0])
-            hls = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHLS(mean_color_rgb)[0])
-            tone = SkinTone(rgb=mean_color_rgb.tolist(), hsv=hsv.tolist(), hls=hls.tolist(),
-                            percent_of_face_mask=round(ImageUtils.percentPoints(m, total_points), 2),
-                            profile=SkinTone.DISPLAY_P3)
-            all_skin_tones.append(tone)
-
-        return all_skin_tones
-
-    """
-    Returns skin tones filtered by mask percent.
-    """
-
-    def filter_skin_tones_by_mask_percent(self, skin_tones):
-        mask_percent_cutoff = 5
-        sig_skin_tones = []
-        cumulative_percent = 0
-        for sk in skin_tones:
-            if round(sk.percent_of_face_mask) >= mask_percent_cutoff:
-                sig_skin_tones.append(sk)
-                cumulative_percent += sk.percent_of_face_mask
-
-        return sig_skin_tones
-
-    """
-    Algorithm that determines brightness from skin.
-    """
-
-    def brightness_from_skin(self):
-        skin_tones = self.smaller_cluster_skin_tones()
-
-        # We want masks that are 5% or greater with cumulative percentage exceeding a certain threshold.
-        sig_skin_tones = self.filter_skin_tones_by_mask_percent(skin_tones)
-        cumulative_percent = 0
-        for sk in sig_skin_tones:
-            cumulative_percent += sk.percent_of_face_mask
-
-        print("Cumulative percent: ", round(cumulative_percent))
-        if cumulative_percent < 60:
-            print("Cumulative percent too less, might be too bright at some region of the face")
+        return curr_mask
 
 
-        # TODO: Find brightness based on Saturation from HLS and Saturation from HSV.
+    def compute_metrics_for_mask(self, mask):
+        image = self.image
+        bright_image = np.max(image, axis=2).astype(float)* (100.0/255.0)
+        average_brightness = round(np.mean(bright_image[mask]))
+        std_brightness = round(np.std(bright_image[mask]))
 
-        return sig_skin_tones
+        gray_image = ImageUtils.to_gray(image).astype(float)*(100.0/255.0)
+        mean_gray = round(np.mean(gray_image[mask]))
+
+        s_image = ImageUtils.to_hls(image)[:, :, 2].astype(float) * (100.0/255.0)
+        average_s = round(np.mean(s_image[mask]))
+        std_s = round(np.std(s_image[mask]))
+
+        ss_image = ImageUtils.to_hsv(image)[:, :, 1].astype(float) * (100.0/255.0)
+        mean_ss = round(np.mean(ss_image[mask]), 2)
+        std_ss = round(np.std(ss_image[mask]))
+
+        l_image = ImageUtils.to_hls(image)[:, :, 1].astype(float) * (100.0 / 255.0)
+        average_l = round(np.mean(l_image[mask]))
+
+        print("mean brightness: ", average_brightness, " mean gray: ", mean_gray, " std brightness: ",
+              std_brightness ," mean lightness: ",
+              average_l)
+        print("mean s: ", average_s, " std s: ", std_s, " s range: ", average_s-std_s, "-", average_s + std_s ,
+              " std ss: ", std_ss,
+              " mean ss: ", mean_ss)
+        print("ratio: ", round((average_l - average_s)/average_brightness, 2))
+        print("delta s: ", average_s - mean_ss)
+
+
+    def get_over_and_under_mask(self):
+        image = self.image
+        bright_image = np.max(image, axis=2).astype(float) * (100.0 / 255.0)
+        overexposed_mask = bright_image >= 94
+        underexposed_mask = bright_image <= 8
+        total_points = image.shape[0] * image.shape[1]
+        print("\noverexposed percent: ", ImageUtils.percentPoints(overexposed_mask, total_points), " underexposed "
+                                                                                                   "points: ", 
+              ImageUtils.percentPoints(underexposed_mask, total_points), "\n")
+        return overexposed_mask, underexposed_mask
+
+    def get_teeth_facing_light(self):
+        mmask = self.mouth_mask_to_process
+
+        tmask = np.bitwise_and(self.face.lips_and_mouth_mask, face_mask_with_direct_light(self.image))
+        #ImageUtils.show_mask(self.image, tmask)
+        boundary_masks = ImageUtils.find_boundaries(tmask)
+
+        # Pick boundary mask with most points.
+        best_boundary_mask = None
+        max_points_count = 0
+        for b in boundary_masks:
+            if np.count_nonzero(b) > max_points_count:
+                best_boundary_mask = b
+                max_points_count = np.count_nonzero(b)
+
+        #ImageUtils.show_mask(self.image, best_boundary_mask)
+        _, c, w, _ = ImageUtils.bbox(best_boundary_mask)
+
+        # only use mask within column bounds.
+        mmask[:, :c] = False
+        mmask[:, c+w:] = False
+
+        # constrain within nose edges.
+        _, cn, wn, _ = ImageUtils.bbox(self.face.get_nose_keypoints())
+        mmask[:, :cn] = False
+        mmask[:, cn+wn:] = False
+
+        return mmask
 
     """
     Detects skin tone and primary light direction for given face image. Only used for debugging purposes. Do not use 
@@ -868,8 +898,9 @@ class SkinToneAnalyzer:
                 hsv = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHSV(mean_color_rgb)[0])
                 hls = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHLS(mean_color_rgb)[0])
 
-                skin_tone = SkinTone(rgb=mean_color_rgb.tolist(), hsv=hsv.tolist(), hls=hls.tolist(),
-                                     percent_of_face_mask=round(percent_of_face_mask, 2),
+                skin_tone = SkinTone(rgb=mean_color_rgb.tolist(), hsv=hsv.tolist(), hls=hls.tolist(), gray=0.0,
+                                     ycrcb=[],
+                                     percent_of_face_mask=round(percent_of_face_mask, 2), face_mask=mask.copy(),
                                      profile=SkinTone.DISPLAY_P3)
                 skin_tones.append(skin_tone)
 
@@ -897,6 +928,156 @@ def get_test_face_mask_info():
                                   left_eye_mask=get_mask("left_eye_mask.png"),
                                   right_eye_mask=get_mask("right_eye_mask.png"))
     return face_mask_info
+
+"""
+Performs detection in directory on one image at a time.
+"""
+
+def test_detection_dir(mrcnn_model, sk_config):
+    from os import listdir
+    from os.path import isfile, join
+    path = "/Users/addarsh/virtualenvs/facemagik_server/facetone/rotation_mode"
+    image_paths = [join(path,f) for f in listdir(path) if isfile(join(path, f)) and f.endswith(".png") and "tone" not
+                   in f and "filtered" not in f]
+
+    count = 0
+    for p in image_paths:
+        sk_config.IMAGE_PATH = p
+        print("Path: ", p)
+        an = SkinToneAnalyzer(mrcnn_model, sk_config, None)
+        filtered_skin_tones = ImageUtils.smaller_cluster_skin_tones(analyzer.image, analyzer.face_mask_to_process)
+        #shade_file_name = os.path.splitext(args.image)[0] + "_shade_clusters.png"
+        filtered_file_name = os.path.splitext(p)[0] + "_filtered_" + str(round(abs(filtered_skin_tones[0].hls[
+                                                                                          2]-filtered_skin_tones[
+            -1].hls[2]))) + ".png"
+        icc_profile_path = "/Users/addarsh/Desktop/anastasia-me/displayP3_icc_profile.txt"
+        print("name: ", filtered_file_name)
+        ImageUtils.save_skin_tones_to_file(filtered_file_name, filtered_skin_tones, icc_profile_path=icc_profile_path)
+        count += 1
+        print("done: ", count)
+
+
+def show_only_face_mask(analyzer):
+    clone = analyzer.image.copy()
+    mask = np.bitwise_xor(np.ones(clone.shape[:2], dtype=bool), analyzer.face_mask_to_process)
+    clone[mask] = [0, 0, 0]
+    ImageUtils.show(clone)
+
+
+def find_sat_mask(analyzer):
+    image = analyzer.image
+    s_image = ImageUtils.to_hsv(image)[:, :, 1].astype(float) * (100.0/255.0)
+    b_image = ImageUtils.to_hsv(image)[:, :, 2].astype(float) * (100.0 / 255.0)
+    mask = s_image < 15
+    mask = np.bitwise_and(mask, b_image > 50)
+    mask = np.bitwise_and(mask, analyzer.face.get_complete_face_mask())
+    emask = np.zeros(analyzer.image.shape[:2], dtype=bool)
+    for em in analyzer.face.get_eye_masks():
+        #mask = np.bitwise_and(mask, em)
+        emask = np.bitwise_or(emask, em)
+    mask = np.bitwise_and(mask, emask)
+    mask = np.bitwise_and(mask,analyzer.face.get_points_between_eyeballs())
+    print("grey mask")
+
+    bright_image = np.max(image, axis=2).astype(float)
+
+    # use top 50%
+    max_brightness = int(np.max(bright_image[mask]))
+    min_brightness = int(np.min(bright_image[mask]))
+    curr_mask = np.zeros(bright_image.shape, dtype=bool)
+    print("max and min: ", max_brightness, min_brightness)
+    for brightness in range(max_brightness, min_brightness - 1, -1):
+        if ImageUtils.percentPoints(curr_mask, np.count_nonzero(mask)) > 50:
+            break
+        curr_mask = np.bitwise_or(curr_mask, np.bitwise_and(bright_image == brightness, mask))
+
+    print("points between eyes")
+
+
+    average_brightness = round(np.mean(bright_image[curr_mask]).astype(float)*(100.0/255.0))
+    print("average brightness of grey mask: ", average_brightness)
+    ImageUtils.show_mask(analyzer.image, curr_mask)
+
+
+def find_gray_color_checker(analyzer):
+    image = analyzer.image
+    gray_image = ImageUtils.to_gray(image)
+
+    """
+    gray_color = 135
+    middle_grey = np.reshape(np.array([gray_color, gray_color, gray_color]), (1,3))
+    deltaImage = ImageUtils.delta_cie2000_matrix_v2(middle_grey, image)
+    mask = deltaImage < 5
+    """
+
+    mask = np.bitwise_and(gray_image > 127, gray_image < 160)
+    fr, _, _, hr = ImageUtils.bbox(analyzer.face.get_face_mask())
+    # Discard all mask points above and including the face.
+    mask[:fr + hr+1, :] = False
+
+    # find contours.
+    binary_clone = gray_image.copy()
+    binary_clone[mask] = 255
+    binary_clone[np.bitwise_xor(np.ones(image.shape[:2], dtype=bool), mask)] = 0
+
+    ImageUtils.show(binary_clone)
+    ImageUtils.show(gray_image)
+
+    print("\nGray metrics")
+    print("percent: ", ImageUtils.percentPoints(mask, image.shape[0]*image.shape[1]))
+    print("mean gray value: ", np.mean(gray_image[mask]))
+    return mask
+
+def check_brightness(final_skin_tones):
+    # Find smallest number of consecutive masks that add up to > 30%.
+    start = 0
+    end = start + 1
+    cum_sum = final_skin_tones[start].percent_of_face_mask
+    cur_tones = [final_skin_tones[start]]
+    best_tones = final_skin_tones
+    best_sum = 0.0
+    best_start_pos = 0
+    while start < len(final_skin_tones) - 1 and end < len(final_skin_tones):
+        print("cum sum: ", cum_sum, " start and end: ", start, end, len(final_skin_tones))
+        while end < len(final_skin_tones) and cum_sum < 30:
+            cum_sum += final_skin_tones[end].percent_of_face_mask
+            cur_tones.append(final_skin_tones[end])
+            end += 1
+        if end == len(final_skin_tones):
+            break
+
+
+        # Have to change this condition since it keeps looping when start = start and end = start +1/2 for ww-29
+        while start < end-1 and cum_sum >= 30:
+            if (len(cur_tones) < len(best_tones)) or (len(cur_tones) == len(best_tones) and cum_sum > best_sum):
+                best_tones = cur_tones.copy()
+                best_sum = cum_sum
+                best_start_pos = start
+
+            cur_tones.pop(0)
+            cum_sum -= final_skin_tones[start].percent_of_face_mask
+            start += 1
+
+
+    # HSV = [24, 40, 73]
+    foundation_color = np.array([186,141,112])
+    # HSV = p179, 136, 107]
+    #foundation_color = np.array([179, 136, 107])
+    print("\nbrightness calc")
+    print("best sum: ", best_sum, " best tones len: ", len(best_tones))
+    for sk in best_tones:
+        print("V: ", sk.hsv[2], " chroma: ", sk.hls[2], " sat: ", sk.hsv[1], " percent: ",
+              sk.percent_of_face_mask, " delta cie: ", ImageUtils.delta_cie2000_v2(sk.rgb, foundation_color))
+
+    print("\nbrighter tones with end pos: ", best_start_pos)
+    for i in range(0, best_start_pos):
+        sk = final_skin_tones[i]
+        if round(sk.percent_of_face_mask) >= 1:
+            print("V: ", sk.hsv[2], " chroma: ", sk.hls[2], " sat: ", sk.hsv[1],
+                                                     " percent: ",
+                  sk.percent_of_face_mask, " delta cie: ", ImageUtils.delta_cie2000_v2(sk.rgb, foundation_color))
+
+    return best_tones
 
 
 if __name__ == "__main__":
@@ -927,6 +1108,10 @@ if __name__ == "__main__":
     # Load Mask RCNN model. maskrcnn_model directory is located one level above where this script is run.
     maskrcnn_model = SkinToneAnalyzer.construct_model("../maskrcnn_model/mask_rcnn_face_0060.h5")
 
+    # Testing directory detection.
+    #test_detection_dir(maskrcnn_model, skin_detection_config)
+    #exit(0)
+
     face_mask_config = None
     # Uncomment if you want to test face mask info.
     # skin_detection_config.IMAGE = ImageUtils.read_rgb_image(args.image)
@@ -935,23 +1120,196 @@ if __name__ == "__main__":
     analyzer = SkinToneAnalyzer(maskrcnn_model, skin_detection_config, face_mask_config)
     #print("Brightness value: ", analyzer.determine_scene_brightness())
     #print("Average face brightness value: ", analyzer.get_average_face_brightness())
-    # print ("Primary light direction: ", analyzer.get_light_direction_result()[:2])
-    # print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
-    # print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
-    # print("light direction only: ", analyzer.get_light_direction())
-    #print("Skin Tones: ", analyzer.detect_skin_tone_and_light_direction())
+    print ("Primary light direction: ", analyzer.get_light_direction_result()[:2])
+    #print("Scene brightness and light direction: ", analyzer.get_scene_brightness_and_primary_light_direction())
+    #analyzer.detect_skin_tone_and_light_direction()
+    #print("light direction and scene brightness: ", analyzer.get_primary_light_direction_and_scene_brightness())
+    #print("light direction only: ", analyzer.get_light_direction())
+    # uncomment to debug light direction.
+    #analyzer.detect_skin_tone_and_light_direction()
     #analyzer.hues_in_face()
 
     # Show skin tones.
     #final_skin_tones = analyzer.get_skin_tones()
-    final_skin_tones = analyzer.smaller_cluster_skin_tones()
-    filtered_skin_tones = analyzer.brightness_from_skin()
+    final_skin_tones = ImageUtils.smaller_cluster_skin_tones(analyzer.image, analyzer.face_mask_to_process)
+    #final_skin_tones = ImageUtils.smaller_cluster_skin_tones(analyzer.image, analyzer.face.get_forehead_points())
+    desirable_fac_mask = analyzer.desirable_regions_face_mask(analyzer.face_mask_to_process, 50)
+    analyzer.compute_metrics_for_mask(desirable_fac_mask)
+
+    anti_mask = np.bitwise_xor(analyzer.face_mask_to_process, desirable_fac_mask)
+    analyzer.compute_metrics_for_mask(anti_mask)
+
+    print("Metrics for full mask")
+    analyzer.compute_metrics_for_mask(analyzer.face_mask_to_process)
+
+    # teeth mask
+    print("\n\n Teeth if any")
+    desirable_teeth_mask = analyzer.desirable_regions_face_mask(analyzer.mouth_mask_to_process, 15)
+    #desirable_teeth_mask = np.bitwise_and(analyzer.mouth_mask_to_process, face_mask_with_direct_light(analyzer.image))
+    #desirable_teeth_mask = analyzer.get_teeth_facing_light()
+    # get rid of gums
+    #desirable_teeth_mask = np.bitwise_and(desirable_teeth_mask,  analyzer.desirable_regions_face_mask(
+    #    desirable_teeth_mask, 50))
+    #ImageUtils.plot_histogram(analyzer.image, desirable_teeth_mask, channel=0, block=True, bins=50, fig_num=1,
+    #                          xlim=[0,
+    #                                256])
+
+    """
+    ImageUtils.plot_histogram(analyzer.image, np.ones(analyzer.image.shape[:2], dtype=bool), channel=2, block=True,
+                              bins=256,
+                              fig_num=1,xlim=[0,256])
+
+    ImageUtils.plot_histogram(analyzer.image, np.ones(analyzer.image.shape[:2], dtype=bool), channel=1, block=True,
+                              bins=50,
+                              fig_num=1, xlim=[0, 256])
+    ImageUtils.plot_histogram(analyzer.image, np.ones(analyzer.image.shape[:2], dtype=bool), channel=2, block=True,
+                              bins=50,
+                              fig_num=1, xlim=[0, 256])
+    """
+
+    #ImageUtils.plot_gray_histogram(ImageUtils.to_gray(analyzer.image), np.ones(analyzer.image.shape[:2], dtype=bool),
+    #                              block=True, bins=255)
+
+    analyzer.compute_metrics_for_mask(desirable_teeth_mask)
+    ImageUtils.show_mask(analyzer.image, desirable_teeth_mask)
+
+    print("\n\n Teeth Part 2")
+    desirable_teeth_mask = analyzer.desirable_regions_face_mask(analyzer.mouth_mask_to_process, 30)
+    analyzer.compute_metrics_for_mask(desirable_teeth_mask)
+    ImageUtils.show_mask(analyzer.image, desirable_teeth_mask)
+
+    filtered_skin_tones, bright_50_mask = analyzer.filter_skin_tones_by_mask_percent(final_skin_tones)
+    mean_50_color_rgb = np.round(np.mean(analyzer.image[bright_50_mask], axis=0), 2)
+    print("Mean 50 RGB: ", mean_50_color_rgb)
+
+    cum_delta_percent = 0.0
+    cum_percent = 0.0
+    cutoff_print = 50.0
+    count_idx = 1
+    cutoff_reached = False
+    shadow_mask = np.zeros(analyzer.image.shape[:2], dtype=bool)
+    one_percent_mask = np.zeros(analyzer.image.shape[:2], dtype=bool)
+    first_cum_mask = np.zeros(analyzer.image.shape[:2], dtype=bool)
+    max_one_c = -1
+    min_one_c = -1
+    max_one_v = -1
+    max_one_gray = -1
+    min_one_gray = -1
+    min_one_c = 100
+    max_one_ss = -1
+    min_one_ss = -1
+    first_c = -1
+    first_sat = -1
+    one_percent_tones = []
+    #foundation_color = np.array([179, 136, 107])
+    foundation_color = np.array([186,141,112])
+    #foundation_color = np.array([195, 144, 107])
+    # mac foundation.
+    #foundation_color = np.array([212, 181, 146])
+    #foundation_color = np.array([220, 180, 140])
+    #foundation_color = np.array([191, 144, 117])
+    for i, sk in enumerate(final_skin_tones):
+        if first_c == -1:
+            first_c = round(sk.hls[2])
+            first_sat = round(sk.hsv[1])
+        if cum_percent < 1:
+            first_cum_mask = np.bitwise_or(first_cum_mask, sk.face_mask)
+
+        prev_d = -1
+        next_d = -1
+        if i > 0:
+            prev_d = round(ImageUtils.delta_cie2000_v2(sk.rgb, final_skin_tones[i-1].rgb),2)
+        if i < len(final_skin_tones) - 1:
+            next_d = round(ImageUtils.delta_cie2000_v2(sk.rgb, final_skin_tones[i+1].rgb),2)
+
+        delta_50_d = round(ImageUtils.delta_cie2000_v2(sk.rgb, mean_50_color_rgb),2)
+
+        cum_percent += sk.percent_of_face_mask
+        if delta_50_d <= 4:
+            cum_delta_percent += sk.percent_of_face_mask
+        delta_ss = round(sk.hsv[1] - sk.hls[2])
+        w_ratio = 0.0
+        if sk.hsv[2] > 0:
+            w_ratio = (sk.hls[1] - sk.hls[2])/(sk.hsv[2])
+        print("V: ", sk.hsv[2], " G: ", round(sk.gray,2)," S: ", sk.hls[2], " SS: ", sk.hsv[1]," percent: ",
+              sk.percent_of_face_mask,
+              " cum percent: ", round(cum_percent, 2), " L: ", sk.hls[1], " delta LS: ", round(sk.hls[1] - sk.hls[
+                2]), " ratio: ", round(w_ratio, 2), " delta SS: ", delta_ss, " prevd: ", prev_d, " 50 d: ", delta_50_d,
+              " delta cie: ", round(ImageUtils.delta_cie2000_v2(sk.rgb, foundation_color), 2), " cum delta percent: "
+                                                                                               "",
+              round(cum_delta_percent,2))
+        if cum_percent > cutoff_print and not cutoff_reached:
+            print(" Reached cum percent in : ", count_idx, "counts with brightness: ", sk.hsv[2])
+            cutoff_reached = True
+        if delta_ss >= 16:
+            shadow_mask = np.bitwise_or(shadow_mask, sk.face_mask)
+
+        # Update this to stop counting one percents once we hit two or more consecutive masks < 1 percent.
+        if sk.percent_of_face_mask >= 1:
+            one_percent_mask = np.bitwise_or(one_percent_mask, sk.face_mask)
+            if max_one_c == -1:
+                max_one_c = round(sk.hls[2])
+                max_one_v = round(sk.hsv[2])
+                max_one_ss = round(sk.hsv[1])
+                max_one_gray = round(sk.gray)
+            min_one_c = round(min(min_one_c, sk.hls[2]))
+            min_one_v = round(sk.hsv[2])
+            min_one_ss = round(max(min_one_ss, round(sk.hsv[1])))
+            one_percent_tones.append(sk)
+            min_one_gray = round(sk.gray)
+
+        count_idx += 1
+
+    max_chroma = round(np.mean((ImageUtils.to_hls(analyzer.image)[:, :, 2].astype(float)*(100.0/255.0))[
+                                   first_cum_mask]))
+
+    print("\nMAX chroma diff: ", first_c - min_one_c, " where upper: ", first_c, " and lower: ", min_one_c,"\n")
+    print("\nMAX sat diff: ", first_sat - min_one_ss, " where upper: ", first_sat, " and lower: ", min_one_ss, "\n")
+
+    print("one percent mask delta chroma: ", max_one_c - min_one_c,  " chroma diff: ", max_chroma - min_one_c," delta ss: ", min_one_ss - max_one_ss,
+          " delta gray: ", max_one_gray - min_one_gray)
+
+    print("\nTrue Delta brightness: ", round((((max_one_v*1.0)/100.0)**2.2 - ((min_one_v*1.0)/100.0)**2.2)*100.0),
+          " from: ", max_one_v, " to: ", min_one_v,"\n")
+    #eye_mask = find_sat_mask(analyzer)
+    #print("eye mask")
+
+    print("Saturation plot chroma (y) vs brightness (x)")
+    x  = [t.hsv[2] for t in final_skin_tones]
+    #x = [t.gray for t in final_skin_tones]
+    y = [t.hls[2] for t in final_skin_tones]
+    #y = [t.ycrcb[2] for t in final_skin_tones]
+    #plt.plot(x, y)
+    plt.xlim(100, 0)
+    plt.ylim(0, 100)
+    #plt.ylim(90, 130)
+    #plt.show(block=True)
+
+    overexposed_mask, underexposed_mask = analyzer.get_over_and_under_mask()
+    #ImageUtils.show_mask(analyzer.image, overexposed_mask)
+    #ImageUtils.show_mask(analyzer.image, underexposed_mask)
+    #bgMask = analyzer.face.detect_background()
+    #ImageUtils.show_mask(analyzer.image, underexposed_mask)
+
+
+    #ImageUtils.show_mask(analyzer.image, bright_50_mask)
+    ImageUtils.show(analyzer.image)
+
+    best_tones = check_brightness(final_skin_tones)
+
+    #analyzer.hues_in_face()
+    #ImageUtils.show(analyzer.image)
+    #ImageUtils.show(ImageUtils.to_YCrCb(analyzer.image))
+
     #print("Skin Tones production: ", final_skin_tones)
     shade_file_name = os.path.splitext(args.image)[0] + "_shade_clusters.png"
     filtered_file_name = os.path.splitext(args.image)[0] + "_filtered.png"
+    one_percent_file_name = os.path.splitext(args.image)[0] + "_percent.png"
     icc_profile_path = "/Users/addarsh/Desktop/anastasia-me/displayP3_icc_profile.txt"
     ImageUtils.save_skin_tones_to_file(shade_file_name, final_skin_tones, icc_profile_path=icc_profile_path)
-    ImageUtils.save_skin_tones_to_file(filtered_file_name, filtered_skin_tones, icc_profile_path=icc_profile_path)
+    ImageUtils.save_skin_tones_to_file(filtered_file_name,  filtered_skin_tones, icc_profile_path=icc_profile_path)
+    ImageUtils.save_skin_tones_to_file(one_percent_file_name, one_percent_tones, icc_profile_path=icc_profile_path,
+                                       skip_text=True)
     if (args.bri is not None and float(args.bri) != 1.0) or (args.sat is not None and float(args.sat) != 1.0):
         mod_file_name = os.path.splitext(args.image)[0] + "_mod.png"
         ImageUtils.save_image_to_file(analyzer.image, mod_file_name,

@@ -3,6 +3,8 @@ Constants and configurations used by both training and inference scripts.
 """
 from mrcnn.config import Config
 from enum import Enum
+from dataclasses import dataclass
+import numpy as np
 
 # Label constants.
 EYE_OPEN = "Eye (Open)"
@@ -68,6 +70,25 @@ class LightDirection(Enum):
     LEFT_TO_RIGHT = 7  # Usually indicates there is a shadow in the scene.
     RIGHT_CENTER = 8  # Light starts from the right and then falls to center. May nor may not be a shadow at center.
     RIGHT_TO_LEFT = 9  # Usually indicates there is a shadow in the scene.
+
+
+"""
+Container class for skin tone.
+"""
+
+
+@dataclass
+class SkinTone:
+    DISPLAY_P3 = "displayP3"
+
+    rgb: []
+    hsv: []
+    hls: []
+    gray: float
+    ycrcb: []
+    percent_of_face_mask: float
+    face_mask: np.ndarray
+    profile: str
 
 
 """

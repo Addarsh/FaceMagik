@@ -17,7 +17,7 @@ from scipy.optimize import minimize
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
 from colormath import color_diff_matrix
-from .common import MaskDirection
+from .common import MaskDirection, SkinTone
 from PIL import Image
 
 
@@ -164,7 +164,7 @@ class ImageUtils:
 
     def plot_histogram(img, mask, channel=0, block=True, bins=40, fig_num=1, xlim=[0, 256]):
         plt.figure(fig_num)
-        plt.hist(img[mask][:, channel], bins=bins, density=True, histtype="step")
+        plt.hist(img[mask][:, channel], bins=bins, density=False, histtype="step")
         plt.xlim(xlim)
         plt.show(block=block)
 
@@ -203,7 +203,7 @@ class ImageUtils:
     """
 
     @staticmethod
-    def save_skin_tones_to_file(image_name, skin_tones, icc_profile_path=""):
+    def save_skin_tones_to_file(image_name, skin_tones, icc_profile_path="",skip_text=False):
 
         grid_height = 800
         img_list = []
@@ -223,11 +223,12 @@ class ImageUtils:
             v = round(hsv[2])
             sl = round(skin_tones[i].hls[2])
 
-            # Add text to image.
-            hsvStr = "H: " + str(h) + ",S: " + str(sl) + ",S:" + str(s) + ",V: " + str(v) + ",P:" + str(
-                percent_of_face_mask)
-            img[:, :, :] = cv2.putText(img, hsvStr, (10, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (210, 0, 0), 1,
-                                       cv2.LINE_AA)
+            if not skip_text:
+                # Add text to image.
+                hsvStr = "H: " + str(h) + ",S: " + str(sl) + ",S:" + str(s) + ",V: " + str(v) + ",P:" + str(
+                    percent_of_face_mask)
+                img[:, :, :] = cv2.putText(img, hsvStr, (10, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (210, 0, 0), 1,
+                                           cv2.LINE_AA)
 
         save_img = np.vstack(img_list)
         ImageUtils.save_image_to_file(save_img, image_name, icc_profile_path)
@@ -736,11 +737,32 @@ class ImageUtils:
         return cv2.cvtColor(srgbImage, cv2.COLOR_RGB2YCR_CB)
 
     """
+    to_Lab converts given RGB image to Lab image.
+    """
+
+    def to_Lab(rgbImage):
+        return cv2.cvtColor(rgbImage, cv2.COLOR_RGB2LAB)
+
+    """
     to_hsv converts given sRGB image to HSV image.
     """
 
     def to_hsv(srgbImage):
         return cv2.cvtColor(srgbImage, cv2.COLOR_RGB2HSV)
+
+    """
+    to_hLS converts given RGB image to HlS image.
+    """
+
+    def to_hls(rgbImage):
+        return cv2.cvtColor(rgbImage, cv2.COLOR_RGB2HLS)
+
+    """
+    to_gray converts given RGB image to Gray image.
+    """
+
+    def to_gray(rgbImage):
+        return cv2.cvtColor(rgbImage, cv2.COLOR_RGB2GRAY)
 
     """
     chromatic_adaptation converts given
@@ -1128,6 +1150,15 @@ class ImageUtils:
                           (-1, 3))
 
     """
+    sRGBtoGray converts given RGB array (n by 3) into (1 by 1) Gray array.
+    """
+
+    def sRGBtoGray(colorArr):
+        return cv2.cvtColor(np.reshape(colorArr,
+                                                  (-1, 3))[np.newaxis, :, :].astype(np.uint8),
+                            cv2.COLOR_RGB2GRAY).astype(np.float)[0][0]
+
+    """
     Converts given HSV/HLS OpenCV values (H=0-179, S=0-255, V=0-255) to preferred values (H=0-360, S=0-100, 
     V=0-100).Will works for HLS input also because L and S have the same ranges and H is the same for both HSV and HLS.
     """
@@ -1136,6 +1167,30 @@ class ImageUtils:
         s = round(hsv[1] * (100.0 / 255.0), 2)
         v = round(hsv[2] * (100.0 / 255.0), 2)
         return np.array([h, s, v])
+
+    """
+    Returns image colorfulness of given srgb image per algorithm in 
+    https://pyimagesearch.com/2017/06/05/computing-image-colorfulness-with-opencv-and-python/.
+    """
+
+    def image_colorfulness(image):
+        # split the image into its respective RGB components
+        R = image[:, :, 0].astype("float")
+        G = image[:, :, 1].astype("float")
+        B = image[:, :, 2].astype("float")
+
+        # compute rg = R - G
+        rg = np.absolute(R - G)
+        # compute yb = 0.5 * (R + G) - B
+        yb = np.absolute(0.5 * (R + G) - B)
+        # compute the mean and standard deviation of both `rg` and `yb`
+        (rbMean, rbStd) = (np.mean(rg), np.std(rg))
+        (ybMean, ybStd) = (np.mean(yb), np.std(yb))
+        # combine the mean and standard deviations
+        stdRoot = np.sqrt((rbStd ** 2) + (ybStd ** 2))
+        meanRoot = np.sqrt((rbMean ** 2) + (ybMean ** 2))
+        # derive the "colorfulness" metric and return it
+        return stdRoot + (0.3 * meanRoot)
 
     """
     HSVtosRGB converts given HSV array (n by 3) into (n by 3) sRGB array.
@@ -1261,6 +1316,33 @@ class ImageUtils:
             colormath.color_objects.sRGBColor(srgb_b[0], srgb_b[1], srgb_b[2], True),
             colormath.color_objects.LabColor)
         return delta_e_cie2000(lab_a, lab_b)
+
+    """
+    Delta cie2000 computation using colour science library which is apparently faster than colormath library per this answer
+    https://stackoverflow.com/questions/57224007/how-to-compute-the-delta-e-between-two-images-using-opencv. This method
+    computes the value between a single rgb array and an an rgb image. If arr1 is (1 by 3) and arr_2 is (100, 300, 
+    3) then the returned result will have dimensions (100, 100).
+    """
+
+    def delta_cie2000_matrix_v2(arr1_rgb, arr2_rgb):
+        arr1_lab = np.reshape(cv2.cvtColor(arr1_rgb[np.newaxis, :, :].astype(np.float32) / 255, cv2.COLOR_RGB2LAB),
+                              (1, 3))
+        arr2_lab = cv2.cvtColor(arr2_rgb.astype(np.float32) / 255, cv2.COLOR_RGB2Lab)
+        return colour.delta_E(arr1_lab, arr2_lab, method='CIE 2000')
+
+    """
+    Return delta e cie2000 between two (1,3) numpy array RGB colors.
+    """
+
+    def delta_cie2000_v2(arr1_rgb, arr2_rgb):
+        arr1_rgb = np.reshape(arr1_rgb, (1,3))
+        arr2_rgb = np.reshape(arr2_rgb, (1, 3))
+
+        arr1_lab = np.reshape(cv2.cvtColor(arr1_rgb[np.newaxis, :, :].astype(np.float32) / 255, cv2.COLOR_RGB2LAB),
+                              (1, 3))
+        arr2_lab = np.reshape(cv2.cvtColor(arr2_rgb[np.newaxis, :, :].astype(np.float32) / 255, cv2.COLOR_RGB2LAB),
+                              (1, 3))
+        return colour.delta_E(arr1_lab, arr2_lab, method='CIE 2000')[0]
 
     """
     lab_colors converts given sRGB array(n,3) into LAB array(n,3).
@@ -1916,8 +1998,59 @@ class ImageUtils:
 
     def sRGBtodisplayP3Image(sRGBArray):
         conversionMatrix = np.array([[0.8225, 0.1774, 0], [0.0332, 0.9669, 0], [0.0171, 0.0724, 0.9108]])
-        return np.clip(ImageUtils.add_gamma_correction_matrix(conversionMatrix @
-            ImageUtils.remove_gamma_correction_matrix(sRGBArray)), 0, 255).astype(np.uint8)
+        w, h = sRGBArray.shape[:2]
+        print("init shape: ", w, h)
+        reshaped_arr = np.reshape(sRGBArray, (-1, 3)).astype(np.float)
+
+        intermediate = conversionMatrix @ ImageUtils.remove_gamma_correction_matrix(reshaped_arr).T
+        final_arr = np.clip(ImageUtils.add_gamma_correction_matrix(intermediate.T), 0, 255).astype(np.uint8).reshape(w,
+                                                                                                                   h,3)
+        print("final shape: ", final_arr.shape)
+        return final_arr
+
+    """
+    Breaks image of given mask to smaller clusters based on brightness and returns mean skin tone for each cluster. 
+    The returned skin tones are in decreasing order of brightness.
+    """
+
+    def smaller_cluster_skin_tones(image, mask):
+
+        bright_image = np.max(image, axis=2).astype(float)
+        total_points = np.count_nonzero(mask)
+
+        # Break mask into smaller clusters.
+        max_brightness = int(np.max(bright_image[mask]))
+        min_brightness = int(np.min(bright_image[mask]))
+        mask_clusters = []
+        curr_mask = np.zeros(bright_image.shape, dtype=bool)
+        curr_max_brightness = max_brightness
+        for brightness in range(max_brightness, min_brightness - 1, -1):
+            curr_mask = np.bitwise_or(curr_mask, np.bitwise_and(bright_image == brightness, mask))
+            if curr_max_brightness - brightness >= 5:
+                mask_clusters.append(curr_mask)
+                curr_mask = np.zeros(bright_image.shape, dtype=bool)
+                curr_max_brightness = brightness - 1
+
+        if np.count_nonzero(curr_mask) > 0:
+            mask_clusters.append(curr_mask)
+
+        all_skin_tones = []
+        for m in mask_clusters:
+            mean_color_rgb = np.round(np.mean(image[m], axis=0), 2)
+            if mean_color_rgb[0] != mean_color_rgb[0]:
+                # Nan, skip.
+                continue
+            hsv = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHSV(mean_color_rgb)[0])
+            hls = ImageUtils.toHSVPreferredRange(ImageUtils.sRGBtoHLS(mean_color_rgb)[0])
+            gray = ImageUtils.sRGBtoGray(mean_color_rgb)*(100.0/255.0)
+            ycrcb = ImageUtils.sRGBtoYCrCb(mean_color_rgb)[0]
+            tone = SkinTone(rgb=mean_color_rgb.tolist(), hsv=hsv.tolist(), hls=hls.tolist(), gray=gray, ycrcb=ycrcb,
+                            percent_of_face_mask=round(ImageUtils.percentPoints(m, total_points), 2),
+                            face_mask=m.copy(),
+                            profile=SkinTone.DISPLAY_P3)
+            all_skin_tones.append(tone)
+
+        return all_skin_tones
 
     """
     Computes percent of points in mask relative to given totalPoints.
@@ -1986,7 +2119,7 @@ class ImageUtils:
 
     def show_gray(imagePath):
         gray, _, _, hsv = ImageUtils.read(imagePath)
-        gray2 = np.clip(gray * 1.5, None, 255).astype(np.uint8)
+        gray2 = np.clip(gray, None, 255).astype(np.uint8)
         cv2.namedWindow("image", cv2.WINDOW_NORMAL)
         cv2.resizeWindow("image", 900, 900)
         cv2.imshow("image", gray2)
@@ -2001,6 +2134,13 @@ class ImageUtils:
         srgb = ImageUtils.LabTosRGBConventional(lab)
         print("srgb: ", srgb)
         print("lab: ", ImageUtils.sRGBtodisplayP3(srgb[0]))
+
+    def get_image_path_from_args():
+        import argparse
+        parser = argparse.ArgumentParser(description='Image for processing')
+        parser.add_argument('--image', required=True, metavar="path to image file")
+        args = parser.parse_args()
+        return args.image
 
 
 if __name__ == "__main__":
@@ -2021,7 +2161,12 @@ if __name__ == "__main__":
     # print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#d1af9b"), ImageUtils.HEX2RGB("#daa894")))
     # img = mpimg.imread("/Users/addarsh/Desktop/anastasia-me/IMG_6613.png")
     #ImageUtils.print_lab_to_rgb([60.0, 0.0, 0.0])
-    # ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/10_29_color_checker_foundation/IMG_7883.png")
+    im_path = ImageUtils.get_image_path_from_args()
+    image = ImageUtils.read_rgb_image(im_path)
+
+    gray, _, _, _ = ImageUtils.read(im_path)
+    #ImageUtils.show_gray(im_path)
+    ImageUtils.show(image)
     #print("val: ", ImageUtils.displayP3tosRGB([204.0, 158.0, 141.0]))
     # ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/10_24_21_addarsh_foundation/IMG_7819.png")
     # ImageUtils.show_image("/Users/addarsh/Desktop/anastasia-me/sephora_foundation_chart.png")
@@ -2055,15 +2200,19 @@ if __name__ == "__main__":
 
     #carr = [62, 0, 0]
     #carr = [73, 0, 0]
-    carr = [50, 0, 0]
-    srgb = ImageUtils.LabTosRGBConventional(np.array(carr))[0].astype(np.float)
-    print("srgb : ", srgb)
-    print("display p3: ", ImageUtils.sRGBtodisplayP3(srgb))
+    #carr = [50, 0, 0]
+    #carr = [38,0,0]
+    #carr = [95,-6,95]
+    #carr = [69, -43, 50]
+    #srgb = ImageUtils.LabTosRGBConventional(np.array(carr))[0].astype(np.float)
+    #print("srgb : ", srgb)
+    #print("display p3: ", ImageUtils.sRGBtoGray(srgb))
 
     # print ("munsell: ", ImageUtils.sRGBtoMunsell(ImageUtils.HEX2RGB("#9F796A")))
     # print ("ycrcb: ", ImageUtils.RGB2HEX(ImageUtils.YCrCbtosRGB(ImageUtils.HEX2RGB("#B69C68"))[0]))
     # ImageUtils.chromatic_adaptation("/Users/addarsh/Desktop/anastasia-me/f0.png", ImageUtils.color("#FFF0E6"))
-    # print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#563521"), ImageUtils.HEX2RGB("#805947")))
+    print ("delta: ", ImageUtils.delta_cie2000(ImageUtils.HEX2RGB("#563521"), ImageUtils.HEX2RGB("#805947")))
+    print("delta v2: ", ImageUtils.delta_cie2000_v2(ImageUtils.HEX2RGB("#563521"), ImageUtils.HEX2RGB("#805947")))
     # print ("ycbcr: ", ImageUtils.sRGBtoYCbCr(ImageUtils.HEX2RGB("#cf9d85")))
     # print ("delta 1: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFEBDA")))
     # print ("delta 2: ", ImageUtils.delta_cie2000(ImageUtils.color("#9A755E"), ImageUtils.color("#FFF1E5")))

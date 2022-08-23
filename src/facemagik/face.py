@@ -54,11 +54,9 @@ class Face:
         # I don't think we should use this logic except when the image file
         # has been created with all required metadata.
         # Convert from sRGB to display P3 if sRGB profile.
-        """
         if image_path != "" and self.is_sRGB_profile(image_path):
             print("image has sRGB profile")
             self.image = ImageUtils.sRGBtodisplayP3Image(self.image)
-        """
 
         self.brightImage = ImageUtils.to_brightImage(self.image)
 
@@ -309,7 +307,7 @@ class Face:
 
     def detect_background(self):
         interpreter = tf.lite.Interpreter(
-            model_path="background_detection/deeplabv3_1_default_1.tflite")
+            model_path="../background_detection/deeplabv3_1_default_1.tflite")
 
         interpreter.allocate_tensors()
 
@@ -671,6 +669,15 @@ class Face:
         # Get vector array from triangle vertex array.
         return np.linalg.det(np.stack((a[:, 1] - a[:, 0], a[:, 2] - a[:, 0]), axis=1))
 
+
+    def get_complete_face_mask(self):
+        for i, class_id in enumerate(self.preds[Face.CLASS_IDS_KEY]):
+            if Face.ID_LABEL_MAP[class_id] == FACE:
+                return self.preds[Face.MASKS_KEY][:, :, i]
+
+        raise Exception("Face not found in image")
+
+
     """
     get_face_mask returns face mask numpy array from stored dictionary of face predictions.
     """
@@ -717,7 +724,15 @@ class Face:
         noseMasks = self.get_attr_masks(NOSE)
         assert len(noseMasks) == 1, "Want 1 mask for nose!"
         noseRowMin, _, _, noseHeight = ImageUtils.bbox(noseMasks[0])
-        faceMask[noseRowMin + noseHeight:, :] = False
+        rowEnd = noseRowMin + noseHeight
+
+        # Extend end of row if nostril present.
+        nostrilMasks = self.get_attr_masks(NOSTRIL)
+        for m in nostrilMasks:
+            rm, _, _, hm = ImageUtils.bbox(m)
+            rowEnd = max(rowEnd, rm+hm)
+
+        faceMask[rowEnd:, :] = False
         return faceMask
 
     """
@@ -1143,6 +1158,29 @@ class Face:
             eMask = np.bitwise_xor(eMask, m)
         return eMask
 
+    def get_points_between_eyeballs(self):
+        eyeMasks = self.get_attr_masks(EYE_OPEN)
+        assert len(eyeMasks) == 2, "Want 2 eye masks"
+
+        leftEyeMask = eyeMasks[0] if ImageUtils.bbox(eyeMasks[0])[1] <= ImageUtils.bbox(eyeMasks[1])[1] else eyeMasks[1]
+        rightEyeMask = eyeMasks[0] if ImageUtils.bbox(eyeMasks[0])[1] >= ImageUtils.bbox(eyeMasks[1])[1] else \
+            eyeMasks[1]
+
+        lr, lc, lw, lh = ImageUtils.bbox(leftEyeMask)
+        rr, rc, rw, rh = ImageUtils.bbox(rightEyeMask)
+
+        c1 = int(lc + lw/2)
+        c2 = rc + rw/2
+
+        r = int(min(lr, rr))
+        w = int(c2 - c1)
+        rf = int(max(rr + rh, lr + lh))
+
+        mask = np.zeros(self.faceMask.shape, dtype=bool)
+        mask[r:rf, c1: c1+w] = True
+        return mask
+
+
     """
     Returns open eye masks associated with given face.
     """
@@ -1195,6 +1233,7 @@ class Face:
             lips_and_mouth_mask[ymin:ymax + 1, x] = True
 
         # Find mouth mask by excluding lips from "lips and mouth" mask.
+        self.lips_and_mouth_mask = lips_and_mouth_mask
         return np.bitwise_xor(lips_and_mouth_mask,
                                    np.bitwise_and(lips_and_mouth_mask, np.bitwise_or(ulip_mask, llip_mask)))
 
