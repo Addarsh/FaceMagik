@@ -1,3 +1,8 @@
+Skintone detection using traditional computer vision algorithms
+
+Came up with various heuristics that could estimate light in the scene and 
+output the accurate skin tone of the face.
+
 Tensorflow Installation instructions for M1 Macs:
 
 Tensorflow installed from source since pre-installed binary doesn't work out of the box even with the Rosetta Simulator (x86) running on top of the arm64 instruction set architecture. We have to ensure that the Python interpreter used is 3.8x and not natively installed (since that only works on arm64).
